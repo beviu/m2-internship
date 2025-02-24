@@ -159,7 +159,8 @@
 #table(
   columns: (auto, auto),
   table.header([], [Minimum (cycles)]),
-  [Page fault #math.arrow.r `SIGSEGV` handler], [2257],
+  [Page fault #math.arrow.r `SIGSEGV` handler], [2254],
+  [`mprotect`], [2929],
   [Return from `SIGSEGV` handler], [902],
 )
 

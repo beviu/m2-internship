@@ -33,7 +33,7 @@ int main() {
 
   signal(SIGSEGV, handle_sigsegv);
 
-  printf("call_time, return_time\n");
+  printf("call_time, mprotect_time, return_time\n");
 
   for (int i = 0; i < 100000; ++i) {
     int64_t start_counter = __rdtsc();
@@ -43,7 +43,8 @@ int main() {
 
     int64_t end_counter = __rdtsc();
 
-    printf("%" PRIi64 ", %" PRIi64 "\n", signal_counter - start_counter,
+    printf("%" PRIi64 ", %" PRIi64 ", %" PRIi64 "\n",
+           signal_counter - start_counter, return_counter - start_counter,
            end_counter - return_counter);
 
     mprotect(page, page_size, PROT_NONE);
