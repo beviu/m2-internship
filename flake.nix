@@ -23,9 +23,10 @@
         in
         {
           default = pkgs.mkShell {
-            packages = with pkgs; [
-              clang-tools
-              clang
+            packages = [
+              pkgs.clang-tools
+              pkgs.clang
+              (pkgs.python3.withPackages (ps: [ ps.pandas ]))
             ];
           };
         }

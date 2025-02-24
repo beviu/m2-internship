@@ -151,3 +151,20 @@
     )
   }),
 )
+
+== Microbenchmarks
+
+=== Direct overhead
+
+#table(
+  columns: (auto, auto),
+  table.header([], [Minimum (cycles)]),
+  [Page fault #math.arrow.r `SIGSEGV` handler], [2257],
+  [Return from `SIGSEGV` handler], [902],
+)
+
+#pause
+
+=== Indirect overhead
+
+How to measure cache pollution?
