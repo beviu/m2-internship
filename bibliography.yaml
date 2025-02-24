@@ -1,0 +1,7 @@
+intel-manual:
+  type: book
+  title: Intel 64 and IA-32 Architectures Software Developer's Manual
+  date: 2024-12-24
+  organization: Intel
+  volume: 1-4
+  url: https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html
