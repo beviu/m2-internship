@@ -150,7 +150,7 @@
       "resume-arrow",
       angle: "resume-arrow.end",
       padding: (bottom: .5em),
-      step(4, [Resume]),
+      step(4, [Resumes]),
       anchor: "south",
     )
   }),
@@ -242,6 +242,7 @@
     line(
       "interrupt-handler",
       "memory-manager",
+      stroke: (dash: "dashed"),
       mark: (end: ">"),
       name: "memory-manager-arrow",
     )
@@ -276,11 +277,18 @@
       "resume-arrow",
       angle: "resume-arrow.end",
       padding: (bottom: .5em),
-      step(4, [Resume]),
+      step(4, [Resumes]),
       anchor: "south",
     )
   }),
 )
+
+== User interrupt page fault handling
+
+- App triggers a page fault.
+- User interrupt handler is called.
+- A call is done to the USM kernel module to install the new PTE.
+- The user space scheduler resumes the user thread.
 
 == Ideas
 
@@ -291,7 +299,7 @@ a new PTE using `io_uring` or an `ioctl`.
 
 - New PTE value that means that the CPU should send a user interrupt whenever an access is made.
 
-=== User-interrupt fault range
+=== User interrupt fault range
 
 - New MSR that define a range of memory for which every page fault results in a user interrupt.
 - The handler doesn't know if the address it got is associated to a valid VMA (it might or might not
