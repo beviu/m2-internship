@@ -10,6 +10,11 @@
 
 #show: simple-theme.with(aspect-ratio: "16-9")
 
+#let cetz-canvas = touying-reducer.with(
+  reduce: cetz.canvas,
+  cover: cetz.draw.hide.with(bounds: true),
+)
+
 #title-slide[
   = Updates
 
@@ -33,7 +38,7 @@
 
 #align(
   center + horizon,
-  cetz.canvas({
+  cetz-canvas({
     import cetz.draw: *
 
     rect(
@@ -65,30 +70,6 @@
       stroke: red.darken(50%),
       text(red.darken(50%), [Interrupt handler]),
       name: "interrupt-handler",
-    )
-
-    line(
-      (rel: (.5em, 0), to: "interrupt-handler.north"),
-      (rel: (.5em, 0), to: "memory-manager.south"),
-      mark: (end: ">"),
-      name: "memory-manager-arrow",
-    )
-    content(
-      (rel: (.5em, 0), to: "memory-manager-arrow"),
-      step(2, []),
-      anchor: "west",
-    )
-
-    line(
-      (rel: (-.5em, 0), to: "memory-manager.south"),
-      (rel: (-.5em, 0), to: "interrupt-handler.north"),
-      mark: (end: ">"),
-      name: "return-arrow",
-    )
-    content(
-      (rel: (-.5em, 0), to: "return-arrow"),
-      step(3, []),
-      anchor: "east",
     )
 
     rect(
@@ -125,6 +106,36 @@
       step(1, [Page fault]),
       anchor: "north",
     )
+
+    (pause,)
+
+    line(
+      (rel: (.5em, 0), to: "interrupt-handler.north"),
+      (rel: (.5em, 0), to: "memory-manager.south"),
+      mark: (end: ">"),
+      name: "memory-manager-arrow",
+    )
+    content(
+      (rel: (.5em, 0), to: "memory-manager-arrow"),
+      step(2, []),
+      anchor: "west",
+    )
+
+    (pause,)
+
+    line(
+      (rel: (-.5em, 0), to: "memory-manager.south"),
+      (rel: (-.5em, 0), to: "interrupt-handler.north"),
+      mark: (end: ">"),
+      name: "return-arrow",
+    )
+    content(
+      (rel: (-.5em, 0), to: "return-arrow"),
+      step(3, []),
+      anchor: "east",
+    )
+
+    (pause,)
 
     line(
       (rel: (0, .5em), to: "memory-manager.east"),
