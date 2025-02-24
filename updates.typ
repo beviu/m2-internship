@@ -23,6 +23,88 @@
 
 = Motivation
 
+== Alternative diagram
+
+#let statement(body, color: none) = box(
+  fill: color.lighten(75%),
+  inset: (x: .4em, y: .5em),
+  radius: .5em,
+  text(color.darken(50%), body),
+)
+
+#let kernel-space-statement = statement.with(color: red)
+#let user-space-statement = statement.with(color: blue)
+
+#text(
+  15pt,
+  grid(
+    column-gutter: 1em,
+    row-gutter: .25em,
+    user-space-statement[Faulting instruction],
+    kernel-space-statement[Save registers],
+    kernel-space-statement[Search for VMA],
+    kernel-space-statement[Find physical page],
+    kernel-space-statement[Update PTE],
+    kernel-space-statement[Resume],
+  ),
+)
+
+#pagebreak()
+
+#text(
+  15pt,
+  grid(
+    columns: (auto, auto),
+    column-gutter: 1em,
+    row-gutter: .25em,
+    pad(text(weight: "bold", [App thread]), bottom: .5em),
+    pad(
+      text(
+        weight: "bold",
+        [Memory thread],
+      ),
+      bottom: .5em,
+    ),
+
+    user-space-statement[Faulting instruction], [],
+    kernel-space-statement[Save registers], [],
+    kernel-space-statement[Notify memory thread], [],
+    [], kernel-space-statement[Complete `poll`/`read`],
+    [], user-space-statement[Find physical page],
+    [], kernel-space-statement[Update PTE],
+    [], kernel-space-statement[Notify app thread],
+    kernel-space-statement[Resume], [],
+  ),
+)
+
+#pagebreak()
+
+#text(
+  15pt,
+  grid(
+    columns: (auto, auto),
+    column-gutter: 1em,
+    row-gutter: .25em,
+    pad(text(weight: "bold", [App thread]), bottom: .5em),
+    pad(
+      text(
+        weight: "bold",
+        [`io_uring` kthread],
+      ),
+      bottom: .5em,
+    ),
+
+    user-space-statement[Faulting instruction], [],
+    user-space-statement[Save registers], [],
+    user-space-statement[Find physical page], [],
+    user-space-statement[Start async. PTE update], [],
+    user-space-statement[Do work on a different user thread],
+    kernel-space-statement[Update PTE],
+
+    user-space-statement[Resume], [],
+  ),
+)
+
 == Linux page fault handling
 
 #let step(i, body) = grid(
