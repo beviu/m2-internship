@@ -152,6 +152,21 @@
   }),
 )
 
+== Ideas
+
+Page fault generate user interrupts. The handler gets the virtual address of the access and installs
+a new PTE using `io_uring` or an `ioctl`.
+
+=== User-interrupt PTEs
+
+- New PTE value that means that the CPU should send a user interrupt whenever an access is made.
+
+=== User-interrupt fault range
+
+- New MSR that define a range of memory for which every page fault results in a user interrupt.
+- The handler doesn't know if the address it got is associated to a valid VMA (it might or might not
+  keep a record of the valid VMAs).
+
 == Microbenchmarks
 
 === Direct overhead
