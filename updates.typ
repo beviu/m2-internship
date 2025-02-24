@@ -49,7 +49,7 @@
       name: "kernel-space",
     )
     content(
-      (rel: (0, -.5em), to: "kernel-space.south"),
+      (rel: (0, -1em), to: "kernel-space.south"),
       text(red.darken(50%), [Kernel space]),
       anchor: "north",
     )
@@ -80,7 +80,7 @@
       name: "user-space",
     )
     content(
-      (rel: (0, -.5em), to: "user-space.south"),
+      (rel: (0, -1em), to: "user-space.south"),
       text(blue.darken(50%), [User space]),
       anchor: "north",
     )
@@ -101,8 +101,9 @@
       name: "page-fault-arrow",
     )
     content(
-      (rel: (0, -.5em), to: "page-fault-arrow"),
-      angle: (rel: (0, -.5em), to: "page-fault-arrow.start"),
+      "page-fault-arrow",
+      angle: "page-fault-arrow.start",
+      padding: (top: .5em),
       step(1, [Page fault]),
       anchor: "north",
     )
@@ -116,7 +117,8 @@
       name: "memory-manager-arrow",
     )
     content(
-      (rel: (.5em, 0), to: "memory-manager-arrow"),
+      "memory-manager-arrow",
+      padding: (left: .5em),
       step(2, []),
       anchor: "west",
     )
@@ -130,7 +132,8 @@
       name: "return-arrow",
     )
     content(
-      (rel: (-.5em, 0), to: "return-arrow"),
+      "return-arrow",
+      padding: (right: .5em),
       step(3, []),
       anchor: "east",
     )
@@ -138,15 +141,142 @@
     (pause,)
 
     line(
-      (rel: (0, .5em), to: "memory-manager.east"),
+      (rel: (0, .5em), to: "interrupt-handler.east"),
       (rel: (0, .5em), to: "app.west"),
       mark: (end: ">"),
-      name: "continue-arrow",
+      name: "resume-arrow",
     )
     content(
-      (rel: (0, .5em), to: "continue-arrow"),
-      angle: (rel: (0, .5em), to: "continue-arrow.end"),
-      step(4, [Continue execution]),
+      "resume-arrow",
+      angle: "resume-arrow.end",
+      padding: (bottom: .5em),
+      step(4, [Resume]),
+      anchor: "south",
+    )
+  }),
+)
+
+== User space page fault handling
+
+#align(
+  center + horizon,
+  cetz.canvas({
+    import cetz.draw: *
+
+    rect(
+      (0, 0),
+      (10, 8),
+      fill: red.transparentize(75%),
+      stroke: none,
+      name: "kernel-space",
+    )
+    content(
+      (rel: (0, -.5em), to: "kernel-space.south"),
+      text(red.darken(50%), [Kernel space]),
+      anchor: "north",
+    )
+
+    content(
+      ("kernel-space.north", 30%, "kernel-space.south"),
+      padding: .5em,
+      frame: "rect",
+      stroke: red.darken(50%),
+      text(red.darken(50%), [USM kernel module]),
+      name: "usm-kernel-module",
+    )
+
+    content(
+      ("kernel-space.north", 70%, "kernel-space.south"),
+      padding: .5em,
+      frame: "rect",
+      stroke: red.darken(50%),
+      text(red.darken(50%), [Interrupt handler]),
+      name: "interrupt-handler",
+    )
+
+    rect(
+      (10, 0),
+      (20, 8),
+      fill: blue.transparentize(75%),
+      stroke: none,
+      name: "user-space",
+    )
+    content(
+      (rel: (0, -.5em), to: "user-space.south"),
+      text(blue.darken(50%), [User space]),
+      anchor: "north",
+    )
+
+    content(
+      ("user-space.north", 30%, "user-space.south"),
+      padding: .5em,
+      frame: "rect",
+      stroke: blue.darken(50%),
+      text(blue.darken(50%), [Memory manager]),
+      name: "memory-manager",
+    )
+
+    content(
+      ("user-space.north", 70%, "user-space.south"),
+      padding: .5em,
+      frame: "rect",
+      stroke: blue.darken(50%),
+      text(blue.darken(50%), [App]),
+      name: "app",
+    )
+
+    line(
+      "app",
+      "interrupt-handler",
+      mark: (end: ">"),
+      name: "page-fault-arrow",
+    )
+    content(
+      "page-fault-arrow",
+      angle: "page-fault-arrow.start",
+      padding: (top: .5em),
+      step(1, [Page fault]),
+      anchor: "north",
+    )
+
+    line(
+      "interrupt-handler",
+      "memory-manager",
+      mark: (end: ">"),
+      name: "memory-manager-arrow",
+    )
+    content(
+      "memory-manager-arrow",
+      angle: "memory-manager-arrow.end",
+      padding: (top: .5em),
+      step(2, [Notifies]),
+      anchor: "north",
+    )
+
+    line(
+      "memory-manager",
+      "usm-kernel-module",
+      mark: (end: ">"),
+      name: "system-call-arrow",
+    )
+    content(
+      "system-call-arrow",
+      padding: (bottom: .5em),
+      step(3, [System call]),
+      anchor: "south",
+    )
+
+    line(
+      "usm-kernel-module",
+      "app",
+      mark: (end: ">"),
+      name: "resume-arrow",
+    )
+    content(
+      "resume-arrow",
+      angle: "resume-arrow.end",
+      padding: (bottom: .5em),
+      step(4, [Resume]),
       anchor: "south",
     )
   }),
