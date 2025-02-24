@@ -5,3 +5,8 @@ intel-manual:
   organization: Intel
   volume: 1-4
   url: https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html
+
+userfaultfd-doc:
+  type: web
+  title: Userfaultfd
+  url: https://docs.kernel.org/admin-guide/mm/userfaultfd.html
