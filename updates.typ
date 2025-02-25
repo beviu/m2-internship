@@ -1,6 +1,6 @@
 #import "@preview/touying:0.6.0": *
 #import themes.simple: *
-#import "@preview/cetz:0.3.2"
+#import "@preview/bytefield:0.0.7": *
 
 #set document(
   title: "Updates",
@@ -9,11 +9,6 @@
 )
 
 #show: simple-theme.with(aspect-ratio: "16-9")
-
-#let cetz-canvas = touying-reducer.with(
-  reduce: cetz.canvas,
-  cover: cetz.draw.hide.with(bounds: true),
-)
 
 #title-slide[
   = Updates
@@ -206,7 +201,39 @@
 
 === User-interrupt PTEs
 
-- New PTE value that means that the CPU should send a user interrupt whenever an access is made.
+#text(
+  12pt,
+  bytefield(
+    msb: left,
+    bitheader("bounds"),
+    flag("XD"),
+    bits(4, "PK"),
+    bits(7, "free", fill: yellow),
+    bits(40, "physical address"),
+    bits(3, "free", fill: yellow),
+    flag("G"),
+    flag("PAT"),
+    flag("D"),
+    flag("A"),
+    flag("PCD"),
+    flag("PWT"),
+    flag("U/S"),
+    flag("R/W"),
+    flag("1"),
+  ),
+)
+
+#text(
+  12pt,
+  bytefield(
+    msb: left,
+    bitheader("offsets"),
+    bits(63, "free", fill: yellow),
+    flag("0"),
+  ),
+)
+
+Modify PTE format to store whether CPU must send a user interrupt whenever an access is made or not.
 
 === User interrupt fault range
 
