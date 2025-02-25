@@ -35,11 +35,37 @@
 #let kernel-space-statement = statement.with(color: red)
 #let user-space-statement = statement.with(color: blue)
 
-#text(
-  15pt,
-  grid(
-    column-gutter: 1em,
-    row-gutter: .25em,
+#let statement-sequence(..statements) = stack(spacing: .25em, ..statements)
+
+#let execution(..threads) = {
+  let headers = threads
+    .pos()
+    .map(thread => pad(
+      text(weight: "bold", thread.name),
+      bottom: .5em,
+    ))
+
+  let thread-statements = threads.pos().map(thread => thread.statements)
+  let statements = thread-statements
+    .at(0)
+    .zip(..thread-statements.slice(1))
+    .flatten()
+
+  text(
+    .6em,
+    grid(
+      columns: threads.pos().map(_thread => auto),
+      column-gutter: 1em,
+      row-gutter: .25em,
+      ..headers,
+      ..statements,
+    ),
+  )
+}
+
+#execution((
+  name: [App thread],
+  statements: (
     user-space-statement[Faulting instruction],
     kernel-space-statement[Save registers],
     kernel-space-statement[Search for VMA],
@@ -47,61 +73,61 @@
     kernel-space-statement[Update PTE],
     kernel-space-statement[Resume],
   ),
-)
+))
 
 #pagebreak()
 
-#text(
-  15pt,
-  grid(
-    columns: (auto, auto),
-    column-gutter: 1em,
-    row-gutter: .25em,
-    pad(text(weight: "bold", [App thread]), bottom: .5em),
-    pad(
-      text(
-        weight: "bold",
-        [Memory thread],
+#execution(
+  (
+    name: [App thread],
+    statements: (
+      statement-sequence(
+        user-space-statement[Faulting instruction],
+        kernel-space-statement[Save registers],
+        kernel-space-statement[Notify memory thread],
       ),
-      bottom: .5em,
+      [],
+      kernel-space-statement[Resume],
     ),
-
-    user-space-statement[Faulting instruction], [],
-    kernel-space-statement[Save registers], [],
-    kernel-space-statement[Notify memory thread], [],
-    [], kernel-space-statement[Complete `poll`/`read`],
-    [], user-space-statement[Find physical page],
-    [], kernel-space-statement[Update PTE],
-    [], kernel-space-statement[Notify app thread],
-    kernel-space-statement[Resume], [],
+  ),
+  (
+    name: [Memory thread],
+    statements: (
+      [],
+      statement-sequence(
+        kernel-space-statement[Complete `poll`/`read`],
+        user-space-statement[Find physical page],
+        kernel-space-statement[Update PTE],
+        kernel-space-statement[Notify app thread],
+      ),
+      [],
+    ),
   ),
 )
 
 #pagebreak()
 
-#text(
-  15pt,
-  grid(
-    columns: (auto, auto),
-    column-gutter: 1em,
-    row-gutter: .25em,
-    pad(text(weight: "bold", [App thread]), bottom: .5em),
-    pad(
-      text(
-        weight: "bold",
-        [`io_uring` kthread],
+#execution(
+  (
+    name: [App thread],
+    statements: (
+      statement-sequence(
+        user-space-statement[Faulting instruction],
+        user-space-statement[Save registers],
+        user-space-statement[Find physical page],
+        user-space-statement[Start async. PTE update],
       ),
-      bottom: .5em,
+      user-space-statement[Do work on a different user thread],
+      user-space-statement[Resume],
     ),
-
-    user-space-statement[Faulting instruction], [],
-    user-space-statement[Save registers], [],
-    user-space-statement[Find physical page], [],
-    user-space-statement[Start async. PTE update], [],
-    user-space-statement[Do work on a different user thread],
-    kernel-space-statement[Update PTE],
-
-    user-space-statement[Resume], [],
+  ),
+  (
+    name: [`io_uring` kthread],
+    statements: (
+      [],
+      kernel-space-statement[Update PTE],
+      [],
+    ),
   ),
 )
 
