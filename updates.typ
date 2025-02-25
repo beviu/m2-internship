@@ -25,15 +25,24 @@
 
 == Linux page fault handling
 
-#let statement(body, color: none) = box(
-  fill: color.lighten(75%),
-  inset: (x: .4em, y: .5em),
-  radius: .5em,
-  text(color.darken(50%), body),
-)
+#let statement(body, color: none, bold: false) = {
+  let fill = if bold {
+    color.lighten(60%)
+  } else {
+    color.lighten(75%).desaturate(25%)
+  }
+
+  box(
+    fill: fill,
+    inset: (x: .4em, y: .5em),
+    radius: .5em,
+    text(color.darken(50%), body),
+  )
+}
 
 #let kernel-space-statement = statement.with(color: red)
 #let user-space-statement = statement.with(color: blue)
+#let internal-statement = statement.with(color: green)
 
 #let statement-sequence(..statements) = stack(spacing: .25em, ..statements)
 
@@ -69,40 +78,61 @@
     user-space-statement[Faulting instruction],
     kernel-space-statement[Save registers],
     kernel-space-statement[Search for VMA],
-    kernel-space-statement[Find physical page],
+    alternatives(
+      kernel-space-statement[Find physical page],
+      kernel-space-statement(bold: true)[Find physical page],
+    ),
     kernel-space-statement[Update PTE],
     kernel-space-statement[Resume],
   ),
 ))
 
-== Userspace page fault handling
+#only(2)[Policy is hard to change.]
 
-#execution(
-  (
-    name: [App thread],
-    statements: (
-      statement-sequence(
-        user-space-statement[Faulting instruction],
-        kernel-space-statement[Save registers],
-        kernel-space-statement[Notify memory thread],
+== User space page fault handling
+
+#columns(
+  2,
+  [
+    #execution(
+      (
+        name: [App thread],
+        statements: (
+          statement-sequence(
+            user-space-statement[Faulting instruction],
+            kernel-space-statement[Save registers],
+            kernel-space-statement[Search for VMA],
+            kernel-space-statement[Notify memory thread],
+          ),
+          [],
+          kernel-space-statement[Resume],
+        ),
       ),
-      [],
-      kernel-space-statement[Resume],
-    ),
-  ),
-  (
-    name: [Memory thread],
-    statements: (
-      [],
-      statement-sequence(
-        kernel-space-statement[Complete `poll`/`read`],
-        user-space-statement[Find physical page],
-        kernel-space-statement[Update PTE],
-        kernel-space-statement[Notify app thread],
+      (
+        name: [Memory thread],
+        statements: (
+          [],
+          statement-sequence(
+            kernel-space-statement[Complete `poll`/`read`],
+            user-space-statement[Find physical page],
+            kernel-space-statement[Update PTE],
+            kernel-space-statement[Notify app thread],
+          ),
+          [],
+        ),
       ),
-      [],
-    ),
-  ),
+    )
+
+    Now, policy is in user space.
+
+    #pause
+
+    === New latency costs
+
+    - 2 context switches
+    - 1 transition from kernel space to user space
+    - 1 system call
+  ],
 )
 
 == User interrupt page fault handling
@@ -113,6 +143,11 @@
     statements: (
       statement-sequence(
         user-space-statement[Faulting instruction],
+        alternatives(
+          internal-statement[User page fault check],
+          internal-statement(bold: true)[User page fault check],
+        ),
+        internal-statement[Post & deliver user interrupt],
         user-space-statement[Save registers],
         user-space-statement[Find physical page],
         user-space-statement[Start async. PTE update],
@@ -131,7 +166,9 @@
   ),
 )
 
-== Ideas
+TODO: sync version with `ioctl`
+
+== User page fault check
 
 Page fault generate user interrupts. The handler gets the virtual address of the access and installs
 a new PTE using `io_uring` or an `ioctl`.
