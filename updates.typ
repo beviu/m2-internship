@@ -18,7 +18,26 @@
   February 27, 2025
 ]
 
-= Motivation
+= Background
+
+== Minor page fault
+
+#align(horizon)[
+  ```c
+  page = mmap(
+    NULL, 4096, PROT_READ, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+  ```
+
+  #v(1em)
+
+  #stack(
+    text(.6em, weight: "bold", pad(bottom: .75em, [App thread])),
+    ```c
+    /* Page fault. */
+    *(volatile char *)page;
+    ```,
+  )
+]
 
 == Linux page fault handling
 
