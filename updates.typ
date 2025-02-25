@@ -238,8 +238,8 @@ Modify PTE format to store whether CPU must send a user interrupt whenever an ac
 === User interrupt fault range
 
 - New MSR that define a range of memory for which every page fault results in a user interrupt.
-- The handler doesn't know if the address it got is associated to a valid VMA (it might or might not
-  keep a record of the valid VMAs).
+- Handler won't know if the faulting address is inside a valid VMA (it might or might not keep a
+  record of the valid VMAs).
 
 == Microbenchmarks
 
