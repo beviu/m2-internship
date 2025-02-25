@@ -11,7 +11,8 @@ int main() {
     return EXIT_FAILURE;
   }
 
-  void *page = mmap(NULL, page_size, PROT_READ, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+  void *page =
+      mmap(NULL, page_size, PROT_READ, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
   if (page == MAP_FAILED) {
     perror("mmap");
     return EXIT_FAILURE;
@@ -21,7 +22,7 @@ int main() {
 
   for (int i = 0; i < 100000; ++i) {
     int64_t start_counter = __rdtsc();
-  
+
     *(volatile char *)page;
 
     int64_t end_counter = __rdtsc();

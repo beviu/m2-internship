@@ -1,6 +1,7 @@
 #import "@preview/touying:0.6.0": *
 #import themes.simple: *
 #import "@preview/bytefield:0.0.7": *
+#import "@preview/cetz:0.3.2"
 
 #set document(
   title: "Updates",
@@ -197,9 +198,9 @@
   ],
 )
 
-== User page fault check
+= User page fault check
 
-=== User-interrupt PTEs
+== User-interrupt PTEs
 
 #text(
   12pt,
@@ -235,15 +236,33 @@
 
 Modify PTE format to store whether CPU must send a user interrupt whenever an access is made or not.
 
-=== User interrupt fault range
+== User interrupt fault range
 
-- New MSR that define a range of memory for which every page fault results in a user interrupt.
-- Handler won't know if the faulting address is inside a valid VMA (it might or might not keep a
-  record of the valid VMAs).
+#grid(
+  columns: (1fr, auto),
+  column-gutter: 1em,
+  [
+    - New MSR that define a range of memory for which every page fault results in a user interrupt.
+    - Handler won't know if the faulting address is inside a valid VMA (it might or might not keep a
+      record of the valid VMAs).
+  ],
+  grid(
+    inset: .5em,
+    stroke: black,
+    align: center,
+    v(.25cm),
+    grid.cell(fill: red.lighten(50%), [Code]),
+    grid.cell(fill: orange.lighten(50%), [Data]),
+    grid.cell(fill: purple.lighten(50%), [Heap]),
+    v(.5cm),
+    grid.cell(fill: black, v(2cm)),
+    v(.25cm),
+  ),
+)
 
-== Microbenchmarks
+= Microbenchmarks
 
-=== Direct overhead
+== Direct overhead
 
 #table(
   columns: (auto, auto),
@@ -256,6 +275,6 @@ Modify PTE format to store whether CPU must send a user interrupt whenever an ac
 
 #pause
 
-=== Indirect overhead
+== Indirect overhead
 
 How to measure cache pollution?
