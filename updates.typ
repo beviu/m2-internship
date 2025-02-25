@@ -204,9 +204,6 @@
 
 == User page fault check
 
-Page fault generate user interrupts. The handler gets the virtual address of the access and installs
-a new PTE using `io_uring` or an `ioctl`.
-
 === User-interrupt PTEs
 
 - New PTE value that means that the CPU should send a user interrupt whenever an access is made.
