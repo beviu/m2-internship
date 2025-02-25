@@ -194,9 +194,15 @@
             internal-statement[Post & deliver user interrupt],
             user-space-statement[Save registers],
             user-space-statement[Find physical page],
-            user-space-statement[Start async. PTE update],
+            alternatives(
+              user-space-statement(bold: true)[Start async. PTE update],
+              user-space-statement[Start async. PTE update],
+            ),
           ),
-          user-space-statement[Do work on a different coroutine],
+          alternatives(
+            user-space-statement(bold: true)[Do work on a different coroutine],
+            user-space-statement[Do work on a different coroutine],
+          ),
           user-space-statement[Resume],
         ),
       ),
