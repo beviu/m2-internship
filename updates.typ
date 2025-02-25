@@ -209,9 +209,9 @@
     bitheader("bounds"),
     flag("XD"),
     bits(4, "PK"),
-    bits(7, "free", fill: yellow),
+    bits(7, "free", fill: yellow.lighten(50%)),
     bits(40, "physical address"),
-    bits(3, "free", fill: yellow),
+    bits(3, "free", fill: yellow.lighten(50%)),
     flag("G"),
     flag("PAT"),
     flag("D"),
@@ -229,7 +229,7 @@
   bytefield(
     msb: left,
     bitheader("offsets"),
-    bits(63, "free", fill: yellow),
+    bits(63, "free", fill: yellow.lighten(50%)),
     flag("0"),
   ),
 )
