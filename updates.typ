@@ -248,6 +248,7 @@ Modify PTE format to store whether CPU must send a user interrupt whenever an ac
 #table(
   columns: (auto, auto),
   table.header([], [Minimum (cycles)]),
+  [Page fault #math.arrow.r resumption], [1271],
   [Page fault #math.arrow.r `SIGSEGV` handler], [2254],
   [`mprotect`], [2929],
   [Return from `SIGSEGV` handler], [902],
