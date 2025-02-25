@@ -123,8 +123,6 @@
       ),
     )
 
-    Now, policy is in user space.
-
     #pause
 
     === New latency costs
