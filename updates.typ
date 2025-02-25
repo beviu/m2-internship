@@ -125,7 +125,7 @@
 
     #pause
 
-    === New latency costs
+    === Latency costs
 
     - 2 context switches
     - 1 transition from kernel space to user space
@@ -154,7 +154,7 @@
 
     #pause
 
-    === New latency costs
+    === Latency costs
 
     - 1 system call
     - Unknown hardware costs
@@ -196,7 +196,7 @@
 
     #colbreak()
 
-    === New latency costs
+    === Latency costs
 
     - Unknown hardware costs
   ],
