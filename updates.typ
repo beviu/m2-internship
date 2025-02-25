@@ -268,7 +268,7 @@ Modify PTE format to store whether CPU must send a user interrupt whenever an ac
   columns: (1fr, auto),
   column-gutter: 1em,
   [
-    - New MSR that define a range of memory for which every page fault results in a user interrupt.
+    - New MSRs that define a range of memory for which every page fault results in a user interrupt.
     - Handler won't know if the faulting address is inside a valid VMA (it might or might not keep a
       record of the valid VMAs).
   ],
