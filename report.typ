@@ -1,18 +1,18 @@
 #set document(
-  title: [Hardware-assisted userspace page fault handling],
+  title: [Hardware-assisted user space page fault handling],
   author: "Greg Depoire--Ferrer",
   date: datetime(year: 2025, month: 2, day: 24),
 )
 
-= Hardware-assisted userspace page fault handling
+= Hardware-assisted user space page fault handling
 
-== Userspace page fault handling
+== User space page fault handling
 
 On Linux, page faults are currently handled in kernel space. Moving the
 handling of page faults to user space allows for more flexibility in the page
 reclaim policy to use, as well as more complicated swap storage backends.
 
-One implementation of userspace page fault handling is by using the
+One implementation of user space page fault handling is by using the
 `userfaultfd` functionality in newer Linux kernels@userfaultfd-doc. It allows
 registering a region with a userfault file descriptor that will be readable
 whenever a thread encounters a page fault in that region. Reading from this FD

@@ -4,7 +4,8 @@
 #import "@preview/cetz:0.3.2"
 
 #set document(
-  title: "Updates",
+  title: "Hardware assisted user space page fault handling",
+  description: "First presentation of what I plan to work on to the KrakOS team",
   author: "Greg Depoire--Ferrer",
   date: datetime(year: 2025, month: 2, day: 27),
 )
@@ -12,7 +13,7 @@
 #show: simple-theme.with(aspect-ratio: "16-9")
 
 #title-slide[
-  = Updates
+  = Hardware assisted user space page fault handling
 
   February 27, 2025
 ]
