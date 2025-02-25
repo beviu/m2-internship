@@ -152,7 +152,7 @@
         user-space-statement[Find physical page],
         user-space-statement[Start async. PTE update],
       ),
-      user-space-statement[Do work on a different user thread],
+      user-space-statement[Do work on a different coroutine],
       user-space-statement[Resume],
     ),
   ),
