@@ -137,36 +137,72 @@
 
 == User interrupt page fault handling
 
-#execution(
-  (
-    name: [App thread],
-    statements: (
-      statement-sequence(
+#columns(
+  2,
+  [#execution((
+      name: [App thread],
+      statements: (
         user-space-statement[Faulting instruction],
-        alternatives(
-          internal-statement[User page fault check],
-          internal-statement(bold: true)[User page fault check],
-        ),
+        internal-statement[User page fault check],
         internal-statement[Post & deliver user interrupt],
         user-space-statement[Save registers],
         user-space-statement[Find physical page],
-        user-space-statement[Start async. PTE update],
+        kernel-space-statement[Update PTE],
+        user-space-statement[Resume],
       ),
-      user-space-statement[Do work on a different coroutine],
-      user-space-statement[Resume],
-    ),
-  ),
-  (
-    name: [`io_uring` kthread],
-    statements: (
-      [],
-      kernel-space-statement[Update PTE],
-      [],
-    ),
-  ),
+    ))
+
+    #colbreak()
+
+    #pause
+
+    === New latency costs
+
+    - 1 system call
+    - Unknown hardware costs
+  ],
 )
 
-TODO: sync version with `ioctl`
+== User interrupt page fault handling (asynchronous)
+
+#columns(
+  2,
+  [#execution(
+      (
+        name: [App thread],
+        statements: (
+          statement-sequence(
+            user-space-statement[Faulting instruction],
+            alternatives(
+              internal-statement[User page fault check],
+              internal-statement(bold: true)[User page fault check],
+            ),
+            internal-statement[Post & deliver user interrupt],
+            user-space-statement[Save registers],
+            user-space-statement[Find physical page],
+            user-space-statement[Start async. PTE update],
+          ),
+          user-space-statement[Do work on a different coroutine],
+          user-space-statement[Resume],
+        ),
+      ),
+      (
+        name: [`io_uring` kthread],
+        statements: (
+          [],
+          kernel-space-statement[Update PTE],
+          [],
+        ),
+      ),
+    )
+
+    #colbreak()
+
+    === New latency costs
+
+    - Unknown hardware costs
+  ],
+)
 
 == User page fault check
 
