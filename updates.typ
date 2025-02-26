@@ -279,10 +279,10 @@
 
 Harder to measure.
 
-== Workflow
+== Hardware modification
 
-- Keep the kernel page fault handling by default.
-- Tag VMAs to handle in user space.
+- By default, page faults continue to be handled by the kernel. #pause
+- VMAs for which page faults must be handled in user space are tagged.
 
 == First version of user-interrupt page fault handling
 
