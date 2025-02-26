@@ -88,7 +88,7 @@
   let thread-statements = threads.pos().map(thread => thread.statements)
   let statements = thread-statements
     .at(0)
-    .zip(..thread-statements.slice(1))
+    .zip(..thread-statements.slice(1), exact: true)
     .flatten()
 
   text(
@@ -119,7 +119,7 @@
         ),
         kernel-space-statement[Update PTE],
         kernel-space-statement[Restore state],
-        internal-statement[`iret`@torvalds-page-fault-cost],
+        kernel-space-statement[`iret`@torvalds-page-fault-cost],
       ),
     ))
 
@@ -149,8 +149,11 @@
             kernel-space-statement[Search for VMA],
             kernel-space-statement[Notify memory thread],
           ),
-          internal-statement[`iret`],
-          kernel-space-statement[Restore state],
+          kernel-space-statement[Wait],
+          statement-sequence(
+            kernel-space-statement[Restore state],
+            kernel-space-statement[`iret`],
+          ),
         ),
       ),
       (
@@ -158,8 +161,12 @@
         statements: (
           [],
           statement-sequence(
-            kernel-space-statement[Complete `poll`/`read`],
+            kernel-space-statement[Complete `read`],
+            kernel-space-statement[Restore state],
+            kernel-space-statement[`sysret`],
             user-space-statement[Find physical page],
+            user-space-statement[`syscall`],
+            kernel-space-statement[Save state],
             kernel-space-statement[Update PTE],
             kernel-space-statement[Notify app thread],
           ),
@@ -191,7 +198,11 @@
         internal-statement[Post & deliver user interrupt],
         user-space-statement[Save state],
         user-space-statement[Find physical page],
+        user-space-statement[`syscall`],
+        kernel-space-statement[Save state],
         kernel-space-statement[Update PTE],
+        kernel-space-statement[Restore state],
+        kernel-space-statement[`sysret`],
         user-space-statement[Restore state],
       ),
     ))
