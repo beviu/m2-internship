@@ -30,6 +30,13 @@
 
 == Minor page fault
 
+// Touying has a bug
+// (https://forum.typst.app/t/how-do-i-add-bibliography-to-a-touying-presentation/643/7) which makes
+// this code snippet create a blank slide if it's put in the preamble, so put it later.
+#show: magic.bibliography-as-footnote.with(
+  bibliography("bibliography.yaml", title: none),
+)
+
 #align(horizon)[
   ```c
   page = mmap(
@@ -326,5 +333,3 @@ Modify PTE format to store whether CPU must send a user interrupt whenever an ac
   )
 
 How to measure cache pollution?
-
-#bibliography("bibliography.yaml")
