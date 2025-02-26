@@ -22,8 +22,8 @@ userfaultfd-doc:
 
 torvalds-page-fault-cost:
   type: web
-  author: Linus Torvals
-  url: https://plus.google.com/+LinusTorvalds/posts/YDKRFDwHwr6
+  author: Linus Torvalds
+  url: https://web.archive.org/web/20181208181101/https://plus.google.com/+LinusTorvalds/posts/YDKRFDwHwr6
 
 extmem:
   type: article
