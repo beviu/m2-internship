@@ -3,14 +3,22 @@
 #import "@preview/bytefield:0.0.7": *
 #import "@preview/cetz:0.3.2"
 
-#set document(
-  title: "Hardware assisted user space page fault handling",
-  description: "First presentation of what I plan to work on to the KrakOS team",
-  author: "Greg Depoire--Ferrer",
-  date: datetime(year: 2025, month: 2, day: 27),
+#show: simple-theme.with(
+  aspect-ratio: "16-9",
+  config-info(
+    title: [Hardware assisted user space page fault handling],
+    subtitle: [First presentation of what I plan to work on to the KrakOS team],
+    author: [Greg Depoire-\-Ferrer],
+    date: datetime(
+      year: 2025,
+      month: 2,
+      day: 27,
+      hour: 14,
+      minute: 0,
+      second: 0,
+    ),
+  ),
 )
-
-#show: simple-theme.with(aspect-ratio: "16-9")
 
 #title-slide[
   = Hardware assisted user space page fault handling
