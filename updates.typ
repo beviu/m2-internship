@@ -294,9 +294,9 @@ Modify PTE format to store whether CPU must send a user interrupt whenever an ac
   ),
 )
 
-= Microbenchmarks
+= Evaluating latency costs
 
-== Direct overhead
+== Direct costs
 
 #table(
   columns: (auto, auto),
@@ -309,6 +309,22 @@ Modify PTE format to store whether CPU must send a user interrupt whenever an ac
 
 #pause
 
-== Indirect overhead
+== Indirect costs
+
++ CPU cache pollution
++ Speculative execution barrier
+
+  #text(
+    gray,
+    .75em,
+    quote(attribution: <intel-manual>)[
+      *Instruction ordering.* Instructions following a SYSCALL may be fetched from memory before earlier instructions
+      complete execution, but they will not execute (even speculatively) until all instructions prior to the SYSCALL have
+      completed execution (the later instructions may execute before data stored by the earlier instructions have
+      become globally visible).
+    ],
+  )
 
 How to measure cache pollution?
+
+#bibliography("bibliography.yaml")
