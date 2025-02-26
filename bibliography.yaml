@@ -24,3 +24,45 @@ torvalds-page-fault-cost:
   type: web
   author: Linus Torvals
   url: https://plus.google.com/+LinusTorvalds/posts/YDKRFDwHwr6
+
+extmem:
+  type: article
+  title: '{ExtMem}: Enabling {Application-Aware} Virtual Memory Management for {Data-Intensive} Applications'
+  author:
+  - Jalalian, Sepehr
+  - Patel, Shaurya
+  - Hajidehi, Milad Rezaei
+  - Seltzer, Margo
+  - Fedorova, Alexandra
+  date: 2024-07
+  page-range: 397–408
+  url: https://www.usenix.org/conference/atc24/presentation/jalalian
+  serial-number:
+    isbn: 978-1-939133-41-0
+  parent:
+    type: proceedings
+    title: 2024 USENIX Annual Technical Conference (USENIX ATC 24)
+    publisher: USENIX Association
+    location: Santa Clara, CA
+
+ghost:
+  type: article
+  title: 'ghOSt: Fast and Flexible User-Space Delegation of Linux Scheduling'
+  author:
+  - Humphries, Jack Tigar
+  - Natu, Neel
+  - Chaugule, Ashwin
+  - Weisse, Ofir
+  - Rhoden, Barret
+  - Don, Josh
+  - Rizzo, Luigi
+  - Rombakh, Oleg
+  - Turner, Paul Jack
+  - Kozyrakis, Christos
+  date: 2021
+  page-range: 588–604
+  url: https://doi.org/10.1145/3477132.3483542
+  parent:
+    type: proceedings
+    title: Proceedings of the ACM SIGOPS 28th Symposium on Operating Systems Principles CD-ROM
+    location: New York, NY, USA

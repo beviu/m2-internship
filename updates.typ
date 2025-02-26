@@ -48,9 +48,9 @@
   February 27, 2025
 ]
 
-= Background
+= Motivation
 
-== Minor page fault
+== A tendency of user-space delegation
 
 // Touying has a bug
 // (https://forum.typst.app/t/how-do-i-add-bibliography-to-a-touying-presentation/643/7) which makes
@@ -58,6 +58,18 @@
 #show: magic.bibliography-as-footnote.with(
   bibliography("bibliography.yaml", title: none),
 )
+
+=== Examples
+
+- `SIGSEGV` handling
+- Userfaultfd@userfaultfd-doc
+- ExtMem@extmem
+- USM (KrakOS)
+- ghOSt@ghost
+
+= Background
+
+== Minor page fault
 
 #align(horizon)[
   ```c
