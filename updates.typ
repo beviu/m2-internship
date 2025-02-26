@@ -3,11 +3,14 @@
 #import "@preview/bytefield:0.0.7": *
 #import "@preview/cetz:0.3.2"
 
+#set document(
+  description: [First presentation of what I plan to work on during my internship to the KrakOS team.],
+)
+
 #show: simple-theme.with(
   aspect-ratio: "16-9",
   config-info(
-    title: [Hardware assisted user space page fault handling],
-    subtitle: [First presentation of what I plan to work on to the KrakOS team],
+    title: [Hardware assisted user-space page fault handling],
     author: [Greg Depoire-\-Ferrer],
     date: datetime(
       year: 2025,
@@ -21,7 +24,26 @@
 )
 
 #title-slide[
-  = Hardware assisted user space page fault handling
+  = Hardware-assisted user-space page fault handling
+
+  #v(2em)
+
+  #grid(
+    columns: (auto, auto),
+    column-gutter: 2em,
+    [
+      *Student:* \
+      Greg Depoire-\-Ferrer \
+      #link("mailto:greg.depoire--ferrer@ens-lyon.fr")
+    ],
+    [
+      *Supervised by:* \
+      Alain Tchana \
+      #link("mailto:alain.tchana@grenoble-inp.fr")
+    ],
+  )
+
+  #v(2em)
 
   February 27, 2025
 ]
