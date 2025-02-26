@@ -10,3 +10,8 @@ userfaultfd-doc:
   type: web
   title: Userfaultfd
   url: https://docs.kernel.org/admin-guide/mm/userfaultfd.html
+
+torvalds-page-fault-cost:
+  type: web
+  author: Linus Torvals
+  url: https://plus.google.com/+LinusTorvalds/posts/YDKRFDwHwr6

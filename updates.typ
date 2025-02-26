@@ -119,6 +119,7 @@
         ),
         kernel-space-statement[Update PTE],
         kernel-space-statement[Resume],
+        internal-statement[`iret`@torvalds-page-fault-cost],
       ),
     ))
 
@@ -150,7 +151,7 @@
             kernel-space-statement[Search for VMA],
             kernel-space-statement[Notify memory thread],
           ),
-          [],
+          internal-statement[`iret`],
           kernel-space-statement[Resume],
         ),
       ),
@@ -183,7 +184,8 @@
 
 #columns(
   2,
-  [#execution((
+  [
+    #execution((
       name: [App thread],
       statements: (
         user-space-statement[Faulting instruction],
