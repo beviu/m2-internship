@@ -92,7 +92,7 @@
     .flatten()
 
   text(
-    .6em,
+    .4em,
     grid(
       columns: threads.pos().map(_thread => auto),
       column-gutter: 1em,
