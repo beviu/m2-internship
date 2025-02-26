@@ -471,8 +471,6 @@ Modify PTE format to store whether CPU must send a user interrupt whenever an ac
   Any questions?
 ]
 
-= Questions
-
 #appendix[
   == FRED
 
