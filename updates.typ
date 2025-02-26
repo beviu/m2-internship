@@ -260,7 +260,7 @@
 - Keep the kernel page fault handling by default.
 - Tag VMAs to handle in user space.
 
-== User-interrupt page fault handling
+== First version of user-interrupt page fault handling
 
 #let user-interrupt-synchronous-page-fault-handling = execution((
   name: [App thread],
