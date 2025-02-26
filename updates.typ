@@ -274,6 +274,8 @@
 
     === Latency costs
 
+    - #strike[2 context switches]
+    - #strike[1 transition from kernel space to user space]
     - 1 system call
     - Unknown hardware costs
   ],
@@ -322,6 +324,9 @@
 
     === Latency costs
 
+    - #text(gray, strike[2 context switches])
+    - #text(gray, strike[1 transition from kernel space to user space])
+    - #strike[1 system call]
     - Unknown hardware costs
   ],
 )
