@@ -263,7 +263,7 @@
 
 == Indirect costs <indirect-costs>
 
-+ CPU cache pollution
++ CPU cache pollution@flexsc
 + Speculative execution barrier
 
   #text(
