@@ -4,7 +4,16 @@ intel-manual:
   date: 2024-12-24
   organization: Intel
   volume: 1-4
+  serial-number: 253665-086US
   url: https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html
+
+fred-spec:
+  type: web
+  title: Flexible Return and Event Delivery (FRED) Specification
+  date: 2023-05-25
+  organization: Intel
+  serial-number: 346446-004US
+  url: https://www.intel.com/content/www/us/en/content-details/779982/flexible-return-and-event-delivery-fred-specification.html
 
 userfaultfd-doc:
   type: web
