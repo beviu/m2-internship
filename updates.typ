@@ -159,25 +159,30 @@
   )
 }
 
+#let linux-page-fault-handling(
+  find-physical-page-bold: false,
+  references: true,
+) = execution((
+  name: [App thread],
+  statements: (
+    user-space-statement[Faulting instruction],
+    internal-statement[Exception],
+    kernel-space-statement[Save state],
+    kernel-space-statement[Search for VMA],
+    kernel-space-statement(bold: find-physical-page-bold)[Find physical page],
+    kernel-space-statement[Update PTE],
+    kernel-space-statement[Restore state],
+    kernel-space-statement[`iret`#if references { ref(<torvalds-page-fault-cost>) }],
+  ),
+))
+
 #columns(
   2,
   [
-    #execution((
-      name: [App thread],
-      statements: (
-        user-space-statement[Faulting instruction],
-        internal-statement[Exception],
-        kernel-space-statement[Save state],
-        kernel-space-statement[Search for VMA],
-        alternatives(
-          kernel-space-statement[Find physical page],
-          kernel-space-statement(bold: true)[Find physical page],
-        ),
-        kernel-space-statement[Update PTE],
-        kernel-space-statement[Restore state],
-        kernel-space-statement[`iret`@torvalds-page-fault-cost],
-      ),
-    ))
+    #alternatives(
+      linux-page-fault-handling(),
+      linux-page-fault-handling(find-physical-page-bold: true),
+    )
 
     ==== Legend
 
@@ -189,55 +194,64 @@
   ],
 )
 
-== User space page fault handling
+== `userfaultfd` page fault handling
+
+#let userfaultfd-page-fault-handling = execution(
+  (
+    name: [App thread],
+    statements: (
+      statement-sequence(
+        user-space-statement[Faulting instruction],
+        internal-statement[Exception],
+        kernel-space-statement[Save state],
+        kernel-space-statement[Search for VMA],
+        kernel-space-statement[Notify memory thread],
+      ),
+      kernel-space-statement[Wait],
+      statement-sequence(
+        kernel-space-statement[Restore state],
+        kernel-space-statement[`iret`],
+      ),
+    ),
+  ),
+  (
+    name: [Memory thread],
+    statements: (
+      [],
+      statement-sequence(
+        kernel-space-statement[Complete `read`],
+        kernel-space-statement[Restore state],
+        kernel-space-statement[`sysret`],
+        user-space-statement[Find physical page],
+        user-space-statement[`syscall`],
+        kernel-space-statement[Save state],
+        kernel-space-statement[Update PTE],
+        kernel-space-statement[Notify app thread],
+      ),
+      [],
+    ),
+  ),
+)
 
 #columns(
   2,
   [
-    #execution(
-      (
-        name: [App thread],
-        statements: (
-          statement-sequence(
-            user-space-statement[Faulting instruction],
-            internal-statement[Exception],
-            kernel-space-statement[Save state],
-            kernel-space-statement[Search for VMA],
-            kernel-space-statement[Notify memory thread],
-          ),
-          kernel-space-statement[Wait],
-          statement-sequence(
-            kernel-space-statement[Restore state],
-            kernel-space-statement[`iret`],
-          ),
-        ),
-      ),
-      (
-        name: [Memory thread],
-        statements: (
-          [],
-          statement-sequence(
-            kernel-space-statement[Complete `read`],
-            kernel-space-statement[Restore state],
-            kernel-space-statement[`sysret`],
-            user-space-statement[Find physical page],
-            user-space-statement[`syscall`],
-            kernel-space-statement[Save state],
-            kernel-space-statement[Update PTE],
-            kernel-space-statement[Notify app thread],
-          ),
-          [],
-        ),
-      ),
+    #userfaultfd-page-fault-handling
+
+    #alternatives(
+      [
+        === Linux page fault handling
+
+        #linux-page-fault-handling(references: false)
+      ],
+      [
+        === Latency costs
+
+        - 2 context switches
+        - 1 transition from kernel space to user space
+        - 1 system call
+      ],
     )
-
-    #pause
-
-    === Latency costs
-
-    - 2 context switches
-    - 1 transition from kernel space to user space
-    - 1 system call
   ],
 )
 
@@ -246,89 +260,124 @@
 - Keep the kernel page fault handling by default.
 - Tag VMAs to handle in user space.
 
-== User interrupt page fault handling
+== User-interrupt page fault handling
+
+#let user-interrupt-synchronous-page-fault-handling = execution((
+  name: [App thread],
+  statements: (
+    user-space-statement[Faulting instruction],
+    internal-statement[User page fault check],
+    internal-statement[Post & deliver user interrupt],
+    user-space-statement[Save state],
+    user-space-statement[Find physical page],
+    user-space-statement[`syscall`],
+    kernel-space-statement[Save state],
+    kernel-space-statement[Update PTE],
+    kernel-space-statement[Restore state],
+    kernel-space-statement[`sysret`],
+    user-space-statement[Restore state],
+  ),
+))
 
 #columns(
   2,
   [
-    #execution((
-      name: [App thread],
-      statements: (
-        user-space-statement[Faulting instruction],
-        internal-statement[User page fault check],
-        internal-statement[Post & deliver user interrupt],
-        user-space-statement[Save state],
-        user-space-statement[Find physical page],
-        user-space-statement[`syscall`],
-        kernel-space-statement[Save state],
-        kernel-space-statement[Update PTE],
-        kernel-space-statement[Restore state],
-        kernel-space-statement[`sysret`],
-        user-space-statement[Restore state],
-      ),
-    ))
+    #user-interrupt-synchronous-page-fault-handling
 
     #colbreak()
 
-    #pause
+    #alternatives(
+      [
+        === `userfaultfd` PF handling
 
-    === Latency costs
+        #text(.9em, userfaultfd-page-fault-handling)
+      ],
+      [
+        === Latency costs
 
-    - #strike[2 context switches]
-    - #strike[1 transition from kernel space to user space]
-    - 1 system call
-    - Unknown hardware costs
+        - #strike[2 context switches]
+        - #strike[1 transition from kernel space to user space]
+        - 1 system call
+        - Unknown hardware costs
+      ],
+    )
   ],
 )
 
-== User interrupt page fault handling with `io_uring`
+== `io_uring`-based user-interrupt page fault handling
 
-#columns(
-  2,
-  [#execution(
-      (
-        name: [App thread],
-        statements: (
-          statement-sequence(
-            user-space-statement[Faulting instruction],
-            alternatives(
-              internal-statement[User page fault check],
-              internal-statement(bold: true)[User page fault check],
+#slide(
+  repeat: 4,
+  columns(
+    2,
+    [
+      #execution(
+        (
+          name: [App thread],
+          statements: (
+            statement-sequence(
+              user-space-statement[Faulting instruction],
+              {
+                only((until: 3), internal-statement[User page fault check])
+                only(4, internal-statement(bold: true)[User page fault check])
+              },
+              internal-statement[Post & deliver user interrupt],
+              user-space-statement[Save state],
+              user-space-statement[Find physical page],
+              alternatives(
+                user-space-statement(bold: true)[Start async. PTE update],
+                user-space-statement[Start async. PTE update],
+                repeat-last: true,
+              ),
             ),
-            internal-statement[Post & deliver user interrupt],
-            user-space-statement[Save state],
-            user-space-statement[Find physical page],
             alternatives(
-              user-space-statement(bold: true)[Start async. PTE update],
-              user-space-statement[Start async. PTE update],
+              user-space-statement(
+                bold: true,
+              )[Do work on a different coroutine],
+              user-space-statement[Do work on a different coroutine],
+              repeat-last: true,
             ),
+            user-space-statement[Restore state],
           ),
-          alternatives(
-            user-space-statement(bold: true)[Do work on a different coroutine],
-            user-space-statement[Do work on a different coroutine],
+        ),
+        (
+          name: [`io_uring` kthread],
+          statements: (
+            [],
+            kernel-space-statement[Update PTE],
+            [],
           ),
-          user-space-statement[Restore state],
         ),
-      ),
-      (
-        name: [`io_uring` kthread],
-        statements: (
-          [],
-          kernel-space-statement[Update PTE],
-          [],
-        ),
-      ),
-    )
+      )
 
-    #colbreak()
+      #colbreak()
 
-    === Latency costs
+      #let latency-costs = [
+        === Latency costs
 
-    - #text(gray, strike[2 context switches])
-    - #text(gray, strike[1 transition from kernel space to user space])
-    - #strike[1 system call]
-    - Unknown hardware costs
-  ],
+        - #text(gray, strike[2 context switches])
+        - #text(gray, strike[1 transition from kernel space to user space])
+        - #strike[1 system call]
+        - Unknown hardware costs
+      ]
+
+      #alternatives(
+        [
+          === Without `io_uring`
+
+          #user-interrupt-synchronous-page-fault-handling
+        ],
+        latency-costs,
+        [
+          #latency-costs
+
+          === Costs not on the critical path
+
+          - New `io_uring` kthread.
+        ],
+      )
+    ],
+  ),
 )
 
 = User page fault check
