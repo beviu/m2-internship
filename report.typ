@@ -1,12 +1,12 @@
 #set document(
-  title: [Hardware-assisted user space page fault handling],
+  title: [Hardware-assisted user-space page fault handling],
   author: "Greg Depoire--Ferrer",
   date: datetime(year: 2025, month: 2, day: 24),
 )
 
-= Hardware-assisted user space page fault handling
+= Hardware-assisted user-space page fault handling
 
-== User space page fault handling
+== User-space page fault handling
 
 On Linux, page faults are currently handled in kernel space. Moving the
 handling of page faults to user space allows for more flexibility in the page
