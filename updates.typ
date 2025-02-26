@@ -241,6 +241,11 @@
   ],
 )
 
+== Workflow
+
+- Keep the kernel page fault handling by default.
+- Tag VMAs to handle in user space.
+
 == User interrupt page fault handling
 
 #columns(
@@ -274,7 +279,7 @@
   ],
 )
 
-== User interrupt page fault handling (asynchronous)
+== User interrupt page fault handling with `io_uring`
 
 #columns(
   2,
