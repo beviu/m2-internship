@@ -238,22 +238,46 @@
   [
     #userfaultfd-page-fault-handling
 
+    #let direct-latency-costs = [
+      === Latency costs
+
+      - 2 context switches
+      - 1 transition from kernel space to user space
+      - 1 system call
+    ]
+
     #alternatives(
       [
         === Linux page fault handling
 
         #linux-page-fault-handling(references: false)
       ],
+      direct-latency-costs,
       [
-        === Latency costs
-
-        - 2 context switches
-        - 1 transition from kernel space to user space
-        - 1 system call
+        #direct-latency-costs
+        - #link(<indirect-costs>)[*Indirect costs*]
       ],
     )
   ],
 )
+
+== Indirect costs <indirect-costs>
+
++ CPU cache pollution
++ Speculative execution barrier
+
+  #text(
+    gray,
+    .75em,
+    quote(attribution: <intel-manual>)[
+      *Instruction ordering.* Instructions following a SYSCALL may be fetched from memory before earlier instructions
+      complete execution, but they will not execute (even speculatively) until all instructions prior to the SYSCALL have
+      completed execution (the later instructions may execute before data stored by the earlier instructions have
+      become globally visible).
+    ],
+  )
+
+Harder to measure.
 
 == Workflow
 
@@ -442,37 +466,6 @@ Modify PTE format to store whether CPU must send a user interrupt whenever an ac
   ),
 )
 
-= Evaluating latency costs
-
-== Direct costs
-
-#table(
-  columns: (auto, auto),
-  table.header([], [Minimum (cycles)]),
-  [Page fault #math.arrow.r resumption], [1271],
-  [Page fault #math.arrow.r `SIGSEGV` handler], [2254],
-  [`mprotect`], [2929],
-  [Return from `SIGSEGV` handler], [902],
-)
-
-#pause
-
-== Indirect costs
-
-+ CPU cache pollution
-+ Speculative execution barrier
-
-  #text(
-    gray,
-    .75em,
-    quote(attribution: <intel-manual>)[
-      *Instruction ordering.* Instructions following a SYSCALL may be fetched from memory before earlier instructions
-      complete execution, but they will not execute (even speculatively) until all instructions prior to the SYSCALL have
-      completed execution (the later instructions may execute before data stored by the earlier instructions have
-      become globally visible).
-    ],
-  )
-
 #focus-slide[
   Thank you. \
   Any questions?
@@ -491,4 +484,17 @@ Modify PTE format to store whether CPU must send a user interrupt whenever an ac
   ]
 
   But no supporting hardware yet!
+
+  == Some measurements
+
+  #table(
+    columns: (auto, auto),
+    table.header([], [Minimum (cycles)]),
+    [Page fault #math.arrow.r resumption], [1271],
+    [Page fault #math.arrow.r `SIGSEGV` handler], [2254],
+    [`mprotect`], [2929],
+    [Return from `SIGSEGV` handler], [902],
+  )
+
+  On Intel Core i5-1335U.
 ]
