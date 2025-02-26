@@ -111,27 +111,25 @@
       statements: (
         user-space-statement[Faulting instruction],
         internal-statement[Exception],
-        kernel-space-statement[Save registers],
+        kernel-space-statement[Save state],
         kernel-space-statement[Search for VMA],
         alternatives(
           kernel-space-statement[Find physical page],
           kernel-space-statement(bold: true)[Find physical page],
         ),
         kernel-space-statement[Update PTE],
-        kernel-space-statement[Resume],
+        kernel-space-statement[Restore state],
         internal-statement[`iret`@torvalds-page-fault-cost],
       ),
     ))
-
-    #only(2)[Policy is hard to change.]
-
-    #colbreak()
 
     ==== Legend
 
     #kernel-space-statement[Kernel space]
     #user-space-statement[User space]
     #internal-statement[CPU internals]
+
+    #only(2)[Policy is hard to change.]
   ],
 )
 
@@ -147,12 +145,12 @@
           statement-sequence(
             user-space-statement[Faulting instruction],
             internal-statement[Exception],
-            kernel-space-statement[Save registers],
+            kernel-space-statement[Save state],
             kernel-space-statement[Search for VMA],
             kernel-space-statement[Notify memory thread],
           ),
           internal-statement[`iret`],
-          kernel-space-statement[Resume],
+          kernel-space-statement[Restore state],
         ),
       ),
       (
@@ -191,10 +189,10 @@
         user-space-statement[Faulting instruction],
         internal-statement[User page fault check],
         internal-statement[Post & deliver user interrupt],
-        user-space-statement[Save registers],
+        user-space-statement[Save state],
         user-space-statement[Find physical page],
         kernel-space-statement[Update PTE],
-        user-space-statement[Resume],
+        user-space-statement[Restore state],
       ),
     ))
 
@@ -224,7 +222,7 @@
               internal-statement(bold: true)[User page fault check],
             ),
             internal-statement[Post & deliver user interrupt],
-            user-space-statement[Save registers],
+            user-space-statement[Save state],
             user-space-statement[Find physical page],
             alternatives(
               user-space-statement(bold: true)[Start async. PTE update],
@@ -235,7 +233,7 @@
             user-space-statement(bold: true)[Do work on a different coroutine],
             user-space-statement[Do work on a different coroutine],
           ),
-          user-space-statement[Resume],
+          user-space-statement[Restore state],
         ),
       ),
       (
