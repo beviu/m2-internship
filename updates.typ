@@ -424,13 +424,22 @@ Modify PTE format to store whether CPU must send a user interrupt whenever an ac
     ],
   )
 
-== FRED
-
-#quote(attribution: <fred-spec>)[
-  The FRED architecture was designed with the following goals:
-  - Improve overall performance and response time by *replacing event delivery*
-    through the interrupt descriptor table (IDT event delivery) and *event return* by
-    the IRET instruction with lower latency transitions.
+#focus-slide[
+  Thank you. \
+  Any questions?
 ]
 
-But no supporting hardware yet!
+= Questions
+
+#appendix[
+  == FRED
+
+  #quote(attribution: <fred-spec>)[
+    The FRED architecture was designed with the following goals:
+    - Improve overall performance and response time by *replacing event delivery*
+      through the interrupt descriptor table (IDT event delivery) and *event return* by
+      the IRET instruction with lower latency transitions.
+  ]
+
+  But no supporting hardware yet!
+]
