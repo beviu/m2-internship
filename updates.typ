@@ -110,6 +110,7 @@
       name: [App thread],
       statements: (
         user-space-statement[Faulting instruction],
+        internal-statement[Exception],
         kernel-space-statement[Save registers],
         kernel-space-statement[Search for VMA],
         alternatives(
@@ -144,6 +145,7 @@
         statements: (
           statement-sequence(
             user-space-statement[Faulting instruction],
+            internal-statement[Exception],
             kernel-space-statement[Save registers],
             kernel-space-statement[Search for VMA],
             kernel-space-statement[Notify memory thread],
@@ -344,5 +346,3 @@ Modify PTE format to store whether CPU must send a user interrupt whenever an ac
       become globally visible).
     ],
   )
-
-How to measure cache pollution?
