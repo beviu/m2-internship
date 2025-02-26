@@ -103,22 +103,35 @@
   )
 }
 
-#execution((
-  name: [App thread],
-  statements: (
-    user-space-statement[Faulting instruction],
-    kernel-space-statement[Save registers],
-    kernel-space-statement[Search for VMA],
-    alternatives(
-      kernel-space-statement[Find physical page],
-      kernel-space-statement(bold: true)[Find physical page],
-    ),
-    kernel-space-statement[Update PTE],
-    kernel-space-statement[Resume],
-  ),
-))
+#columns(
+  2,
+  [
+    #execution((
+      name: [App thread],
+      statements: (
+        user-space-statement[Faulting instruction],
+        kernel-space-statement[Save registers],
+        kernel-space-statement[Search for VMA],
+        alternatives(
+          kernel-space-statement[Find physical page],
+          kernel-space-statement(bold: true)[Find physical page],
+        ),
+        kernel-space-statement[Update PTE],
+        kernel-space-statement[Resume],
+      ),
+    ))
 
-#only(2)[Policy is hard to change.]
+    #only(2)[Policy is hard to change.]
+
+    #colbreak()
+
+    ==== Legend
+
+    #kernel-space-statement[Kernel space]
+    #user-space-statement[User space]
+    #internal-statement[CPU internals]
+  ],
+)
 
 == User space page fault handling
 
