@@ -9,6 +9,7 @@
 
 #show: simple-theme.with(
   aspect-ratio: "16-9",
+  primary: purple,
   config-info(
     title: [Hardware assisted user-space page fault handling],
     author: [Greg Depoire-\-Ferrer],
@@ -48,7 +49,7 @@
   February 27, 2025
 ]
 
-= Motivation
+= Background
 
 == A tendency of user-space delegation
 
@@ -59,21 +60,42 @@
   bibliography("bibliography.yaml", title: none),
 )
 
-=== Examples
+== US delegation of scheduling and page fault handling
 
-- `SIGSEGV` handling
-- Userfaultfd@userfaultfd-doc
-- ExtMem@extmem
-- USM (KrakOS)
-- ghOSt@ghost
+#grid(
+  columns: (8cm, 1fr),
+  [
+    === Use cases
 
-= Background
+    - `SIGSEGV` handling
+    - `userfaultfd`@userfaultfd-doc
+    - ExtMem@extmem
+    - USM (KrakOS)
+    - ghOSt@ghost
+
+    #pause
+  ],
+  [
+    === Hardware limitations
+
+    Unlike networking and disk I/O, *kernel bypass* is not possible #math.arrow.r new hardware features needed.
+  ],
+)
+
+= Plan
+
+== Plan of the internship
+
++ *Motivation*: evaluate the cost of existing approaches and approximate the cost of the proposed approaches using a model.
++ *Implementation* and *evaluation*.
+
+= Page fault latency cost
 
 == Minor page fault
 
 #align(horizon)[
   ```c
-  page = mmap(
+  volatile char *page = mmap(
     NULL, 4096, PROT_READ, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
   ```
 
@@ -83,7 +105,7 @@
     text(.6em, weight: "bold", pad(bottom: .75em, [App thread])),
     ```c
     /* Page fault. */
-    *(volatile char *)page;
+    *page;
     ```,
   )
 ]
