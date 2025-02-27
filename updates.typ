@@ -21,6 +21,8 @@
       minute: 0,
       second: 0,
     ),
+    institution: [KrakOS],
+    logo: image("krakos.png"),
   ),
 )
 
@@ -51,6 +53,10 @@
     column-gutter: 2em,
     [February 27, 2025], image("krakos.png"),
   )
+
+  #speaker-note[
+    I'm going to present what I plan to work on during my internship.
+  ]
 ]
 
 = Background
@@ -66,6 +72,13 @@
 
 A need for more *flexibility* in memory management.
 
+#speaker-note[
+  There is no *one size fits all* policy for memory management. There is recent work to move a part
+  of memory management to user space so that it can be modified more easily.
+
+  `userfaultfd` is a Linux functionality to let user space process page faults.
+]
+
 - ExtMem [ATC '24]
 - USM (PhD Assane Fall, KrakOS)
 - `userfaultfd`-based systems
@@ -80,17 +93,31 @@ A need for more *flexibility* in memory management.
 - Snap [SOSP '19] (Network)
 - etc.
 
-== User-space delegation of memory management
+#speaker-note[
+  Delegating services to user-space is not a new idea. It is commonly done for devices and IO like
+  networking devices, disks and filesystems. It has also been done for scheduling with ghOSt.
+
+  The goal is to improve application performance by using policies specifically tuned for the
+  application. The overhead introduced by delegating the service to user-space therefore has to be
+  minimal.
+]
+
+== Current limitations
 
 #grid(
   columns: (8cm, 1fr),
+  column-gutter: .4em,
   [
-    === Use cases
+    === Implementations
 
     - `SIGSEGV` handling
     - `userfaultfd`@userfaultfd-doc
     - ExtMem [ATC '24]
-    - USM (PhD Assane Fall, KrakOS)
+    - USM (PhD Assane~Fall, KrakOS)
+
+    #speaker-note[
+      Back to the case of memory management, the current implementations suffer from a limitation.
+    ]
 
     #pause
   ],
@@ -98,6 +125,11 @@ A need for more *flexibility* in memory management.
     === Hardware limitations
 
     Unlike networking and disk IO, *kernel bypass* is not possible #math.arrow.r new hardware features needed.
+
+    #speaker-note[
+      Kernel bypass is a technique used to make user-space delegation usable. Without it, the service
+      needs to ask the kernel before doing anything which introduces too much overhead.
+    ]
 
     #align(
       center,
@@ -188,7 +220,12 @@ A need for more *flexibility* in memory management.
 + *Motivation*: evaluate the cost of existing approaches and approximate the cost of the proposed approaches using a model.
 + *Implementation* and *evaluation*.
 
-= Page fault latency cost
+= Memory management costs
+
+#speaker-note[
+  The rest of the slides focus on the cost of page fault handling, which can be significant cost in
+  memory-intensive applications and is what we want to improve.
+]
 
 == Minor page fault
 
@@ -293,6 +330,10 @@ A need for more *flexibility* in memory management.
   ],
 )
 
+#speaker-note[
+  Present the legend. List the parts, one by one.
+]
+
 == `userfaultfd` memory management
 
 #let userfaultfd-page-fault-handling = execution(
@@ -384,7 +425,7 @@ Harder to measure.
 
 #pause
 
-=== Hardware modification
+=== Hardware modifications
 
 - By default, page faults continue to be handled by the kernel. #pause
 - VMAs for which page faults must be handled in user space are tagged.
@@ -574,6 +615,10 @@ Modify PTE format to store whether CPU must send a user interrupt whenever an ac
 #focus-slide[
   Thank you. \
   Any questions?
+
+  #speaker-note[
+    eBPF is not flexible enough: for example, you cannot implement complex data structures with eBPF.
+  ]
 ]
 
 #appendix[
