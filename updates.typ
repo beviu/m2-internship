@@ -11,7 +11,7 @@
   aspect-ratio: "16-9",
   primary: purple,
   config-info(
-    title: [Hardware assisted user-space page fault handling],
+    title: [Hardware assisted user-space memory management (uMM)],
     author: [Greg Depoire-\-Ferrer],
     date: datetime(
       year: 2025,
@@ -25,7 +25,7 @@
 )
 
 #title-slide[
-  = Hardware-assisted user-space page fault handling
+  = Hardware assisted user-space memory management (uMM)
 
   #v(2em)
 
@@ -40,18 +40,22 @@
     [
       *Supervised by:* \
       Alain Tchana \
-      #link("mailto:alain.tchana@grenoble-inp.fr")
+      Renaud Lachaize
     ],
   )
 
-  #v(2em)
+  #v(1em)
 
-  February 27, 2025
+  #grid(
+    columns: (auto, auto),
+    column-gutter: 2em,
+    [February 27, 2025], image("krakos.png"),
+  )
 ]
 
 = Background
 
-== User-space page fault handling
+== User-space memory management
 
 // Touying has a bug
 // (https://forum.typst.app/t/how-do-i-add-bibliography-to-a-touying-presentation/643/7) which makes
@@ -62,23 +66,21 @@
 
 A need for more *flexibility* in memory management.
 
-- ExtMem@extmem
-- USM (KrakOS)
+- ExtMem [ATC '24]
+- USM (PhD Assane Fall, KrakOS)
+- `userfaultfd`-based systems
 
 == A tendency of user-space delegation
 
-#columns(
-  2,
-  [
-    - ghOSt@ghost
-    - Bento@bento
-    - Swap
-    - Concord
-    - μFS
-  ],
-)
+- ghOSt [SOSP '21] (CPU)
+- uFS [SOSP '21] (FS)
+- Bento [FAST '21] (FS)
+- Concord [SOSP '23] (Network)
+- Demikernel [SOSP '21] (Network)
+- Snap [SOSP '19] (Network)
+- etc.
 
-== User-space delegation of page fault handling
+== User-space delegation of memory management
 
 #grid(
   columns: (8cm, 1fr),
@@ -87,15 +89,15 @@ A need for more *flexibility* in memory management.
 
     - `SIGSEGV` handling
     - `userfaultfd`@userfaultfd-doc
-    - ExtMem
-    - USM (KrakOS)
+    - ExtMem [ATC '24]
+    - USM (PhD Assane Fall, KrakOS)
 
     #pause
   ],
   [
     === Hardware limitations
 
-    Unlike networking and disk I/O, *kernel bypass* is not possible #math.arrow.r new hardware features needed.
+    Unlike networking and disk IO, *kernel bypass* is not possible #math.arrow.r new hardware features needed.
 
     #align(
       center,
@@ -108,9 +110,9 @@ A need for more *flexibility* in memory management.
           align(horizon, body),
         )
 
-        content((), frame: "rect", part[App], name: "app-before")
+        content((), frame: "rect", part[uMM], name: "umm")
         content(
-          (rel: (-1, 0), to: "app-before.west"),
+          (rel: (-1, 0), to: "umm.west"),
           frame: "rect",
           part[Kernel],
           name: "kernel",
@@ -119,34 +121,34 @@ A need for more *flexibility* in memory management.
         content(
           (rel: (-1, 0), to: "kernel.west"),
           frame: "rect",
-          part[Device],
-          name: "device-before",
+          part[CPU],
+          name: "cpu",
           anchor: "east",
         )
 
         content(
-          (rel: (0, -1), to: "app-before.south"),
+          (rel: (0, -1), to: "umm.south"),
           frame: "rect",
-          part[App],
-          name: "app-after",
+          part[Bento],
+          name: "bento",
           anchor: "north",
         )
         content(
-          (rel: (0, -1), to: "device-before.south"),
+          (rel: (0, -1), to: "cpu.south"),
           frame: "rect",
-          part[Device],
-          name: "device-after",
+          part[IO],
+          name: "io",
           anchor: "north",
         )
 
         line(
           (
             rel: (0, .5),
-            to: ("app-before.north-west", .5, "kernel.north-east"),
+            to: ("umm.north-west", .5, "kernel.north-east"),
           ),
           (
             horizontal: (),
-            vertical: (rel: (0, -.5), to: "app-after.south-west"),
+            vertical: (rel: (0, -.5), to: "bento.south-west"),
           ),
           stroke: (dash: "dashed", paint: gray),
         )
@@ -154,19 +156,26 @@ A need for more *flexibility* in memory management.
         line(
           (
             rel: (0, .5),
-            to: ("device-before.north-east", .5, "kernel.north-west"),
+            to: ("cpu.north-east", .5, "kernel.north-west"),
           ),
           (
             horizontal: (),
-            vertical: (rel: (0, -.5), to: "device-after.south-east"),
+            vertical: (rel: (0, -.5), to: "io.south-east"),
           ),
           stroke: (dash: "dashed", paint: gray),
         )
 
-        line("app-before", "kernel", mark: (symbol: ">"))
-        line("kernel", "device-before", mark: (symbol: ">"))
+        line("umm", "kernel", mark: (symbol: ">"))
+        line("kernel", "cpu", mark: (symbol: ">"))
+        bezier(
+          "umm.south",
+          "cpu.south",
+          (rel: (0, -1.5), to: ("umm.south", 50%, "cpu.south")),
+          stroke: red + 2pt,
+          mark: (symbol: ">"),
+        )
 
-        line("app-after", "device-after", mark: (symbol: ">"))
+        line("bento", "io", mark: (symbol: ">"))
       }),
     )
   ],
@@ -200,7 +209,7 @@ A need for more *flexibility* in memory management.
   )
 ]
 
-== Linux page fault handling
+== Linux memory management
 
 #let statement(body, color: none, bold: false) = {
   let fill = if bold {
@@ -284,7 +293,7 @@ A need for more *flexibility* in memory management.
   ],
 )
 
-== `userfaultfd` page fault handling
+== `userfaultfd` memory management
 
 #let userfaultfd-page-fault-handling = execution(
   (
@@ -338,7 +347,7 @@ A need for more *flexibility* in memory management.
 
     #alternatives(
       [
-        === Linux page fault handling
+        === Linux memory management
 
         #linux-page-fault-handling(references: false)
       ],
@@ -369,7 +378,7 @@ A need for more *flexibility* in memory management.
 
 Harder to measure.
 
-== Workflow
+== Workflow of the solution
 
 - Modify the hardware to make *kernel bypass* possible.
 
@@ -380,7 +389,7 @@ Harder to measure.
 - By default, page faults continue to be handled by the kernel. #pause
 - VMAs for which page faults must be handled in user space are tagged.
 
-== First version of user-interrupt page fault handling
+== First version of user-interrupt memory management
 
 #let user-interrupt-synchronous-page-fault-handling = execution((
   name: [App thread],
@@ -424,7 +433,7 @@ Harder to measure.
   ],
 )
 
-== `io_uring`-based user-interrupt page fault handling
+== `io_uring`-based user-interrupt memory management
 
 #slide(
   repeat: 4,
