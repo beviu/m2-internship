@@ -22,7 +22,6 @@
       second: 0,
     ),
     institution: [KrakOS],
-    logo: image("krakos.png"),
   ),
 )
 
@@ -48,10 +47,12 @@
 
   #v(1em)
 
+  #let logo = rect(fill: black, image("krakos.png"), inset: .1em)
+
   #grid(
     columns: (auto, auto),
     column-gutter: 2em,
-    [February 27, 2025], image("krakos.png"),
+    [February 27, 2025], logo,
   )
 
   #speaker-note[
