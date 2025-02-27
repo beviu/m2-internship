@@ -51,7 +51,7 @@
 
 = Background
 
-== A tendency of user-space delegation
+== User-space page fault handling
 
 // Touying has a bug
 // (https://forum.typst.app/t/how-do-i-add-bibliography-to-a-touying-presentation/643/7) which makes
@@ -60,7 +60,25 @@
   bibliography("bibliography.yaml", title: none),
 )
 
-== US delegation of scheduling and page fault handling
+A need for more *flexibility* in memory management.
+
+- ExtMem@extmem
+- USM (KrakOS)
+
+== A tendency of user-space delegation
+
+#columns(
+  2,
+  [
+    - ghOSt@ghost
+    - Bento@bento
+    - Swap
+    - Concord
+    - μFS
+  ],
+)
+
+== User-space delegation of page fault handling
 
 #grid(
   columns: (8cm, 1fr),
@@ -69,9 +87,8 @@
 
     - `SIGSEGV` handling
     - `userfaultfd`@userfaultfd-doc
-    - ExtMem@extmem
+    - ExtMem
     - USM (KrakOS)
-    - ghOSt@ghost
 
     #pause
   ],
@@ -79,6 +96,79 @@
     === Hardware limitations
 
     Unlike networking and disk I/O, *kernel bypass* is not possible #math.arrow.r new hardware features needed.
+
+    #align(
+      center,
+      cetz.canvas({
+        import cetz.draw: *
+
+        let part(body) = box(
+          height: 1.5em,
+          inset: (x: .5em),
+          align(horizon, body),
+        )
+
+        content((), frame: "rect", part[App], name: "app-before")
+        content(
+          (rel: (-1, 0), to: "app-before.west"),
+          frame: "rect",
+          part[Kernel],
+          name: "kernel",
+          anchor: "east",
+        )
+        content(
+          (rel: (-1, 0), to: "kernel.west"),
+          frame: "rect",
+          part[Device],
+          name: "device-before",
+          anchor: "east",
+        )
+
+        content(
+          (rel: (0, -1), to: "app-before.south"),
+          frame: "rect",
+          part[App],
+          name: "app-after",
+          anchor: "north",
+        )
+        content(
+          (rel: (0, -1), to: "device-before.south"),
+          frame: "rect",
+          part[Device],
+          name: "device-after",
+          anchor: "north",
+        )
+
+        line(
+          (
+            rel: (0, .5),
+            to: ("app-before.north-west", .5, "kernel.north-east"),
+          ),
+          (
+            horizontal: (),
+            vertical: (rel: (0, -.5), to: "app-after.south-west"),
+          ),
+          stroke: (dash: "dashed", paint: gray),
+        )
+
+        line(
+          (
+            rel: (0, .5),
+            to: ("device-before.north-east", .5, "kernel.north-west"),
+          ),
+          (
+            horizontal: (),
+            vertical: (rel: (0, -.5), to: "device-after.south-east"),
+          ),
+          stroke: (dash: "dashed", paint: gray),
+        )
+
+        line("app-before", "kernel", mark: (symbol: ">"))
+        line("kernel", "device-before", mark: (symbol: ">"))
+
+        line("app-after", "device-after", mark: (symbol: ">"))
+      }),
+    )
   ],
 )
 
@@ -279,7 +369,13 @@
 
 Harder to measure.
 
-== Hardware modification
+== Workflow
+
+- Modify the hardware to make *kernel bypass* possible.
+
+#pause
+
+=== Hardware modification
 
 - By default, page faults continue to be handled by the kernel. #pause
 - VMAs for which page faults must be handled in user space are tagged.

@@ -84,3 +84,24 @@ flexsc:
     parent:
       type: proceedings
       title: OSDI'10
+
+bento:
+  type: article
+  title: High Velocity Kernel File Systems with Bento
+  author:
+  - Miller, Samantha
+  - Zhang, Kaiyuan
+  - Chen, Mengqi
+  - Jennings, Ryan
+  - Chen, Ang
+  - Zhuo, Danyang
+  - Anderson, Thomas
+  date: 2021-02
+  page-range: 65–79
+  url: https://www.usenix.org/conference/fast21/presentation/miller
+  serial-number:
+    isbn: 978-1-939133-20-5
+  parent:
+    type: proceedings
+    title: 19th USENIX Conference on File and Storage Technologies (FAST 21)
+    publisher: USENIX Association
