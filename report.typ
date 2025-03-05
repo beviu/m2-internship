@@ -86,4 +86,18 @@ results:
   ),
 )
 
+#align(
+  center,
+  table(
+    columns: (auto, auto),
+    table.header([], [Minimum (cycles)]),
+    [Exception], [469],
+    [Save state], [252],
+    [Search for VMA], [1349],
+    [Handle fault], [264],
+    [Restore state], [51],
+    [`iret`], [160],
+  ),
+)
+
 #bibliography("bibliography.yaml")

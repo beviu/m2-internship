@@ -4,6 +4,17 @@
 #include <unistd.h>
 #include <x86intrin.h>
 
+static uint64_t rdtsc_serialize() {
+  uint32_t eax, edx;
+
+  asm volatile("\n"
+               "rdtsc\n"
+               ""
+               : "=a"(eax), "=d"(edx));
+
+  return eax | ((uint64_t)edx << 32);
+}
+
 int main() {
   ssize_t page_size = sysconf(_SC_PAGESIZE);
   if (page_size == -1) {
@@ -21,11 +32,11 @@ int main() {
   printf("time\n");
 
   for (int i = 0; i < 100000; ++i) {
-    int64_t start_counter = __rdtsc();
+    int64_t start_counter = rdtsc_serialize();
 
     *(volatile char *)page;
 
-    int64_t end_counter = __rdtsc();
+    int64_t end_counter = rdtsc_serialize();
 
     printf("%" PRIi64 "\n", end_counter - start_counter);
 
