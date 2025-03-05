@@ -1,3 +1,5 @@
+#import "@preview/cetz:0.3.3"
+
 #set document(
   title: [Hardware-assisted user-space page fault handling],
   author: "Greg Depoire--Ferrer",
@@ -102,19 +104,67 @@ results:
   ),
 )
 
-Timeline diagram:
-- Page fault
-- Save state start
-- Save state end
-- (`printk`)
-- Search for VMA start
-- Search for VMA end
-- (`printk`)
-- Handle MM fault start
-- Handle MM fault end
-- (`printk`)
-- Restore state start
-- `iret`
-- End
+#figure(
+  cetz.canvas({
+    import cetz.draw: *
+
+    line((0, 0), (13, 0), mark: (end: ">"))
+
+    line((2.4, 0), (4.8, 0), stroke: red + 2pt)
+    line((5.1, 0), (7.5, 0), stroke: red + 2pt)
+    line((8, 0), (10.4, 0), stroke: red + 2pt)
+
+    let mark(x, body, color: black, bottom: false) = {
+      line((x, -.2), (x, .2), stroke: color)
+
+      let body = text(size: .75em, fill: color, body)
+
+      if bottom {
+        content((rel: (0, -.5em), to: (x, -.2)), body, anchor: "north")
+      } else {
+        content((rel: (0, .5em), to: (x, .2)), body, anchor: "south")
+      }
+    }
+
+    mark(1, [PF], color: orange.darken(50%))
+    mark(1.8, math.accent(math.text[Save], math.arrow), color: teal.darken(50%))
+    mark(
+      2.4,
+      math.accent(math.text[Save], math.arrow.l),
+      color: teal.darken(50%),
+      bottom: true,
+    )
+    mark(
+      4.8,
+      math.accent(math.text[VMA], math.arrow),
+      color: fuchsia.darken(50%),
+    )
+    mark(
+      5.1,
+      math.accent(math.text[VMA], math.arrow.l),
+      color: fuchsia.darken(50%),
+      bottom: true,
+    )
+    mark(
+      7.5,
+      math.accent(math.text[Handle], math.arrow),
+      color: navy,
+    )
+    mark(
+      8,
+      math.accent(math.text[Handle], math.arrow.l),
+      color: navy,
+      bottom: true,
+    )
+    mark(
+      10.4,
+      pad(right: 1em, math.accent(math.text[Restore], math.arrow.r)),
+      color: maroon.darken(50%),
+    )
+    mark(10.5, [`iret`], color: yellow.darken(50%), bottom: true)
+    mark(11, pad(left: 1em)[End], color: lime.darken(50%))
+  }),
+  caption: [Positions of `rdtsc` instructions. `printk` calls are highlighted in red.],
+)
 
 #bibliography("bibliography.yaml")
