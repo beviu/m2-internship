@@ -1,12 +1,88 @@
 #import "@preview/cetz:0.3.3"
 
 #set document(
-  title: [Hardware-assisted user-space page fault handling],
+  title: [M2 internship report],
+  description: [Hardware-assisted user-space page fault handling],
   author: "Greg Depoire--Ferrer",
-  date: datetime(year: 2025, month: 2, day: 24),
+  date: datetime(year: 2025, month: 6, day: 1),
 )
 
-= Hardware-assisted user-space page fault handling
+_M2 internship report_ #h(1fr) Greg #smallcaps[Depoire-\-Ferrer]
+
+#let title(body) = align(
+  center,
+  block(
+    width: 80%,
+    align(
+      center,
+      [
+        #line(length: 50%)
+        #text(
+          size: 20pt,
+          weight: "bold",
+          body,
+        )
+        #line(length: 50%)
+      ],
+    ),
+  ),
+)
+
+#v(1fr)
+
+#title[Hardware-assisted user-space page fault handling]
+
+#pad(
+  y: 1.5cm,
+  align(
+    center,
+    block(
+      width: 90%,
+      grid(
+        columns: (1fr, 1fr),
+        column-gutter: 2em,
+        align: horizon,
+        [
+          _Location_
+
+          #v(.5em)
+
+          #link("https://lig-krakos.imag.fr/")[KrakOS team], \
+          #link("https://www.liglab.fr/")[Laboratoire d'Informatique de Grenoble~(LIG)]
+        ],
+        [
+          _Supervisors_
+
+          #v(.5em)
+
+          Alain #smallcaps[Tchana] \
+          #link("mailto:alain.tchana@grenoble-inp.fr")
+
+          #v(.25em)
+
+          Renaud #smallcaps[Lachaize] \
+          #link("mailto:renaud.lachaize@univ-grenoble-alpes.fr")
+        ],
+      ),
+    ),
+  ),
+)
+
+== Abstract
+
+#lorem(100)
+
+#v(1em)
+
+== Keywords
+
+_Keyword 1_, _Keyword 2_, _Keyword 3_
+
+#v(1fr)
+
+#h(1fr) June 1, 2025
+
+#pagebreak()
 
 == User-space page fault handling
 
@@ -73,6 +149,8 @@ pointer to the task that is currently executing on the CPU.
 I ran my `detailed-page-fault` benchmark inside a virtual machine on my computer
 with a _Intel Core i5-1335U_ processor and Linux 6.14, and got the following
 results:
+
+TODO: explain that physical page alloc is not included (zero page on read)
 
 #align(
   center,
