@@ -7,6 +7,10 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#ifdef UNSERIALIZED_RDTSC
+#include <x86intrin.h>
+#endif
+
 #define SYSLOG_ACTION_READ_ALL 3
 #define SYSLOG_ACTION_SIZE_BUFFER 10
 
@@ -328,7 +332,13 @@ int main() {
       "iret\n");
 
   for (int i = 0; i < 100000; ++i) {
-    uint64_t page_fault_tsc = rdtsc_serialize();
+    uint64_t page_fault_tsc;
+
+#ifdef UNSERIALIZED_RDTSC
+    page_fault_tsc = __rdtsc();
+#else
+    page_fault_tsc = rdtsc_serialize();
+#endif
 
     uint32_t restore_state_start_tsc_1, restore_state_start_tsc_2, iret_tsc_1,
         iret_tsc_2;
@@ -341,7 +351,13 @@ int main() {
                  : [page] "r"(page), "b"(0xb141a52a)
                  : "rdi");
 
-    uint64_t end_tsc = rdtsc_serialize();
+    uint64_t end_tsc;
+
+#ifdef UNSERIALIZED_RDTSC
+    end_tsc = __rdtsc();
+#else
+    end_tsc = rdtsc_serialize();
+#endif
 
     uint64_t restore_state_start_tsc =
         restore_state_start_tsc_1 | ((uint64_t)restore_state_start_tsc_2 << 32);
@@ -374,7 +390,7 @@ int main() {
            ", %" PRIu64 "\n",
            sections.save_state.start_tsc - page_fault_tsc,
            sections.save_state.end_tsc - sections.save_state.start_tsc,
-           sections.search_for_vma.end_tsc - sections.save_state.end_tsc,
+           sections.search_for_vma.end_tsc - sections.search_for_vma.start_tsc,
            sections.handle_mm_fault.end_tsc -
                sections.handle_mm_fault.start_tsc,
            iret_tsc - restore_state_start_tsc, end_tsc - iret_tsc);

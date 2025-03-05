@@ -77,12 +77,13 @@ results:
   table(
     columns: (auto, auto),
     table.header([], [Minimum (cycles)]),
-    [Exception], [479],
-    [Save state], [303],
-    [Search for VMA], [1448],
+    [Exception], [461],
+    [Save state], [317],
+    [Search for VMA], [158],
     [Handle fault], [308],
     [Restore state], [61],
-    [`iret`], [257],
+    [`iret`], [255],
+    [Sum], [1560],
   ),
 )
 
@@ -91,13 +92,29 @@ results:
   table(
     columns: (auto, auto),
     table.header([], [Minimum (cycles)]),
-    [Exception], [469],
-    [Save state], [252],
-    [Search for VMA], [1349],
-    [Handle fault], [264],
-    [Restore state], [51],
-    [`iret`], [160],
+    [Exception], [455],
+    [Save state], [319],
+    [Search for VMA], [158],
+    [Handle fault], [311],
+    [Restore state], [61],
+    [`iret`], [159],
+    [Sum], [1463],
   ),
 )
+
+Timeline diagram:
+- Page fault
+- Save state start
+- Save state end
+- (`printk`)
+- Search for VMA start
+- Search for VMA end
+- (`printk`)
+- Handle MM fault start
+- Handle MM fault end
+- (`printk`)
+- Restore state start
+- `iret`
+- End
 
 #bibliography("bibliography.yaml")
