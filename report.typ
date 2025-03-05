@@ -1,4 +1,5 @@
 #import "@preview/cetz:0.3.3"
+#import "@preview/drafting:0.2.2": *
 
 #set document(
   title: [M2 internship report],
@@ -150,7 +151,7 @@ I ran my `detailed-page-fault` benchmark inside a virtual machine on my computer
 with a _Intel Core i5-1335U_ processor and Linux 6.14, and got the following
 results:
 
-TODO: explain that physical page alloc is not included (zero page on read)
+#inline-note[Explain that physical page alloc is not included (zero page on read)]
 
 #align(
   center,
