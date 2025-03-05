@@ -40,4 +40,50 @@ _UITT_ registered. This table contains _UITT entries_ that contain a pointer to
 a UPID as well as a user-interrupt vector. The `senduipi` instruction takes an
 index into this table.
 
+== Measuring the execution time of small steps
+
+In order to evaluate the hardware modifications that we propose, we make a model
+of the current page fault handling and then use it to approximate what would be
+the execution time of a page fault with the hardware modifications.
+
+To do that, we will need to measure the execution time of several small steps
+during page fault handling.
+
+We start with the normal Linux page fault handling in the case of a minor page
+fault. We are interested in the execution time in cycles of the following steps:
+
+- Time from execution of faulting instruction to first instruction in OS
+  exception handler.
+- Time to save the CPU state (including registers) before the C code is called.
+- Time to search for the VMA.
+- Time to find a free physical page.
+- Time to update the PTE.
+- TIme to restore the CPU state after the C code returns.
+
+We will instrument the kernel to measure these times.
+
+However, we only want to instrument the code flow for a single process. To do
+this, we are going to add checks that rely on the `current` pointer which is a
+pointer to the task that is currently executing on the CPU.
+
+=== Results
+
+I ran my `detailed-page-fault` benchmark inside a virtual machine on my computer
+with a _Intel Core i5-1335U_ processor and Linux 6.14, and got the following
+results:
+
+#align(
+  center,
+  table(
+    columns: (auto, auto),
+    table.header([], [Minimum (cycles)]),
+    [Exception], [479],
+    [Save state], [303],
+    [Search for VMA], [1448],
+    [Handle fault], [308],
+    [Restore state], [61],
+    [`iret`], [257],
+  ),
+)
+
 #bibliography("bibliography.yaml")
