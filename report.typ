@@ -175,20 +175,25 @@ _UITT_ registered. This table contains _UITT entries_ that contain a pointer to
 a UPID as well as a user-interrupt vector. The `senduipi` instruction takes an
 index into this table.
 
-= Measuring the execution time of small steps
+= A model of the execution time of a minor page fault
 
-In order to evaluate the hardware modifications that we propose, we make a model
-of the current page fault handling and then use it to approximate what would be
-the execution time of a page fault with the hardware modifications.
-
-To do that, we will need to measure the execution time of several small steps
-during page fault handling.
+To evaluate the hardware modifications that we propose, we build and validate
+a model of the current page fault handling and then use it to approximate what
+would be the execution time of a page fault with the modifications.
 
 We start by evaluating the cost of a minor page fault on Linux without any
 modification. A _minor page fault_ occurs when the physical page is directly
 ready to be mapped by the operating system, as opposed to a _major page fault_
 where there is work to do before the fault can be resolved (e.g. read a physical
 page from disk). Minor page faults are the fastest.
+
+One way to trigger a minor page fault is by reading from a page that was just
+allocated. On Linux, newly allocated pages are filled with the zero byte. Linux
+has an optimization where the the page fault from the first read to page is
+treated by updating the PTE to point to a special physical page called the _zero
+page_ that is filled with the zero byte and is shared among all processes. The
+PTE is also updated to make the virtual page read-only so that when the page is
+actually written to, a physical page is finally allocated.
 
 #figure(caption: [Triggering a minor page fault])[
   ```c
@@ -199,31 +204,17 @@ page from disk). Minor page faults are the fastest.
   ```
 ]
 
-handling in the case of a minor page
-fault. We are interested in the execution time in cycles of the following steps:
+The treatement of a page fault can be broken down into the following operations:
 
-- Time from execution of faulting instruction to first instruction in OS
-  exception handler.
-- Time to save the CPU state (including registers) before the C code is called.
-- Time to search for the VMA.
-- Time to find a free physical page.
-- Time to update the PTE.
-- TIme to restore the CPU state after the C code returns.
++ *Exception*: the processor detects the page fault and jumps to the operating system exception handler.
++ *Save state*: the operating system saves the registers of the program that generated the page fault.
++ *Search for VMA*: the operating system searches for the VMA that contains the faulting virtual address.
++ *Handle fault*: the operating system fills in the physical page number in the PTE.
++ *Restore state*: the operating system restores the register to the ones that were saved before.
++ *IRET*: the operating system jumps back to the code that was executing before the page fault with the IRET (Interrupt RETurn) instruction.
 
-We will instrument the kernel to measure these times.
-
-However, we only want to instrument the code flow for a single process. To do
-this, we are going to add checks that rely on the `current` pointer which is a
-pointer to the task that is currently executing on the CPU.
-
-== Results
-
-I ran my `detailed-page-fault` benchmark inside a virtual machine on my computer
-with a _Intel Core i5-1335U_ processor and Linux 6.14, and got the following
-results:
-
-#inline-note[Explain that physical page alloc is not included (zero page on read)]
-
+The measurement methodology is described in @execution-time-measurement-method.
+The results are shown in @linux-page-fault-breakdown.
 #figure(
   caption: [Linux page fault execution time breakdown],
   table(
@@ -234,10 +225,20 @@ results:
     [Search for VMA], [158],
     [Handle fault], [308],
     [Restore state], [61],
-    [`iret`], [255],
-    [Sum], [1560],
+    [IRET], [255],
+    [Total], [1560],
   ),
 ) <linux-page-fault-breakdown>
+
+#inline-note[
+  Rerun the experiment on the test machine and update the environment in the
+  appendix.
+]
+
+#inline-note[
+  Think about whether taking the minimum is a good idea. In any case, explain
+  why I chose what I end up choosing. Don't forget to update the other table.
+]
 
 // This is not a heading so that it does not appear in the outline.
 #text(
@@ -253,14 +254,16 @@ results:
 #bibliography("bibliography.yaml", title: none)
 
 #let appendix(body) = {
-  set heading(numbering: "A", supplement: [Appendix])
+  set heading(numbering: "A.1", supplement: [Appendix])
   counter(heading).update(0)
   body
 }
 
 #show: appendix
 
-= Measuring execution time
+= Measuring execution time <execution-time-measurement-method>
+
+== RDTSC
 
 The execution time of the operations we measure is in the order of a few
 nanoseconds. We need a clock with a high frequency that is simple and fast to
@@ -288,10 +291,12 @@ operation as measured in @linux-page-fault-breakdown, but without the fences.
     [Search for VMA], [158],
     [Handle fault], [311],
     [Restore state], [61],
-    [`iret`], [159],
-    [Sum], [1463],
+    [IRET], [159],
+    [Total], [1463],
   ),
 ) <linux-page-fault-no-fence-breakdown>
+
+== Minor page fault
 
 Measuring in kernel space proved to be more difficult than measuring in user
 space as we want to ignore all but one process, and there is no easy way to
@@ -378,3 +383,13 @@ using `printk` (similar to `printf` in userspace). The execution time of the
   caption: [Positions of RDTSC instructions with `printk` calls in red],
 )
 
+The code for measuring the execution time of the operations that happen during
+a minor page fault can be found in the `page-fault-breakdown` directory of the
+repository: there is a kernel patch as well as the source code of a program
+to be run on a patched kernel that produces a CSV file where each row contains
+the execution time of the operations for a page fault.
+
+== Environment
+
+The measurements were done on machine with a _Intel Core i5-1335U_ processor and
+Linux 6.14.
