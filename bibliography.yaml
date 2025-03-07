@@ -6,7 +6,6 @@ intel-manual:
   volume: 1-4
   serial-number: 253665-086US
   url: https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html
-
 fred-spec:
   type: web
   title: Flexible Return and Event Delivery (FRED) Specification
@@ -14,26 +13,23 @@ fred-spec:
   organization: Intel
   serial-number: 346446-004US
   url: https://www.intel.com/content/www/us/en/content-details/779982/flexible-return-and-event-delivery-fred-specification.html
-
 userfaultfd-doc:
   type: web
   title: Userfaultfd
   url: https://docs.kernel.org/admin-guide/mm/userfaultfd.html
-
 torvalds-page-fault-cost:
   type: web
   author: Linus Torvalds
   url: https://web.archive.org/web/20181208181101/https://plus.google.com/+LinusTorvalds/posts/YDKRFDwHwr6
-
 extmem:
   type: article
   title: '{ExtMem}: Enabling {Application-Aware} Virtual Memory Management for {Data-Intensive} Applications'
   author:
-  - Jalalian, Sepehr
-  - Patel, Shaurya
-  - Hajidehi, Milad Rezaei
-  - Seltzer, Margo
-  - Fedorova, Alexandra
+    - Jalalian, Sepehr
+    - Patel, Shaurya
+    - Hajidehi, Milad Rezaei
+    - Seltzer, Margo
+    - Fedorova, Alexandra
   date: 2024-07
   page-range: 397–408
   url: https://www.usenix.org/conference/atc24/presentation/jalalian
@@ -44,21 +40,20 @@ extmem:
     title: 2024 USENIX Annual Technical Conference (USENIX ATC 24)
     publisher: USENIX Association
     location: Santa Clara, CA
-
 ghost:
   type: article
   title: 'ghOSt: Fast and Flexible User-Space Delegation of Linux Scheduling'
   author:
-  - Humphries, Jack Tigar
-  - Natu, Neel
-  - Chaugule, Ashwin
-  - Weisse, Ofir
-  - Rhoden, Barret
-  - Don, Josh
-  - Rizzo, Luigi
-  - Rombakh, Oleg
-  - Turner, Paul Jack
-  - Kozyrakis, Christos
+    - Humphries, Jack Tigar
+    - Natu, Neel
+    - Chaugule, Ashwin
+    - Weisse, Ofir
+    - Rhoden, Barret
+    - Don, Josh
+    - Rizzo, Luigi
+    - Rombakh, Oleg
+    - Turner, Paul Jack
+    - Kozyrakis, Christos
   date: 2021
   page-range: 588–604
   url: https://doi.org/10.1145/3477132.3483542
@@ -66,13 +61,12 @@ ghost:
     type: proceedings
     title: Proceedings of the ACM SIGOPS 28th Symposium on Operating Systems Principles CD-ROM
     location: New York, NY, USA
-
 flexsc:
   type: article
   title: 'FlexSC: flexible system call scheduling with exception-less system calls'
   author:
-  - Soares, Livio
-  - Stumm, Michael
+    - Soares, Livio
+    - Stumm, Michael
   date: 2010
   page-range: 33–46
   abstract: 'For the past 30+ years, system calls have been the de facto interface used by applications to request services from the operating system kernel. System calls have almost universally been implemented as a synchronous mechanism, where a special processor instruction is used to yield userspace execution to the kernel. In the first part of this paper, we evaluate the performance impact of traditional synchronous system calls on system intensive workloads. We show that synchronous system calls negatively affect performance in a significant way, primarily because of pipeline flushing and pollution of key processor structures (e.g., TLB, data and instruction caches, etc.).We propose a new mechanism for applications to request services from the operating system kernel: exception-less system calls. They improve processor efficiency by enabling flexibility in the scheduling of operating system work, which in turn can lead to significantly increased temporal and spacial locality of execution in both user and kernel space, thus reducing pollution effects on processor structures. Exception-less system calls are particularly effective on multicore processors. They primarily target highly threaded server applications, such as Web servers and database servers.We present FlexSC, an implementation of exceptionless system calls in the Linux kernel, and an accompanying user-mode thread package (FlexSC-Threads), binary compatible with POSIX threads, that translates legacy synchronous system calls into exception-less ones transparently to applications. We show how FlexSC improves performance of Apache by up to 116%, MySQL by up to 40%, and BIND by up to 105% while requiring no modifications to the applications.'
@@ -84,18 +78,17 @@ flexsc:
     parent:
       type: proceedings
       title: OSDI'10
-
 bento:
   type: article
   title: High Velocity Kernel File Systems with Bento
   author:
-  - Miller, Samantha
-  - Zhang, Kaiyuan
-  - Chen, Mengqi
-  - Jennings, Ryan
-  - Chen, Ang
-  - Zhuo, Danyang
-  - Anderson, Thomas
+    - Miller, Samantha
+    - Zhang, Kaiyuan
+    - Chen, Mengqi
+    - Jennings, Ryan
+    - Chen, Ang
+    - Zhuo, Danyang
+    - Anderson, Thomas
   date: 2021-02
   page-range: 65–79
   url: https://www.usenix.org/conference/fast21/presentation/miller
@@ -105,3 +98,96 @@ bento:
     type: proceedings
     title: 19th USENIX Conference on File and Storage Technologies (FAST 21)
     publisher: USENIX Association
+syrup:
+  type: article
+  title: 'Syrup: User-Defined Scheduling Across the Stack'
+  author:
+    - Kaffes, Kostis
+    - Humphries, Jack Tigar
+    - Mazières, David
+    - Kozyrakis, Christos
+  date: 2021
+  page-range: 605–620
+  url: https://doi.org/10.1145/3477132.3483548
+  serial-number:
+    doi: 10.1145/3477132.3483548
+    isbn: '9781450387095'
+  abstract: Suboptimal scheduling decisions in operating systems, networking stacks, and application runtimes are often responsible for poor application performance, including higher latency and lower throughput. These poor decisions stem from a lack of insight into the applications and requests the scheduler is handling and a lack of coherence and coordination between the various layers of the stack, including NICs, kernels, and applications.We propose Syrup, a framework for user-defined scheduling. Syrup enables untrusted application developers to express application-specific scheduling policies across these system layers without being burdened with the low-level system mechanisms that implement them. Application developers write a scheduling policy with Syrup as a set of matching functions between inputs (threads, network packets, network connections) and executors (cores, network sockets, NIC queues) and then deploy it across system layers without modifying their code. Syrup supports multi-tenancy as multiple co-located applications can each safely and securely specify a custom policy. We present several examples of uses of Syrup to define application and workload-specific scheduling policies in a few lines of code, deploy them across the stack, and improve performance up to 8x compared with default policies.
+  parent:
+    type: proceedings
+    title: Proceedings of the ACM SIGOPS 28th Symposium on Operating Systems Principles
+    publisher: Association for Computing Machinery
+    location: Virtual Event, Germany
+    parent:
+      type: proceedings
+      title: SOSP '21
+ufs:
+  type: article
+  title: Scale and Performance in a Filesystem Semi-Microkernel
+  author:
+    - Liu, Jing
+    - Rebello, Anthony
+    - Dai, Yifan
+    - Ye, Chenhao
+    - Kannan, Sudarsun
+    - Arpaci-Dusseau, Andrea C.
+    - Arpaci-Dusseau, Remzi H.
+  date: 2021
+  page-range: 819–835
+  url: https://doi.org/10.1145/3477132.3483581
+  serial-number:
+    doi: 10.1145/3477132.3483581
+    isbn: '9781450387095'
+  abstract: 'We present uFS, a user-level filesystem semi-microkernel. uFS takes advantage of a high-performance storage development kit to realize a fully-functional, crash-consistent, highly-scalable filesystem, with relative developer ease. uFS delivers scalable high performance with a number of novel techniques: careful partitioning of in-memory and on-disk data structures to enable concurrent access without locking, inode migration for balancing load across filesystem threads, and a dynamic scaling algorithm for determining the number of filesystem threads to serve the current workload. Through measurements, we show that uFS has good base performance and excellent scalability; for example, uFS delivers nearly twice the throughput of ext4 for LevelDB on YCSB workloads.'
+  parent:
+    type: proceedings
+    title: Proceedings of the ACM SIGOPS 28th Symposium on Operating Systems Principles
+    publisher: Association for Computing Machinery
+    location: Virtual Event, Germany
+    parent:
+      type: proceedings
+      title: SOSP '21
+snap:
+  type: article
+  title: 'Snap: a microkernel approach to host networking'
+  author:
+    - Marty, Michael
+    - name: Kruijf
+      given-name: Marc
+      prefix: de
+    - Adriaens, Jacob
+    - Alfeld, Christopher
+    - Bauer, Sean
+    - Contavalli, Carlo
+    - Dalton, Michael
+    - Dukkipati, Nandita
+    - Evans, William C.
+    - Gribble, Steve
+    - Kidd, Nicholas
+    - Kononov, Roman
+    - Kumar, Gautam
+    - Mauer, Carl
+    - Musick, Emily
+    - Olson, Lena
+    - Rubow, Erik
+    - Ryan, Michael
+    - Springborn, Kevin
+    - Turner, Paul
+    - Valancius, Valas
+    - Wang, Xi
+    - Vahdat, Amin
+  date: 2019
+  page-range: 399–413
+  url: https://doi.org/10.1145/3341301.3359657
+  serial-number:
+    doi: 10.1145/3341301.3359657
+    isbn: '9781450368735'
+  abstract: This paper presents our design and experience with a microkernel-inspired approach to host networking called Snap. Snap is a userspace networking system that supports Google's rapidly evolving needs with flexible modules that implement a range of network functions, including edge packet switching, virtualization for our cloud platform, traffic shaping policy enforcement, and a high-performance reliable messaging and RDMA-like service. Snap has been running in production for over three years, supporting the extensible communication needs of several large and critical systems.Snap enables fast development and deployment of new networking features, leveraging the benefits of address space isolation and the productivity of userspace software development together with support for transparently upgrading networking services without migrating applications off of a machine. At the same time, Snap achieves compelling performance through a modular architecture that promotes principled synchronization with minimal state sharing, and supports real-time scheduling with dynamic scaling of CPU resources through a novel kernel/userspace CPU scheduler co-design. Our evaluation demonstrates over 3x Gbps/core improvement compared to a kernel networking stack for RPC workloads, software-based RDMA-like performance of up to 5M IOPS/core, and transparent upgrades that are largely imperceptible to user applications. Snap is deployed to over half of our fleet of machines and supports the needs of numerous teams.
+  parent:
+    type: proceedings
+    title: Proceedings of the 27th ACM Symposium on Operating Systems Principles
+    publisher: Association for Computing Machinery
+    location: Huntsville, Ontario, Canada
+    parent:
+      type: proceedings
+      title: SOSP '19

@@ -6,5 +6,6 @@
     typstyle.enable = true;
     clang-format.enable = true;
     ruff.enable = true;
+    yamlfmt.enable = true;
   };
 }

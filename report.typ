@@ -1,6 +1,8 @@
 #import "@preview/cetz:0.3.3"
 #import "@preview/drafting:0.2.2": *
 
+#set heading(numbering: "1.1")
+
 #set document(
   title: [M2 internship report],
   description: [Hardware-assisted user-space page fault handling],
@@ -9,6 +11,8 @@
 )
 
 _M2 internship report_ #h(1fr) Greg #smallcaps[Depoire-\-Ferrer]
+
+#v(1fr)
 
 #let title(body) = align(
   center,
@@ -28,8 +32,6 @@ _M2 internship report_ #h(1fr) Greg #smallcaps[Depoire-\-Ferrer]
     ),
   ),
 )
-
-#v(1fr)
 
 #title[Hardware-assisted user-space page fault handling]
 
@@ -69,15 +71,20 @@ _M2 internship report_ #h(1fr) Greg #smallcaps[Depoire-\-Ferrer]
   ),
 )
 
-== Abstract
+#let part(body) = block(
+  above: 2.5em,
+  below: 1.125em,
+  text(
+    size: 13.2pt,
+    weight: "bold",
+    body,
+  ),
+)
 
-#lorem(100)
+#part[Abstract]
 
-#v(1em)
-
-== Keywords
-
-_Keyword 1_, _Keyword 2_, _Keyword 3_
+This report proposes a hardware modification to Intel CPUs to optimize the
+user-space page fault handling in Linux.
 
 #v(1fr)
 
@@ -85,7 +92,56 @@ _Keyword 1_, _Keyword 2_, _Keyword 3_
 
 #pagebreak()
 
-== User-space page fault handling
+#{
+  show outline.entry.where(level: 1): set block(above: 1.2em)
+  show outline.entry.where(level: 1): set text(weight: "bold")
+
+  show outline.entry: set outline.entry(
+    fill: pad(left: .5em, right: 1em, repeat([.], gap: 0.5em)),
+  )
+  show outline.entry.where(level: 1): set outline.entry(fill: none)
+
+  outline()
+}
+
+= Introduction
+
+== Page faults
+
+_Virtual memory_ is a technique to control the memory visible and usable
+by a program. With virtual memory, a program accesses memory using _virtual
+addresses_ that the memory management unit (MMU) maps to _physical addresses_.
+
+_Paging_ is an implementation of virtual memory that splits memory into _pages_.
+The MMU converts a virtual address into a virtual page number and offset within
+that page. Then it maps the virtual page number to a physical page number using
+the _page table_. Finally, it converts the physical page number and offset
+back into a physical address. In a system with pages of size $N$, virtual
+address $v$ is mapped to physical address $p$ using the formula
+
+$
+  p = "table"(floor(v \/ N)) times N + (v "mod" N)
+$
+
+A _page table entry_ (PTE) can be _present_ or _missing_. A present PTE contains
+a physical page number and access bits that specify if the virtual page is
+readable and writable. A missing PTE contains arbitrary data ignored by the MMU.
+When the MMU encounters a missing PTE or when the access bits deny the access
+(for example, a write to a read-only virtual page), the processor generates an
+exception called a _page fault_.
+
+Paging can be used to make physical memory allocation lazy. On Linux, when a
+program allocates virtual memory using the `mmap` system call#footnote[Without
+`MAP_POPULATE` and with memory overcommitment enabled (the default).], the
+kernel creates a new _virtual memory area_ (VMA) but does not allocate physical
+memory or modify the page table yet. Later, when the program accesses that memory
+for the first time, the MMU sees that the PTE is missing, a page fault is
+generated, and Linux takes over. Linux allocates a physical page, writes its
+number into the PTE and resumes the execution of the program. In a similar
+manner, paging is used to implement _swapping_ where a secondary storage (such
+as disk) is used as additional memory.
+
+== User-space delegation
 
 On Linux, page faults are currently handled in kernel space. Moving the
 handling of page faults to user space allows for more flexibility in the page
@@ -99,27 +155,27 @@ will return a structure with information about the page fault and an `ioctl`
 can be made on the FD to install a PTE and resume the execution of the faulted
 thread.
 
-== User interrupts
+= User interrupts
 
 _User interrupts_ is a feature that allows delivering interrupts directly
 to user space@intel-manual. It was first introduced in Intel Sapphire Rapids
 processors.
 
-=== UPID
+== UPID
 
 Threads that receive user interrupts need to have an _user posted-interrupt
 descriptor_ or _UPID_ registered. The _UPID_ is managed by the OS. It is used
 to by the `senduipi` instruction and during user-interrupt recognition and
 delivery.
 
-=== UITT
+== UITT
 
 Threads that send user interrupt need to have a _user-interrupt target table_ or
 _UITT_ registered. This table contains _UITT entries_ that contain a pointer to
 a UPID as well as a user-interrupt vector. The `senduipi` instruction takes an
 index into this table.
 
-== Measuring the execution time of small steps
+= Measuring the execution time of small steps
 
 In order to evaluate the hardware modifications that we propose, we make a model
 of the current page fault handling and then use it to approximate what would be
@@ -145,7 +201,7 @@ However, we only want to instrument the code flow for a single process. To do
 this, we are going to add checks that rely on the `current` pointer which is a
 pointer to the task that is currently executing on the CPU.
 
-=== Results
+== Results
 
 I ran my `detailed-page-fault` benchmark inside a virtual machine on my computer
 with a _Intel Core i5-1335U_ processor and Linux 6.14, and got the following
@@ -246,4 +302,15 @@ results:
   caption: [Positions of `rdtsc` instructions. `printk` calls are highlighted in red.],
 )
 
-#bibliography("bibliography.yaml")
+// This is not a heading so that it does not appear in the outline.
+#text(
+  size: 15.4pt,
+  weight: "bold",
+  block(
+    above: 1.29em,
+    below: .54em,
+    [Bibliography],
+  ),
+)
+
+#bibliography("bibliography.yaml", title: none)
