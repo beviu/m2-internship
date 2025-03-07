@@ -125,8 +125,8 @@ $
 
 A _page table entry_ (PTE) can be _present_ or _missing_. A present PTE contains
 a physical page number and access bits that specify if the virtual page is
-readable and writable. A missing PTE contains arbitrary data ignored by the MMU.
-When the MMU encounters a missing PTE or when the access bits deny the access
+readable and writable. A absent PTE contains arbitrary data ignored by the MMU.
+When the MMU encounters a absent PTE or when the access bits deny the access
 (for example, a write to a read-only virtual page), the processor generates an
 exception called a _page fault_.
 
@@ -135,7 +135,7 @@ program allocates virtual memory using the `mmap` system call#footnote[Without
 `MAP_POPULATE` and with memory overcommitment enabled (the default).], the
 kernel creates a new _virtual memory area_ (VMA) but does not allocate physical
 memory or modify the page table yet. Later, when the program accesses that memory
-for the first time, the MMU sees that the PTE is missing, a page fault is
+for the first time, the MMU sees that the PTE is absent, a page fault is
 generated, and Linux takes over. Linux allocates a physical page, writes its
 number into the PTE and resumes the execution of the program. In a similar
 manner, paging is used to implement _swapping_ where a secondary storage (such
@@ -184,7 +184,22 @@ the execution time of a page fault with the hardware modifications.
 To do that, we will need to measure the execution time of several small steps
 during page fault handling.
 
-We start with the normal Linux page fault handling in the case of a minor page
+We start by evaluating the cost of a minor page fault on Linux without any
+modification. A _minor page fault_ occurs when the physical page is directly
+ready to be mapped by the operating system, as opposed to a _major page fault_
+where there is work to do before the fault can be resolved (e.g. read a physical
+page from disk). Minor page faults are the fastest.
+
+#figure(caption: [Triggering a minor page fault])[
+  ```c
+  void *page = mmap(NULL, page_size, PROT_READ, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+
+  /* Read the first byte of the page. */
+  *(volatile char *)page;
+  ```
+]
+
+handling in the case of a minor page
 fault. We are interested in the execution time in cycles of the following steps:
 
 - Time from execution of faulting instruction to first instruction in OS
@@ -209,8 +224,8 @@ results:
 
 #inline-note[Explain that physical page alloc is not included (zero page on read)]
 
-#align(
-  center,
+#figure(
+  caption: [Linux page fault execution time breakdown],
   table(
     columns: (auto, auto),
     table.header([], [Minimum (cycles)]),
@@ -222,10 +237,49 @@ results:
     [`iret`], [255],
     [Sum], [1560],
   ),
+) <linux-page-fault-breakdown>
+
+// This is not a heading so that it does not appear in the outline.
+#text(
+  size: 15.4pt,
+  weight: "bold",
+  block(
+    above: 1.29em,
+    below: .54em,
+    [Bibliography],
+  ),
 )
 
-#align(
-  center,
+#bibliography("bibliography.yaml", title: none)
+
+#let appendix(body) = {
+  set heading(numbering: "A", supplement: [Appendix])
+  counter(heading).update(0)
+  body
+}
+
+#show: appendix
+
+= Measuring execution time
+
+The execution time of the operations we measure is in the order of a few
+nanoseconds. We need a clock with a high frequency that is simple and fast to
+read. We use the RDTSC (ReaD Time Stamp Counter) instruction. The _time stamp
+counter_' is a counter driven by a clock whose frequency depends on the CPU but
+is often in the order of the CPU's maximum frequency.
+
+The RDTSC instruction is not serializing: the processor is free to reorder
+previous and subsequent instructions to make full use of its instruction
+pipeline. We use _fences_ to prevent instruction reordering around the RDTSC
+instruction as suggested by the manual.
+
+These fences slightly increase the execution time of the operations
+that we measure but make the results easier to interpret. For example,
+@linux-page-fault-no-fence-breakdown shows the execution time of the same
+operation as measured in @linux-page-fault-breakdown, but without the fences.
+
+#figure(
+  caption: [Linux page fault execution time breakdown (without fences)],
   table(
     columns: (auto, auto),
     table.header([], [Minimum (cycles)]),
@@ -237,7 +291,29 @@ results:
     [`iret`], [159],
     [Sum], [1463],
   ),
-)
+) <linux-page-fault-no-fence-breakdown>
+
+Measuring in kernel space proved to be more difficult than measuring in user
+space as we want to ignore all but one process, and there is no easy way to
+store and/or communicate the measures back to user space.
+
+To detect that the page fault comes from the process we want to measure, we
+store a fixed value in a given register and check it on the other side.
+
+#figure(caption: [Storing a magic value in a register])[
+  ```asm
+  /* Before the page fault. */
+  movl $0xb141a52a, %rbx
+
+  /* In the exception handler. */
+  cmpl $0xb141a52a, %ebx
+  ```
+]
+
+To communicate the measures to user space, we print them to the kernel buffer
+using `printk` (similar to `printf` in userspace). The execution time of the
+`printk` calls is large so we measure the TSC before and after the calls to
+`printk` and subtract them.
 
 #figure(
   cetz.canvas({
@@ -299,18 +375,6 @@ results:
     mark(10.5, [`iret`], color: yellow.darken(50%), bottom: true)
     mark(11, pad(left: 1em)[End], color: lime.darken(50%))
   }),
-  caption: [Positions of `rdtsc` instructions. `printk` calls are highlighted in red.],
+  caption: [Positions of RDTSC instructions with `printk` calls in red],
 )
 
-// This is not a heading so that it does not appear in the outline.
-#text(
-  size: 15.4pt,
-  weight: "bold",
-  block(
-    above: 1.29em,
-    below: .54em,
-    [Bibliography],
-  ),
-)
-
-#bibliography("bibliography.yaml", title: none)
