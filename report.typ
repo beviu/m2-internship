@@ -352,14 +352,8 @@ minimum amount of work needed
 
   table(
     columns: threads.len(),
-    stroke: (x, y) => if threads.len() > 0 {
-      if x > 0 and x < threads.len() - 1 {
-        (left: (dash: "dotted"), right: (dash: "dotted"))
-      } else if x > 0 {
-        (left: (dash: "dotted"))
-      } else if x < threads.len() - 1 {
-        (right: (dash: "dotted"))
-      }
+    stroke: (x, y) => if threads.len() > 0 and x < threads.len() - 1 {
+      (right: (dash: "dotted"))
     },
     table.header(..headers),
     ..columns,
