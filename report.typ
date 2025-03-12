@@ -1,5 +1,6 @@
 #import "@preview/cetz:0.3.3"
 #import "@preview/drafting:0.2.2": *
+#import "simple-arrow.typ": simple-arrow
 
 #set heading(numbering: "1.1")
 
@@ -181,7 +182,9 @@ To evaluate the hardware modifications that we propose, we build and validate
 a model of the current page fault handling and then use it to approximate what
 would be the execution time of a page fault with the modifications.
 
-We start by evaluating the cost of a minor page fault on Linux without any
+== Kernel page fault handling
+
+We start by measuring the cost of a minor page fault on Linux without any
 modification. A _minor page fault_ occurs when the physical page is directly
 ready to be mapped by the operating system, as opposed to a _major page fault_
 where there is work to do before the fault can be resolved (e.g. read a physical
@@ -240,6 +243,133 @@ The results are shown in @linux-page-fault-breakdown.
   why I chose what I end up choosing. Don't forget to update the other table.
 ]
 
+== `userfaultfd`-based page fault handling
+
+Next, we measure the cost of a minor page fault handled by `userfaultfd`.
+
+#let stmt(body, base-color: none, bold: false) = {
+  let fill = if bold {
+    base-color.lighten(60%)
+  } else {
+    base-color.lighten(75%).desaturate(25%)
+  }
+
+  let stroke = base-color.darken(50%)
+
+  rect(
+    fill: fill,
+    stroke: stroke,
+    inset: (x: .4em, y: .5em),
+    body,
+  )
+}
+
+#let kernel-stmt = stmt.with(base-color: red)
+#let user-stmt = stmt.with(base-color: blue)
+#let internal-stmt = stmt.with(base-color: green)
+
+#let get-location(callback) = {
+  let label = label("loc-tracker")
+
+  [
+    #metadata(none) // A label must be attached to some content.
+    #label
+  ]
+
+  context {
+    let location = query(selector(label).before(here())).last().location()
+    callback(location)
+  }
+}
+
+#let execution(..args) = context {
+  let threads = args.pos()
+
+  let headers = threads.map(thread => {
+    let thread-name = thread.at(0)
+    text(weight: "bold", thread-name)
+  })
+
+  let columns = threads.map(thread => {
+    let thread-statements = thread.slice(1)
+    let elements = thread-statements.map(statement => {
+      if type(statement) == content {
+        statement
+      } else if (
+        type(statement) == dictionary
+          and statement.keys().contains("wait-for-event")
+      ) {
+        let event-name = statement.at("wait-for-event")
+        let event-label = label("execution-" + event-name)
+        get-location(location => {
+          let current-position = location.position()
+          let event-set-position = query(selector(event-label))
+            .last()
+            .location()
+            .position()
+          let y = current-position.y
+          if y < event-set-position.y {
+            block(height: event-set-position.y - y)
+            y = event-set-position.y
+          }
+          place(
+            simple-arrow(
+              start: (
+                event-set-position.x - current-position.x,
+                event-set-position.y - y,
+              ),
+              end: (0pt, 0pt),
+            ),
+          )
+        })
+      } else if (
+        type(statement) == dictionary and statement.keys().contains("set-event")
+      ) {
+        let event-name = statement.at("set-event")
+        let event-label = label("execution-" + event-name)
+        [
+          #metadata(none) // A label must be attached to some content.
+          #event-label
+        ]
+      } else {
+        panic(
+          "statement is neither content, nor a dictionary with a \"set-event\" or \"wait-for-event\" key:",
+          statement,
+        )
+      }
+    })
+    stack(
+      dir: ttb,
+      ..elements,
+    )
+  })
+
+  grid(
+    columns: threads.len(),
+    column-gutter: 4em,
+    row-gutter: .6em,
+    ..headers,
+    ..columns,
+  )
+}
+
+#execution(
+  (
+    [App thread],
+    user-stmt[Hello!],
+    (set-event: "a"),
+    (wait-for-event: "b"),
+    kernel-stmt[World!],
+  ),
+  (
+    [Memory thread],
+    (wait-for-event: "a"),
+    user-stmt[Test],
+    kernel-stmt[Another],
+    (set-event: "b"),
+  ),
+)
+
 // This is not a heading so that it does not appear in the outline.
 #text(
   size: 15.4pt,
@@ -268,7 +398,7 @@ The results are shown in @linux-page-fault-breakdown.
 The execution time of the operations we measure is in the order of a few
 nanoseconds. We need a clock with a high frequency that is simple and fast to
 read. We use the RDTSC (ReaD Time Stamp Counter) instruction. The _time stamp
-counter_' is a counter driven by a clock whose frequency depends on the CPU but
+counter_ is a counter driven by a clock whose frequency depends on the CPU but
 is often in the order of the CPU's maximum frequency.
 
 The RDTSC instruction is not serializing: the processor is free to reorder
