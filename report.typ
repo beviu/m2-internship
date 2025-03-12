@@ -245,7 +245,12 @@ The results are shown in @linux-page-fault-breakdown.
 
 == `userfaultfd`-based page fault handling
 
-Next, we measure the cost of a minor page fault handled by `userfaultfd`.
+Next, we measure the cost of a minor page fault handled by `userfaultfd`. The
+`userfaultfd` thread will read from the `userfaultfd` file descriptor. When a
+page fault occurs, the read will return and the `userfaultfd` thread will
+immediately do a `UFFDIO_ZEROPAGE` operation to resolve the page fault with the
+zero page and wake up the faulting thread. The `userfaultfd` thread does the
+minimum amount of work needed
 
 #let stmt(body, base-color: none, bold: false) = {
   let fill = if bold {
@@ -254,13 +259,12 @@ Next, we measure the cost of a minor page fault handled by `userfaultfd`.
     base-color.lighten(75%).desaturate(25%)
   }
 
-  let stroke = base-color.darken(50%)
-
   rect(
+    width: 10em,
     fill: fill,
-    stroke: stroke,
+    stroke: black,
     inset: (x: .4em, y: .5em),
-    body,
+    align(center, body),
   )
 }
 
@@ -287,7 +291,7 @@ Next, we measure the cost of a minor page fault handled by `userfaultfd`.
 
   let headers = threads.map(thread => {
     let thread-name = thread.at(0)
-    text(weight: "bold", thread-name)
+    strong(thread-name)
   })
 
   let columns = threads.map(thread => {
@@ -319,6 +323,7 @@ Next, we measure the cost of a minor page fault handled by `userfaultfd`.
                 event-set-position.y - y,
               ),
               end: (0pt, 0pt),
+              thickness: .1em,
             ),
           )
         })
@@ -340,35 +345,54 @@ Next, we measure the cost of a minor page fault handled by `userfaultfd`.
     })
     stack(
       dir: ttb,
+      spacing: .4em,
       ..elements,
     )
   })
 
-  grid(
+  table(
     columns: threads.len(),
-    column-gutter: 4em,
-    row-gutter: .6em,
-    ..headers,
+    stroke: (x, y) => if threads.len() > 0 {
+      if x > 0 and x < threads.len() - 1 {
+        (left: (dash: "dotted"), right: (dash: "dotted"))
+      } else if x > 0 {
+        (left: (dash: "dotted"))
+      } else if x < threads.len() - 1 {
+        (right: (dash: "dotted"))
+      }
+    },
+    table.header(..headers),
     ..columns,
   )
 }
 
-#execution(
-  (
-    [App thread],
-    user-stmt[Hello!],
-    (set-event: "a"),
-    (wait-for-event: "b"),
-    kernel-stmt[World!],
+#figure(
+  execution(
+    (
+      [Faulting thread],
+      user-stmt[Faulting instruction],
+      internal-stmt[Exception],
+      kernel-stmt[Save state],
+      kernel-stmt[Search for VMA],
+      kernel-stmt[Notify memory thread],
+      (set-event: "userfaultfd-readable"),
+      (wait-for-event: "userfaultfd-handled"),
+      kernel-stmt[Restore state],
+      kernel-stmt[IRET],
+    ),
+    (
+      [`userfaultfd` thread],
+      (wait-for-event: "userfaultfd-readable"),
+      kernel-stmt[Return from `read`],
+      user-stmt[`syscall`],
+      kernel-stmt[Save state],
+      kernel-stmt[Update PTE],
+      kernel-stmt[Notify app thread],
+      (set-event: "userfaultfd-handled"),
+    ),
   ),
-  (
-    [Memory thread],
-    (wait-for-event: "a"),
-    user-stmt[Test],
-    kernel-stmt[Another],
-    (set-event: "b"),
-  ),
-)
+  caption: [Flow of `userfaultfd`-based page fault handling],
+) <userfaultfd-page-fault-flow>
 
 // This is not a heading so that it does not appear in the outline.
 #text(
