@@ -1,4 +1,4 @@
-From 0a8d7c83c013673e86793860a585475dfbcf9931 Mon Sep 17 00:00:00 2001
+From 76ccc9bc0bab708f50deefde66ea51c6b7a57c35 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Tue, 4 Mar 2025 13:50:40 +0100
 Subject: [PATCH] mm: add page fault timing debugging code
@@ -12,8 +12,8 @@ fault handling to dmesg and returns:
 - the value of the TSC before registers are restored in ebx:ecx.
 ---
  arch/x86/entry/entry_64.S | 19 +++++++++++++++++++
- arch/x86/mm/fault.c       | 35 +++++++++++++++++++++++++++++++++++
- 2 files changed, 54 insertions(+)
+ arch/x86/mm/fault.c       | 33 +++++++++++++++++++++++++++++++++
+ 2 files changed, 52 insertions(+)
 
 diff --git a/arch/x86/entry/entry_64.S b/arch/x86/entry/entry_64.S
 index f52dbe0ad93c..9b86cbfe099d 100644
@@ -53,7 +53,7 @@ index f52dbe0ad93c..9b86cbfe099d 100644
  	 * This may fault.  Non-paranoid faults on return to userspace are
  	 * handled by fixup_bad_iret.  These include #SS, #GP, and #NP.
 diff --git a/arch/x86/mm/fault.c b/arch/x86/mm/fault.c
-index 296d294142c8..147af03f664e 100644
+index 296d294142c8..d7e405a957f2 100644
 --- a/arch/x86/mm/fault.c
 +++ b/arch/x86/mm/fault.c
 @@ -36,6 +36,7 @@
@@ -106,16 +106,7 @@ index 296d294142c8..147af03f664e 100644
  	if (unlikely(access_error(error_code, vma))) {
  		bad_area_access_error(regs, error_code, address, NULL, vma);
  		count_vm_vma_lock_event(VMA_LOCK_SUCCESS);
-@@ -1372,6 +1401,8 @@ void do_user_addr_fault(struct pt_regs *regs,
- 		return;
- 	}
- 
-+	end_profiling_section(regs, "search_for_vma");
-+
- 	/*
- 	 * If for any reason at all we couldn't handle the fault,
- 	 * make sure we exit gracefully rather than endlessly redo
-@@ -1494,6 +1525,8 @@ DEFINE_IDTENTRY_RAW_ERRORCODE(exc_page_fault)
+@@ -1494,6 +1523,8 @@ DEFINE_IDTENTRY_RAW_ERRORCODE(exc_page_fault)
  	irqentry_state_t state;
  	unsigned long address;
  
@@ -124,7 +115,7 @@ index 296d294142c8..147af03f664e 100644
  	address = cpu_feature_enabled(X86_FEATURE_FRED) ? fred_event_data(regs) : read_cr2();
  
  	prefetchw(&current->mm->mmap_lock);
-@@ -1539,4 +1572,6 @@ DEFINE_IDTENTRY_RAW_ERRORCODE(exc_page_fault)
+@@ -1539,4 +1570,6 @@ DEFINE_IDTENTRY_RAW_ERRORCODE(exc_page_fault)
  	instrumentation_end();
  
  	irqentry_exit(regs, state);
