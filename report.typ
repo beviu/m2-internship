@@ -240,29 +240,31 @@ The results are shown in @linux-page-fault-breakdown.
 
 #let linux-page-fault-timings = timings-csv("linux-page-fault-timings/results.txt")
 
+#let linux-page-fault-breakdown-table(timings) = {
+  let total = (
+    timings.save-state-start
+      + timings.save-state-end
+      + timings.search-for-vma-end
+      + timings.handle-fault-end
+      + timings.iret
+  )
+  let m(number) = math.equation(str(number))
+  table(
+    columns: (auto, auto),
+    table.header([Operation], [Minimum (cycles)]),
+    [Exception], m(timings.save-state-start),
+    [Save state], m(timings.save-state-end),
+    [Search for VMA], m(timings.search-for-vma-end),
+    [Handle fault], m(timings.handle-fault-end),
+    [Restore state], m(timings.iret),
+    [IRET], m(timings.end),
+    [Total], m(total),
+  )
+}
+
 #figure(
   caption: [Linux page fault execution time breakdown],
-  {
-    let total = (
-      linux-page-fault-timings.save-state-start
-        + linux-page-fault-timings.save-state-end
-        + linux-page-fault-timings.search-for-vma-end
-        + linux-page-fault-timings.handle-fault-end
-        + linux-page-fault-timings.iret
-    )
-    let m(number) = math.equation(str(number))
-    table(
-      columns: (auto, auto),
-      table.header([Operation], [Minimum (cycles)]),
-      [Exception], m(linux-page-fault-timings.save-state-start),
-      [Save state], m(linux-page-fault-timings.save-state-end),
-      [Search for VMA], m(linux-page-fault-timings.search-for-vma-end),
-      [Handle fault], m(linux-page-fault-timings.handle-fault-end),
-      [Restore state], m(linux-page-fault-timings.iret),
-      [IRET], m(linux-page-fault-timings.end),
-      [Total], m(total),
-    )
-  },
+  linux-page-fault-breakdown-table(linux-page-fault-timings),
 ) <linux-page-fault-breakdown>
 
 #inline-note[
@@ -465,28 +467,9 @@ operation as measured in @linux-page-fault-breakdown, but without the fences.
 
 #figure(
   caption: [Linux page fault execution time breakdown (without fences)],
-  {
-    let timings = timings-csv("linux-page-fault-timings/results-no-fence.txt")
-    let total = (
-      timings.save-state-start
-        + timings.save-state-end
-        + timings.search-for-vma-end
-        + timings.handle-fault-end
-        + timings.iret
-    )
-    let m(number) = math.equation(str(number))
-    table(
-      columns: (auto, auto),
-      table.header([Operation], [Minimum (cycles)]),
-      [Exception], m(timings.save-state-start),
-      [Save state], m(timings.save-state-end),
-      [Search for VMA], m(timings.search-for-vma-end),
-      [Handle fault], m(timings.handle-fault-end),
-      [Restore state], m(timings.iret),
-      [IRET], m(timings.end),
-      [Total], m(total),
-    )
-  },
+  linux-page-fault-breakdown-table(
+    timings-csv("linux-page-fault-timings/results-no-fence.txt"),
+  ),
 ) <linux-page-fault-no-fence-breakdown>
 
 == Minor page fault
