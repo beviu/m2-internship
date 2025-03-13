@@ -218,19 +218,51 @@ The treatement of a page fault can be broken down into the following operations:
 
 The measurement methodology is described in @execution-time-measurement-method.
 The results are shown in @linux-page-fault-breakdown.
+
+#let array-differences(array) = ((0,) + array).zip(array).map(((a, b)) => b - a)
+
+#let timings-csv(source) = {
+  let rows = csv(source)
+  let keys = rows.at(0).map(key => key.trim())
+  let minimums = (:)
+  for row in rows.slice(1) {
+    let durations = array-differences(row.map(value => int(value.trim())))
+    for (key, duration) in keys.zip(durations) {
+      if minimums.keys().contains(key) {
+        minimums.at(key) = calc.min(minimums.at(key), duration)
+      } else {
+        minimums.insert(key, duration)
+      }
+    }
+  }
+  minimums
+}
+
+#let linux-page-fault-timings = timings-csv("linux-page-fault-timings/results.txt")
+
 #figure(
   caption: [Linux page fault execution time breakdown],
-  table(
-    columns: (auto, auto),
-    table.header([], [Minimum (cycles)]),
-    [Exception], [461],
-    [Save state], [317],
-    [Search for VMA], [158],
-    [Handle fault], [308],
-    [Restore state], [61],
-    [IRET], [255],
-    [Total], [1560],
-  ),
+  {
+    let total = (
+      linux-page-fault-timings.save-state-start
+        + linux-page-fault-timings.save-state-end
+        + linux-page-fault-timings.search-for-vma-end
+        + linux-page-fault-timings.handle-fault-end
+        + linux-page-fault-timings.iret
+    )
+    let m(number) = math.equation(str(number))
+    table(
+      columns: (auto, auto),
+      table.header([Operation], [Minimum (cycles)]),
+      [Exception], m(linux-page-fault-timings.save-state-start),
+      [Save state], m(linux-page-fault-timings.save-state-end),
+      [Search for VMA], m(linux-page-fault-timings.search-for-vma-end),
+      [Handle fault], m(linux-page-fault-timings.handle-fault-end),
+      [Restore state], m(linux-page-fault-timings.iret),
+      [IRET], m(linux-page-fault-timings.end),
+      [Total], m(total),
+    )
+  },
 ) <linux-page-fault-breakdown>
 
 #inline-note[
@@ -245,12 +277,14 @@ The results are shown in @linux-page-fault-breakdown.
 
 == `userfaultfd`-based page fault handling
 
-Next, we measure the cost of a minor page fault handled by `userfaultfd`. The
-`userfaultfd` thread will read from the `userfaultfd` file descriptor. When a
-page fault occurs, the read will return and the `userfaultfd` thread will
-immediately do a `UFFDIO_ZEROPAGE` operation to resolve the page fault with the
-zero page and wake up the faulting thread. The `userfaultfd` thread does the
-minimum amount of work needed
+Next, we measure the cost of a minor page fault handled by `userfaultfd` when
+the handler immediately resolves the page fault with the zero page.
+
+The `userfaultfd` thread continuously reads from the `userfaultfd` file
+descriptor. When a page fault occurs, the read returns and the `userfaultfd`
+thread does a `UFFDIO_ZEROPAGE` operation to resolve the page fault
+with the zero page and wake up the faulting thread, as represented in
+@userfaultfd-page-fault-flow.
 
 #let stmt(body, base-color: none, bold: false) = {
   let fill = if bold {
@@ -431,17 +465,28 @@ operation as measured in @linux-page-fault-breakdown, but without the fences.
 
 #figure(
   caption: [Linux page fault execution time breakdown (without fences)],
-  table(
-    columns: (auto, auto),
-    table.header([], [Minimum (cycles)]),
-    [Exception], [455],
-    [Save state], [319],
-    [Search for VMA], [158],
-    [Handle fault], [311],
-    [Restore state], [61],
-    [IRET], [159],
-    [Total], [1463],
-  ),
+  {
+    let timings = timings-csv("linux-page-fault-timings/results-no-fence.txt")
+    let total = (
+      timings.save-state-start
+        + timings.save-state-end
+        + timings.search-for-vma-end
+        + timings.handle-fault-end
+        + timings.iret
+    )
+    let m(number) = math.equation(str(number))
+    table(
+      columns: (auto, auto),
+      table.header([Operation], [Minimum (cycles)]),
+      [Exception], m(timings.save-state-start),
+      [Save state], m(timings.save-state-end),
+      [Search for VMA], m(timings.search-for-vma-end),
+      [Handle fault], m(timings.handle-fault-end),
+      [Restore state], m(timings.iret),
+      [IRET], m(timings.end),
+      [Total], m(total),
+    )
+  },
 ) <linux-page-fault-no-fence-breakdown>
 
 == Minor page fault
@@ -468,21 +513,48 @@ using `printk` (similar to `printf` in userspace). The execution time of the
 `printk` calls is large so we measure the TSC before and after the calls to
 `printk` and subtract them.
 
+#let cumulative-sum(array) = {
+  let accumulator = array.at(0)
+  let result = (accumulator,)
+  for value in array.slice(1) {
+    accumulator += value
+    result.push(accumulator)
+  }
+  result
+}
+
 #figure(
   cetz.canvas({
     import cetz.draw: *
 
-    line((0, 0), (13, 0), mark: (end: ">"))
+    let width = 11
+    let padding = 1
 
-    line((2.4, 0), (4.8, 0), stroke: red + 2pt)
-    line((5.1, 0), (7.5, 0), stroke: red + 2pt)
-    line((8, 0), (10.4, 0), stroke: red + 2pt)
+    line((0, 0), (width + 2 * padding, 0), mark: (end: ">"))
 
-    let mark(x, body, color: black, bottom: false) = {
+    let absolute-x(relative) = padding + relative * width
+
+    let cumulative-timings = cumulative-sum(linux-page-fault-timings.values())
+    let total = cumulative-timings.last()
+
+    let timing-x(time) = absolute-x(time / total)
+
+    let printk-line(start, end) = line(
+      (timing-x(start), 0),
+      (timing-x(end), 0),
+      stroke: red + 2pt,
+    )
+
+    printk-line(cumulative-timings.at(1), cumulative-timings.at(2))
+    printk-line(cumulative-timings.at(3), cumulative-timings.at(4))
+    printk-line(cumulative-timings.at(5), cumulative-timings.at(6))
+
+    let mark(time, body, color: black, bottom: false) = {
+      let x = timing-x(time)
+
       line((x, -.2), (x, .2), stroke: color)
 
       let body = text(size: .75em, fill: color, body)
-
       if bottom {
         content((rel: (0, -.5em), to: (x, -.2)), body, anchor: "north")
       } else {
@@ -490,43 +562,52 @@ using `printk` (similar to `printf` in userspace). The execution time of the
       }
     }
 
-    mark(1, [PF], color: orange.darken(50%))
-    mark(1.8, math.accent(math.text[Save], math.arrow), color: teal.darken(50%))
+    mark(0, [PF], color: orange.darken(50%))
     mark(
-      2.4,
+      cumulative-timings.at(0),
+      math.accent(math.text[Save], math.arrow),
+      color: teal.darken(50%),
+    )
+    mark(
+      cumulative-timings.at(1),
       math.accent(math.text[Save], math.arrow.l),
       color: teal.darken(50%),
       bottom: true,
     )
     mark(
-      4.8,
+      cumulative-timings.at(2),
       math.accent(math.text[VMA], math.arrow),
       color: fuchsia.darken(50%),
     )
     mark(
-      5.1,
+      cumulative-timings.at(3),
       math.accent(math.text[VMA], math.arrow.l),
       color: fuchsia.darken(50%),
       bottom: true,
     )
     mark(
-      7.5,
+      cumulative-timings.at(4),
       math.accent(math.text[Handle], math.arrow),
       color: navy,
     )
     mark(
-      8,
+      cumulative-timings.at(5),
       math.accent(math.text[Handle], math.arrow.l),
       color: navy,
       bottom: true,
     )
     mark(
-      10.4,
-      pad(right: 1em, math.accent(math.text[Restore], math.arrow.r)),
+      cumulative-timings.at(6),
+      pad(right: .125cm, math.accent(math.text[Restore], math.arrow.r)),
       color: maroon.darken(50%),
     )
-    mark(10.5, [`iret`], color: yellow.darken(50%), bottom: true)
-    mark(11, pad(left: 1em)[End], color: lime.darken(50%))
+    mark(
+      cumulative-timings.at(7),
+      [`iret`],
+      color: yellow.darken(50%),
+      bottom: true,
+    )
+    mark(total, pad(left: .125cm)[End], color: lime.darken(50%))
   }),
   caption: [Positions of RDTSC instructions with `printk` calls in red],
 )

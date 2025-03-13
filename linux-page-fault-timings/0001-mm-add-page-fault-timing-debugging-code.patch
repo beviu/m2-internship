@@ -1,0 +1,136 @@
+From 0a8d7c83c013673e86793860a585475dfbcf9931 Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Tue, 4 Mar 2025 13:50:40 +0100
+Subject: [PATCH] mm: add page fault timing debugging code
+
+The code activates if ebx contains the value 0xb141a52a before a page
+fault.
+
+It prints CPU timestamp counters (TSC) at various points during page
+fault handling to dmesg and returns:
+- the value of the TSC just before iret is called in eax:edx, and
+- the value of the TSC before registers are restored in ebx:ecx.
+---
+ arch/x86/entry/entry_64.S | 19 +++++++++++++++++++
+ arch/x86/mm/fault.c       | 35 +++++++++++++++++++++++++++++++++++
+ 2 files changed, 54 insertions(+)
+
+diff --git a/arch/x86/entry/entry_64.S b/arch/x86/entry/entry_64.S
+index f52dbe0ad93c..9b86cbfe099d 100644
+--- a/arch/x86/entry/entry_64.S
++++ b/arch/x86/entry/entry_64.S
+@@ -336,6 +336,16 @@ SYM_CODE_START(\asmsym)
+ 	.endif
+ 
+ 	ENDBR
++
++	.if \vector == X86_TRAP_PF
++		/* Check for a magic number to read the counter. */
++		cmpl	$0xb141a52a, %ebx
++		jne	1f
++		rdtsc
++		lfence
++1:
++	.endif
++
+ 	ASM_CLAC
+ 	cld
+ 
+@@ -649,6 +659,15 @@ SYM_INNER_LABEL(early_xen_iret_patch, SYM_L_GLOBAL)
+ 
+ SYM_INNER_LABEL(native_irq_return_iret, SYM_L_GLOBAL)
+ 	ANNOTATE_NOENDBR // exc_double_fault
++
++	/* Check for a magic number to read the counter. */
++	cmpl	$0xb141a52a, %ebx
++	jne	1f
++	movl	%eax, %ebx
++	movl	%edx, %ecx
++	rdtsc
++1:
++
+ 	/*
+ 	 * This may fault.  Non-paranoid faults on return to userspace are
+ 	 * handled by fixup_bad_iret.  These include #SS, #GP, and #NP.
+diff --git a/arch/x86/mm/fault.c b/arch/x86/mm/fault.c
+index 296d294142c8..147af03f664e 100644
+--- a/arch/x86/mm/fault.c
++++ b/arch/x86/mm/fault.c
+@@ -36,6 +36,7 @@
+ #include <asm/irq_stack.h>
+ #include <asm/fred.h>
+ #include <asm/sev.h>			/* snp_dump_hva_rmpentry()	*/
++#include <asm/msr.h>
+ 
+ #define CREATE_TRACE_POINTS
+ #include <asm/trace/exceptions.h>
+@@ -1198,6 +1199,32 @@ do_kern_addr_fault(struct pt_regs *regs, unsigned long hw_error_code,
+ }
+ NOKPROBE_SYMBOL(do_kern_addr_fault);
+ 
++static __always_inline unsigned long long rdtsc_serialize(void)
++{
++	DECLARE_ARGS(val, low, high);
++
++	asm volatile("mfence; lfence\n"
++		"rdtsc\n"
++		"lfence"
++		: EAX_EDX_RET(val, low, high));
++
++	return EAX_EDX_VAL(val, low, high);
++}
++
++static __always_inline void end_profiling_section(struct pt_regs *regs, const char *name)
++{
++	unsigned long long tsc = rdtsc_serialize();
++
++	if ((regs->bx & 0xffffffff) != 0xb141a52a)
++		return;
++
++	printk("%s: start=%lu, end=%llu\n", name, regs->ax | (regs->dx << 32), tsc);
++
++	tsc = rdtsc_serialize();
++	regs->ax = tsc & 0xffffffff;
++	regs->dx = tsc >> 32;
++}
++
+ /*
+  * Handle faults in the user portion of the address space.  Nothing in here
+  * should check X86_PF_USER without a specific justification: for almost
+@@ -1329,6 +1356,8 @@ void do_user_addr_fault(struct pt_regs *regs,
+ 	if (!vma)
+ 		goto lock_mmap;
+ 
++	end_profiling_section(regs, "search_for_vma");
++
+ 	if (unlikely(access_error(error_code, vma))) {
+ 		bad_area_access_error(regs, error_code, address, NULL, vma);
+ 		count_vm_vma_lock_event(VMA_LOCK_SUCCESS);
+@@ -1372,6 +1401,8 @@ void do_user_addr_fault(struct pt_regs *regs,
+ 		return;
+ 	}
+ 
++	end_profiling_section(regs, "search_for_vma");
++
+ 	/*
+ 	 * If for any reason at all we couldn't handle the fault,
+ 	 * make sure we exit gracefully rather than endlessly redo
+@@ -1494,6 +1525,8 @@ DEFINE_IDTENTRY_RAW_ERRORCODE(exc_page_fault)
+ 	irqentry_state_t state;
+ 	unsigned long address;
+ 
++	end_profiling_section(regs, "save_state");
++
+ 	address = cpu_feature_enabled(X86_FEATURE_FRED) ? fred_event_data(regs) : read_cr2();
+ 
+ 	prefetchw(&current->mm->mmap_lock);
+@@ -1539,4 +1572,6 @@ DEFINE_IDTENTRY_RAW_ERRORCODE(exc_page_fault)
+ 	instrumentation_end();
+ 
+ 	irqentry_exit(regs, state);
++
++	end_profiling_section(regs, "handle_fault");
+ }
+-- 
+2.48.1
+
