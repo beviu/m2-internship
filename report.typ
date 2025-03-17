@@ -140,7 +140,8 @@ for the first time, the MMU sees that the PTE is absent, a page fault is
 generated, and Linux takes over. Linux allocates a physical page, writes its
 number into the PTE and resumes the execution of the program. In a similar
 manner, paging is used to implement _swapping_ where a secondary storage (such
-as disk) is used as additional memory.
+as disk) is used as additional memory when the operating system runs out of
+physical memory.
 
 == User-space delegation
 
@@ -211,7 +212,7 @@ The treatement of a page fault can be broken down into the following operations:
 
 + *Exception*: the processor detects the page fault and jumps to the operating system exception handler.
 + *Save state*: the operating system saves the registers of the program that generated the page fault.
-+ *Search for VMA*: the operating system searches for the VMA that contains the faulting virtual address.
++ *Read-lock VMA*: the operating system looks up the VMA containing the faulting virtual address, and locks it for reading.
 + *Handle fault*: the operating system fills in the physical page number in the PTE.
 + *Restore state*: the operating system restores the register to the ones that were saved before.
 + *IRET*: the operating system jumps back to the code that was executing before the page fault with the IRET (Interrupt RETurn) instruction.
@@ -254,7 +255,7 @@ The results are shown in @linux-page-fault-breakdown.
     table.header([Operation], [Minimum (cycles)]),
     [Exception], m(timings.save-state-start),
     [Save state], m(timings.save-state-end),
-    [Search for VMA], m(timings.search-for-vma-end),
+    [Read-lock VMA], m(timings.search-for-vma-end),
     [Handle fault], m(timings.handle-fault-end),
     [Restore state], m(timings.iret),
     [IRET], m(timings.end),
@@ -403,10 +404,12 @@ with the zero page and wake up the faulting thread, as represented in
       user-stmt[Faulting instruction],
       internal-stmt[Exception],
       kernel-stmt[Save state],
-      kernel-stmt[Search for VMA],
-      kernel-stmt[Notify memory thread],
+      kernel-stmt[Read-lock VMA],
+      kernel-stmt[Wake up \ `userfaultfd` thread],
       (set-event: "userfaultfd-readable"),
       (wait-for-event: "userfaultfd-handled"),
+      kernel-stmt[Read-lock VMA],
+      kernel-stmt[Handle fault],
       kernel-stmt[Restore state],
       kernel-stmt[IRET],
     ),
