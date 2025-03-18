@@ -210,12 +210,18 @@ actually written to, a physical page is finally allocated.
 
 The treatement of a page fault can be broken down into the following operations:
 
-+ *Exception*: the processor detects the page fault and jumps to the operating system exception handler.
-+ *Save state*: the operating system saves the registers of the program that generated the page fault.
-+ *Read-lock VMA*: the operating system looks up the VMA containing the faulting virtual address, and locks it for reading.
-+ *Handle fault*: the operating system fills in the physical page number in the PTE.
-+ *Restore state*: the operating system restores the register to the ones that were saved before.
-+ *IRET*: the operating system jumps back to the code that was executing before the page fault with the IRET (Interrupt RETurn) instruction.
++ *Exception*: the processor detects the page fault and jumps to the operating
+  system exception handler.
++ *Save state*: the operating system saves the registers of the program that
+  generated the page fault.
++ *Read-lock VMA*: the operating system looks up the VMA containing the faulting
+  virtual address, and locks it for reading.
++ *Handle fault*: the operating system fills in the physical page number in the
+  PTE.
++ *Restore state*: the operating system restores the register to the ones that
+  were saved before.
++ *IRET*: the operating system jumps back to the code that was executing before
+  the page fault with the IRET (Interrupt RETurn) instruction.
 
 The measurement methodology is described in @execution-time-measurement-method.
 The results are shown in @linux-page-fault-breakdown.
@@ -224,10 +230,16 @@ The results are shown in @linux-page-fault-breakdown.
 
 #let timings-csv(source) = {
   let rows = csv(source)
-  let keys = rows.at(0).map(key => key.trim())
+  let keys = rows.at(0).map(key => key.trim().replace("_", "-"))
   let minimums = (:)
   for row in rows.slice(1) {
     let durations = array-differences(row.map(value => int(value.trim())))
+    // Because of multi-threading, the timings in rows may not be in the same
+    // order as the columns sometimes. For simplification, ignore those rows. We
+    // have enough rows that are the expected order.
+    if durations.any(duration => duration < 0) {
+      continue
+    }
     for (key, duration) in keys.zip(durations) {
       if minimums.keys().contains(key) {
         minimums.at(key) = calc.min(minimums.at(key), duration)
@@ -269,7 +281,7 @@ The results are shown in @linux-page-fault-breakdown.
 ) <linux-page-fault-breakdown>
 
 #inline-note[
-  Rerun the experiment on the test machine and update the environment in the
+  Rerun the experiments on the test machine and update the environment in the
   appendix.
 ]
 
@@ -405,11 +417,15 @@ with the zero page and wake up the faulting thread, as represented in
       internal-stmt[Exception],
       kernel-stmt[Save state],
       kernel-stmt[Read-lock VMA],
+      kernel-stmt[Walk page table],
       kernel-stmt[Wake up \ `userfaultfd` thread],
       (set-event: "userfaultfd-readable"),
       (wait-for-event: "userfaultfd-handled"),
+      kernel-stmt[Return from \ `handle_mm_fault`],
       kernel-stmt[Read-lock VMA],
-      kernel-stmt[Handle fault],
+      kernel-stmt[Walk page table],
+      kernel-stmt[Return from \ `handle_mm_fault`],
+      kernel-stmt[Cleanup],
       kernel-stmt[Restore state],
       kernel-stmt[IRET],
     ),
@@ -426,6 +442,50 @@ with the zero page and wake up the faulting thread, as represented in
   ),
   caption: [Flow of `userfaultfd`-based page fault handling],
 ) <userfaultfd-page-fault-flow>
+
+
+#figure(
+  caption: [`userfaultfd` page fault execution time breakdown],
+  {
+    let timings = timings-csv("userfaultfd-page-fault-timings/results.txt")
+    let total = (
+      timings.save-state-start
+        + timings.save-state-end
+        + timings.read-lock-vma-end
+        + timings.walk-page-table-end
+        + timings.wake-up-userfaultfd-end
+        + timings.msg-received
+        + timings.handle-mm-fault-end
+        + timings.retry-read-lock-vma-end
+        + timings.retry-walk-page-table-end
+        + timings.retry-handle-mm-fault-end
+        + timings.cleanup-end
+        + timings.iret
+        + timings.end
+    )
+    let m(number) = math.equation(str(number))
+    table(
+      columns: (auto, auto),
+      table.header([Operation], [Minimum (cycles)]),
+      [Exception], m(timings.save-state-start),
+      [Save state], m(timings.save-state-end),
+      [Read-lock VMA], m(timings.read-lock-vma-end),
+      [Walk page table], m(timings.walk-page-table-end),
+      [Wake up \ `userfaultfd` thread], m(timings.wake-up-userfaultfd-end),
+      [Return from `read`], m(timings.msg-received),
+      [Treat fault and \ return from \ `handle_mm_fault`],
+      m(timings.handle-mm-fault-end),
+
+      [Read-lock VMA], m(timings.retry-read-lock-vma-end),
+      [Walk page table], m(timings.retry-walk-page-table-end),
+      [Return from \ `handle_mm_fault`], m(timings.retry-handle-mm-fault-end),
+      [Cleanup], m(timings.cleanup-end),
+      [Restore state], m(timings.iret),
+      [IRET], m(timings.end),
+      [Total], m(total),
+    )
+  },
+)
 
 // This is not a heading so that it does not appear in the outline.
 #text(
