@@ -308,12 +308,15 @@ with the zero page and wake up the faulting thread, as represented in
     base-color.lighten(75%).desaturate(25%)
   }
 
-  rect(
-    width: 10em,
-    fill: fill,
-    stroke: black,
-    inset: (x: .4em, y: .5em),
-    align(center, body),
+  pad(
+    y: .2em,
+    rect(
+      width: 10em,
+      fill: fill,
+      stroke: black,
+      inset: (x: .4em, y: .5em),
+      align(center, body),
+    ),
   )
 }
 
@@ -335,55 +338,60 @@ with the zero page and wake up the faulting thread, as represented in
   }
 }
 
-#let execution(..args) = context {
-  let threads = args.pos()
+#let execution(braces: (), ..threads) = context {
+  let threads = threads.pos()
 
-  let headers = threads.map(thread => {
-    let thread-name = thread.at(0)
-    strong(thread-name)
-  })
+  let header(thread) = {
+    let (name, .._statements) = thread
+    strong(name)
+  }
 
-  let columns = threads.map(thread => {
-    let thread-statements = thread.slice(1)
-    let elements = thread-statements.map(statement => {
+  let column(thread) = {
+    let (_name, ..statements) = thread
+    let elements = statements.map(statement => {
       if type(statement) == content {
         statement
       } else if (
         type(statement) == dictionary
           and statement.keys().contains("wait-for-event")
       ) {
-        let event-name = statement.at("wait-for-event")
-        let event-label = label("execution-" + event-name)
+        let event = statement.at("wait-for-event")
         get-location(location => {
           let current-position = location.position()
-          let event-set-position = query(selector(event-label))
+          let event-position = query(selector(label("execution-" + event)))
             .last()
             .location()
             .position()
           let y = current-position.y
-          if y < event-set-position.y {
-            block(height: event-set-position.y - y)
-            y = event-set-position.y
+          if y < event-position.y {
+            block(height: event-position.y - y, spacing: 0pt)
+            y = event-position.y
           }
-          place(
-            simple-arrow(
-              start: (
-                event-set-position.x - current-position.x,
-                event-set-position.y - y,
+          align(
+            left,
+            block(
+              place(
+                simple-arrow(
+                  start: (
+                    event-position.x - current-position.x,
+                    event-position.y - y,
+                  ),
+                  end: (0pt, 0pt),
+                  thickness: .1em,
+                ),
               ),
-              end: (0pt, 0pt),
-              thickness: .1em,
+              spacing: 0pt,
+              inset: .2em,
             ),
           )
         })
       } else if (
         type(statement) == dictionary and statement.keys().contains("set-event")
       ) {
-        let event-name = statement.at("set-event")
-        let event-label = label("execution-" + event-name)
+        let event = statement.at("set-event")
         [
           #metadata(none) // A label must be attached to some content.
-          #event-label
+          #label("execution-" + event)
         ]
       } else {
         panic(
@@ -394,18 +402,48 @@ with the zero page and wake up the faulting thread, as represented in
     })
     stack(
       dir: ttb,
-      spacing: .4em,
       ..elements,
     )
-  })
+  }
 
-  table(
+  let main-table = table(
     columns: threads.len(),
     stroke: (x, y) => if threads.len() > 0 and x < threads.len() - 1 {
       (right: (dash: "dotted"))
     },
-    table.header(..headers),
-    ..columns,
+    table.header(..threads.map(header)),
+    ..threads.map(column),
+  )
+
+  let brace(args) = {
+    let (start-event, end-event, description) = args
+    get-location(location => {
+      let current-position = location.position()
+      let start-position = query(selector(label("execution-" + start-event)))
+        .last()
+        .location()
+        .position()
+      let end-position = query(selector(label("execution-" + end-event)))
+        .last()
+        .location()
+        .position()
+      move(
+        grid(
+          columns: (auto, auto),
+          column-gutter: .5em,
+          align: horizon,
+          $ lr(#block(height: end-position.y - start-position.y) }) $,
+          align(left, description),
+        ),
+        dy: start-position.y - current-position.y,
+      )
+    })
+  }
+
+  stack(
+    dir: ltr,
+    main-table,
+    braces.map(brace).join(),
   )
 }
 
@@ -422,6 +460,7 @@ with the zero page and wake up the faulting thread, as represented in
       (set-event: "userfaultfd-readable"),
       (wait-for-event: "userfaultfd-handled"),
       kernel-stmt[Return from \ `handle_mm_fault`],
+      (set-event: "treat-fault-end"),
       kernel-stmt[Read-lock VMA],
       kernel-stmt[Walk page table],
       kernel-stmt[Return from \ `handle_mm_fault`],
@@ -433,16 +472,23 @@ with the zero page and wake up the faulting thread, as represented in
       [`userfaultfd` thread],
       (wait-for-event: "userfaultfd-readable"),
       kernel-stmt[Return from `read`],
+      (set-event: "treat-fault-start"),
       user-stmt[`syscall`],
       kernel-stmt[Save state],
       kernel-stmt[Update PTE],
       kernel-stmt[Notify app thread],
       (set-event: "userfaultfd-handled"),
     ),
+    braces: (
+      (
+        "treat-fault-start",
+        "treat-fault-end",
+        [Treat fault and \ return from \ `handle_mm_fault`],
+      ),
+    ),
   ),
   caption: [Flow of `userfaultfd`-based page fault handling],
 ) <userfaultfd-page-fault-flow>
-
 
 #figure(
   caption: [`userfaultfd` page fault execution time breakdown],
