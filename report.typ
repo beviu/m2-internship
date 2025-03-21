@@ -747,5 +747,5 @@ the execution time of the operations for a page fault.
 
 == Environment
 
-The measurements were done on machine with a _Intel Core i5-1335U_ processor and
-Linux 6.14.
+The measurements were done in a virtual machine running Linux 6.14 on a _Intel
+Core i5-1335U_ processor.
