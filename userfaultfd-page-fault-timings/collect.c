@@ -1,7 +1,9 @@
+#define _GNU_SOURCE
 #include <fcntl.h>
 #include <inttypes.h>
 #include <linux/userfaultfd.h>
 #include <pthread.h>
+#include <sched.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -363,6 +365,7 @@ static void *userfaultfd_thread_routine(void *data) {
 
 int main() {
   int ret = EXIT_SUCCESS;
+  cpu_set_t cpu_set;
   ssize_t page_size;
   int klog_size;
   char *klog_buffer = NULL;
@@ -382,6 +385,15 @@ int main() {
       iret_tsc_2;
   uint64_t end_tsc, msg_received_tsc_copy, restore_state_start_tsc, iret_tsc;
   int read;
+
+  CPU_ZERO(&cpu_set);
+  CPU_SET(0, &cpu_set);
+  err = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set), &cpu_set);
+  if (err) {
+    fprintf(stderr, "pthread_setaffinity_np: %s\n", strerror(err));
+    ret = EXIT_FAILURE;
+    goto out;
+  }
 
   page_size = sysconf(_SC_PAGESIZE);
   if (page_size == -1) {
@@ -436,7 +448,6 @@ int main() {
 
   thread_args.fd = fd;
   thread_args.range = register_args.range;
-
   err = pthread_create(&userfaultfd_thread, NULL, userfaultfd_thread_routine,
                        &thread_args);
   if (err) {
@@ -446,6 +457,17 @@ int main() {
   }
 
   started_userfaultfd_thread = true;
+
+#ifdef DIFFERENT_CPU
+  CPU_ZERO(&cpu_set);
+  CPU_SET(1, &cpu_set);
+#endif
+  err = pthread_setaffinity_np(userfaultfd_thread, sizeof(cpu_set), &cpu_set);
+  if (err) {
+    fprintf(stderr, "pthread_setaffinity_np: %s\n", strerror(err));
+    ret = EXIT_FAILURE;
+    goto out;
+  }
 
   printf("save_state_start, save_state_end, read_lock_vma_start, "
          "read_lock_vma_end, walk_page_table_start, walk_page_table_end, "

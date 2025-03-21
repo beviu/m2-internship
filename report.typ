@@ -473,9 +473,10 @@ with the zero page and wake up the faulting thread, as represented in
       (wait-for-event: "userfaultfd-readable"),
       kernel-stmt[Return from `read`],
       (set-event: "treat-fault-start"),
-      user-stmt[`syscall`],
+      user-stmt[SYSCALL],
       kernel-stmt[Save state],
-      kernel-stmt[Update PTE],
+      kernel-stmt[Walk page table],
+      kernel-stmt[Set PTE],
       kernel-stmt[Notify app thread],
       (set-event: "userfaultfd-handled"),
     ),
@@ -494,7 +495,8 @@ with the zero page and wake up the faulting thread, as represented in
   caption: [`userfaultfd` page fault execution time breakdown],
   {
     let timings = timings-csv("userfaultfd-page-fault-timings/results.txt")
-    let total = (
+    let timings-different-cpus = timings-csv("userfaultfd-page-fault-timings/results-different-cpus.txt")
+    let total(timings) = (
       timings.save-state-start
         + timings.save-state-end
         + timings.read-lock-vma-end
@@ -511,24 +513,57 @@ with the zero page and wake up the faulting thread, as represented in
     )
     let m(number) = math.equation(str(number))
     table(
-      columns: (auto, auto),
-      table.header([Operation], [Minimum (cycles)]),
-      [Exception], m(timings.save-state-start),
-      [Save state], m(timings.save-state-end),
-      [Read-lock VMA], m(timings.read-lock-vma-end),
-      [Walk page table], m(timings.walk-page-table-end),
-      [Wake up \ `userfaultfd` thread], m(timings.wake-up-userfaultfd-end),
-      [Return from `read`], m(timings.msg-received),
+      columns: (auto, auto, auto),
+      table.header(
+        [Operation],
+        [Minimum on the \ same CPU (cycles)],
+        [Minimum on different \ CPUs (cycles)],
+      ),
+
+      [Exception],
+      m(timings.save-state-start),
+      m(timings-different-cpus.save-state-start),
+
+      [Save state],
+      m(timings.save-state-end),
+      m(timings-different-cpus.save-state-end),
+
+      [Read-lock VMA],
+      m(timings.read-lock-vma-end),
+      m(timings-different-cpus.read-lock-vma-end),
+
+      [Walk page table],
+      m(timings.walk-page-table-end),
+      m(timings-different-cpus.walk-page-table-end),
+
+      [Wake up \ `userfaultfd` thread],
+      m(timings.wake-up-userfaultfd-end),
+      m(timings-different-cpus.wake-up-userfaultfd-end),
+
+      [Return from `read`],
+      m(timings.msg-received),
+      m(timings-different-cpus.msg-received),
+
       [Treat fault and \ return from \ `handle_mm_fault`],
       m(timings.handle-mm-fault-end),
+      m(timings-different-cpus.handle-mm-fault-end),
 
-      [Read-lock VMA], m(timings.retry-read-lock-vma-end),
-      [Walk page table], m(timings.retry-walk-page-table-end),
-      [Return from \ `handle_mm_fault`], m(timings.retry-handle-mm-fault-end),
-      [Cleanup], m(timings.cleanup-end),
-      [Restore state], m(timings.iret),
-      [IRET], m(timings.end),
-      [Total], m(total),
+      [Read-lock VMA],
+      m(timings.retry-read-lock-vma-end),
+      m(timings-different-cpus.retry-read-lock-vma-end),
+
+      [Walk page table],
+      m(timings.retry-walk-page-table-end),
+      m(timings-different-cpus.retry-walk-page-table-end),
+
+      [Return from \ `handle_mm_fault`],
+      m(timings.retry-handle-mm-fault-end),
+      m(timings-different-cpus.retry-handle-mm-fault-end),
+
+      [Cleanup], m(timings.cleanup-end), m(timings-different-cpus.cleanup-end),
+      [Restore state], m(timings.iret), m(timings-different-cpus.iret),
+      [IRET], m(timings.end), m(timings-different-cpus.end),
+      [Total], m(total(timings)), m(total(timings-different-cpus)),
     )
   },
 )
