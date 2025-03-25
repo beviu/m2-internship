@@ -251,15 +251,18 @@ The results are shown in @linux-page-fault-breakdown.
   minimums
 }
 
-#let linux-page-fault-timings = timings-csv("linux-page-fault-timings/results.txt")
+#let linux-page-fault-timings = timings-csv("page-fault-timings/results-linux.txt")
 
 #let linux-page-fault-breakdown-table(timings) = {
   let total = (
     timings.save-state-start
       + timings.save-state-end
-      + timings.search-for-vma-end
-      + timings.handle-fault-end
+      + timings.read-lock-vma-end
+      + timings.walk-page-table-end
+      + timings.handle-mm-fault-end
+      + timings.cleanup-end
       + timings.iret
+      + timings.end
   )
   let m(number) = math.equation(str(number))
   table(
@@ -267,8 +270,10 @@ The results are shown in @linux-page-fault-breakdown.
     table.header([Operation], [Minimum (cycles)]),
     [Exception], m(timings.save-state-start),
     [Save state], m(timings.save-state-end),
-    [Read-lock VMA], m(timings.search-for-vma-end),
-    [Handle fault], m(timings.handle-fault-end),
+    [Read-lock VMA], m(timings.read-lock-vma-end),
+    [Walk page table], m(timings.walk-page-table-end),
+    [Return from \ `handle_mm_fault`], m(timings.handle-mm-fault-end),
+    [Cleanup], m(timings.cleanup-end),
     [Restore state], m(timings.iret),
     [IRET], m(timings.end),
     [Total], m(total),
@@ -494,8 +499,8 @@ with the zero page and wake up the faulting thread, as represented in
 #figure(
   caption: [`userfaultfd` page fault execution time breakdown],
   {
-    let timings = timings-csv("userfaultfd-page-fault-timings/results.txt")
-    let timings-different-cpus = timings-csv("userfaultfd-page-fault-timings/results-different-cpus.txt")
+    let timings = timings-csv("page-fault-timings/results-userfaultfd.txt")
+    let timings-two-cpus = timings-csv("page-fault-timings/results-userfaultfd-two-cpus.txt")
     let total(timings) = (
       timings.save-state-start
         + timings.save-state-end
@@ -522,48 +527,48 @@ with the zero page and wake up the faulting thread, as represented in
 
       [Exception],
       m(timings.save-state-start),
-      m(timings-different-cpus.save-state-start),
+      m(timings-two-cpus.save-state-start),
 
       [Save state],
       m(timings.save-state-end),
-      m(timings-different-cpus.save-state-end),
+      m(timings-two-cpus.save-state-end),
 
       [Read-lock VMA],
       m(timings.read-lock-vma-end),
-      m(timings-different-cpus.read-lock-vma-end),
+      m(timings-two-cpus.read-lock-vma-end),
 
       [Walk page table],
       m(timings.walk-page-table-end),
-      m(timings-different-cpus.walk-page-table-end),
+      m(timings-two-cpus.walk-page-table-end),
 
       [Wake up \ `userfaultfd` thread],
       m(timings.wake-up-userfaultfd-end),
-      m(timings-different-cpus.wake-up-userfaultfd-end),
+      m(timings-two-cpus.wake-up-userfaultfd-end),
 
       [Return from `read`],
       m(timings.msg-received),
-      m(timings-different-cpus.msg-received),
+      m(timings-two-cpus.msg-received),
 
       [Treat fault and \ return from \ `handle_mm_fault`],
       m(timings.handle-mm-fault-end),
-      m(timings-different-cpus.handle-mm-fault-end),
+      m(timings-two-cpus.handle-mm-fault-end),
 
       [Read-lock VMA],
       m(timings.retry-read-lock-vma-end),
-      m(timings-different-cpus.retry-read-lock-vma-end),
+      m(timings-two-cpus.retry-read-lock-vma-end),
 
       [Walk page table],
       m(timings.retry-walk-page-table-end),
-      m(timings-different-cpus.retry-walk-page-table-end),
+      m(timings-two-cpus.retry-walk-page-table-end),
 
       [Return from \ `handle_mm_fault`],
       m(timings.retry-handle-mm-fault-end),
-      m(timings-different-cpus.retry-handle-mm-fault-end),
+      m(timings-two-cpus.retry-handle-mm-fault-end),
 
-      [Cleanup], m(timings.cleanup-end), m(timings-different-cpus.cleanup-end),
-      [Restore state], m(timings.iret), m(timings-different-cpus.iret),
-      [IRET], m(timings.end), m(timings-different-cpus.end),
-      [Total], m(total(timings)), m(total(timings-different-cpus)),
+      [Cleanup], m(timings.cleanup-end), m(timings-two-cpus.cleanup-end),
+      [Restore state], m(timings.iret), m(timings-two-cpus.iret),
+      [IRET], m(timings.end), m(timings-two-cpus.end),
+      [Total], m(total(timings)), m(total(timings-two-cpus)),
     )
   },
 )
@@ -612,7 +617,7 @@ operation as measured in @linux-page-fault-breakdown, but without the fences.
 #figure(
   caption: [Linux page fault execution time breakdown (without fences)],
   linux-page-fault-breakdown-table(
-    timings-csv("linux-page-fault-timings/results-no-fence.txt"),
+    timings-csv("page-fault-timings/results-linux-no-fence.txt"),
   ),
 ) <linux-page-fault-no-fence-breakdown>
 
@@ -675,6 +680,8 @@ using `printk` (similar to `printf` in userspace). The execution time of the
     printk-line(cumulative-timings.at(1), cumulative-timings.at(2))
     printk-line(cumulative-timings.at(3), cumulative-timings.at(4))
     printk-line(cumulative-timings.at(5), cumulative-timings.at(6))
+    printk-line(cumulative-timings.at(7), cumulative-timings.at(8))
+    printk-line(cumulative-timings.at(9), cumulative-timings.at(10))
 
     let mark(time, body, color: black, bottom: false) = {
       let x = timing-x(time)
@@ -714,27 +721,49 @@ using `printk` (similar to `printf` in userspace). The execution time of the
     )
     mark(
       cumulative-timings.at(4),
-      math.accent(math.text[Handle], math.arrow),
+      math.accent(math.text[Walk PT], math.arrow),
       color: navy,
     )
     mark(
       cumulative-timings.at(5),
-      math.accent(math.text[Handle], math.arrow.l),
+      math.accent(math.text[Walk PT], math.arrow.l),
       color: navy,
       bottom: true,
     )
     mark(
       cumulative-timings.at(6),
-      pad(right: .125cm, math.accent(math.text[Restore], math.arrow.r)),
-      color: maroon.darken(50%),
+      math.accent(math.text[Return], math.arrow),
+      color: purple.darken(50%),
     )
     mark(
       cumulative-timings.at(7),
+      math.accent(math.text[Return], math.arrow.l),
+      color: purple.darken(50%),
+      bottom: true,
+    )
+    mark(
+      cumulative-timings.at(8),
+      math.accent(math.text[Cleanup], math.arrow),
+      color: aqua.darken(50%),
+    )
+    mark(
+      cumulative-timings.at(9),
+      math.accent(math.text[Cleanup], math.arrow.l),
+      color: aqua.darken(50%),
+      bottom: true,
+    )
+    mark(
+      cumulative-timings.at(10),
+      pad(right: .5cm, math.accent(math.text[Restore], math.arrow.r)),
+      color: maroon.darken(50%),
+    )
+    mark(
+      cumulative-timings.at(11),
       [`iret`],
       color: yellow.darken(50%),
       bottom: true,
     )
-    mark(total, pad(left: .125cm)[End], color: lime.darken(50%))
+    mark(total, pad(left: .5cm)[End], color: lime.darken(50%))
   }),
   caption: [Positions of RDTSC instructions with `printk` calls in red],
 )
