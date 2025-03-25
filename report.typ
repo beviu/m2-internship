@@ -480,6 +480,7 @@ with the zero page and wake up the faulting thread, as represented in
       (set-event: "treat-fault-start"),
       user-stmt[SYSCALL],
       kernel-stmt[Save state],
+      kernel-stmt[Read-lock VMA],
       kernel-stmt[Walk page table],
       kernel-stmt[Set PTE],
       kernel-stmt[Notify app thread],
@@ -495,6 +496,16 @@ with the zero page and wake up the faulting thread, as represented in
   ),
   caption: [Flow of `userfaultfd`-based page fault handling],
 ) <userfaultfd-page-fault-flow>
+
+The kernel read-locks the VMA and walks the page table three times. In between
+the notification and the `UFFDIO_ZEROPAGE` operation, the VMA that contains
+the faulting address could have been modified from another thread so the kernel
+verifies that the VMA is still associated with the `userfaultfd` context, and
+walks the page table a second time. I do not understand the third occurence,
+however.
+
+Measurements in @userfaultfd-page-fault-breakdown show that `userfaultfd`-based
+page fault handling is significantly slower than the native page fault handling.
 
 #figure(
   caption: [`userfaultfd` page fault execution time breakdown],
@@ -571,7 +582,7 @@ with the zero page and wake up the faulting thread, as represented in
       [Total], m(total(timings)), m(total(timings-two-cpus)),
     )
   },
-)
+) <userfaultfd-page-fault-breakdown>
 
 // This is not a heading so that it does not appear in the outline.
 #text(
