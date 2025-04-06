@@ -607,6 +607,8 @@ page fault handling is significantly slower than the native page fault handling.
 
 = Measuring execution time <execution-time-measurement-method>
 
+#inline-note[Explain why kprobes and other alternatives were not considered.]
+
 == RDTSC
 
 The execution time of the operations we measure is in the order of a few
