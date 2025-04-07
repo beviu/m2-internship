@@ -1,4 +1,4 @@
-From 8b1ede1711ca257bd217158994168fac6922cacd Mon Sep 17 00:00:00 2001
+From 919402fa8e6379cec6ae31ba33acbbf148766fec Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Tue, 4 Mar 2025 13:50:40 +0100
 Subject: [PATCH] mm: add page fault timing debugging code
@@ -73,7 +73,7 @@ index f52dbe0ad93c..fb283d685e33 100644
  	 * This may fault.  Non-paranoid faults on return to userspace are
  	 * handled by fixup_bad_iret.  These include #SS, #GP, and #NP.
 diff --git a/arch/x86/mm/fault.c b/arch/x86/mm/fault.c
-index 296d294142c8..ce5cc9cafe43 100644
+index 296d294142c8..95defc081f54 100644
 --- a/arch/x86/mm/fault.c
 +++ b/arch/x86/mm/fault.c
 @@ -36,10 +36,13 @@
@@ -174,7 +174,7 @@ index 296d294142c8..ce5cc9cafe43 100644
  	unsigned long address;
 +	bool trace = (regs->bx & 0xffffffff) == 0xb141a52a;
 +
-+	if (trace) {
++	if (likely(trace)) {
 +		/* Save the PF ISR entry timestamp because it will be overwritten in the
 +		   assembly return code. */
 +		regs->di = regs->ax & 0xffffffff;
@@ -195,7 +195,7 @@ index 296d294142c8..ce5cc9cafe43 100644
  
  	irqentry_exit(regs, state);
 +
-+	if (trace)
++	if (likely(trace))
 +		timestamp_c_exit = rdtsc_ordered();
  }
 diff --git a/drivers/iommu/iommu-sva.c b/drivers/iommu/iommu-sva.c
