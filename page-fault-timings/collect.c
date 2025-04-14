@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include <errno.h>
 #include <fcntl.h>
+#include <getopt.h>
 #include <inttypes.h>
 #include <linux/userfaultfd.h>
 #include <pthread.h>
@@ -41,7 +42,7 @@ static bool read_timestamp(const char *name, uint64_t *timestamp) {
   int timestamp_fd;
   char buf[21];
   ssize_t n;
-  const char *tmp;
+  const char *cursor;
   bool ok = false;
 
   timestamp_fd = openat(timestamps_dir_fd, name, O_RDONLY);
@@ -58,8 +59,8 @@ static bool read_timestamp(const char *name, uint64_t *timestamp) {
     goto fail;
   }
 
-  tmp = buf;
-  if (!parse_uint64_t(&tmp, buf + n, timestamp)) {
+  cursor = buf;
+  if (!parse_uint64_t(&cursor, buf + n, timestamp)) {
     fprintf(stderr, "Failed to parse timestamp: %.*s.\n", (int)n, buf);
     goto fail;
   }
@@ -114,11 +115,39 @@ static void *userfaultfd_thread_routine(void *data) {
 }
 #endif
 
-int main() {
+static const struct option long_options[] = {
+    {"file", required_argument, 0, 'f'},
+    {"offset", required_argument, 0, 'o'},
+    {"help", no_argument, 0, 'h'},
+    {0, 0, 0, 0}};
+
+static void print_usage(const char *arg0) {
+  fprintf(stdout,
+          "Usage: %s [OPTION]...\n"
+          "Collect page fault timings.\n"
+          "\n"
+          "Mandatory arguments to long options are mandatory for short options "
+          "too.\n"
+          "  -f, --file=FILE      do a major page fault by memory-mapping FILE "
+          "and reading a byte from it\n"
+          "  -o, --offset=OFFSET  set the offset to read from the start of the "
+          "memory mapping (useful with -f)\n"
+          "      --help           display this help and exit\n",
+          arg0);
+}
+
+int main(int argc, char **argv) {
+  const char *arg0;
+  int opt;
+  const char *file = NULL;
+  const char *cursor;
+  uint64_t offset = 0;
   int ret = EXIT_FAILURE;
+  int file_fd = -1;
   cpu_set_t cpu_set;
   ssize_t page_size;
   void *page = MAP_FAILED;
+  uint8_t *byte;
   int err;
   unsigned int aux;
   int i;
@@ -153,6 +182,29 @@ int main() {
   uint64_t timestamp_second_handle_mm_fault_end;
 #endif
 
+  arg0 = argv[0] ? argv[0] : "collect";
+
+  while ((opt = getopt_long(argc, argv, "f:o:", long_options, NULL)) != -1) {
+    switch (opt) {
+    case 'f':
+      file = optarg;
+      break;
+    case 'o':
+      cursor = optarg;
+      if (!parse_uint64_t(&cursor, optarg + strlen(optarg), &offset)) {
+        fprintf(stderr, "%s: invalid offset: ‘%s’\n", arg0, optarg);
+        goto fail;
+      }
+      break;
+    case 'h':
+      print_usage(arg0);
+      goto out;
+    default:
+      fprintf(stderr, "Try '%s --help' for more information.\n", arg0);
+      goto fail;
+    }
+  }
+
   timestamps_dir_fd =
       open("/proc/sys/debug/fast-tracepoints", O_DIRECTORY | O_PATH);
   if (timestamps_dir_fd == -1) {
@@ -168,17 +220,29 @@ int main() {
     goto fail;
   }
 
+  if (file) {
+    file_fd = open(file, O_RDONLY);
+    if (file_fd == -1) {
+      perror("open");
+      goto fail;
+    }
+  }
+
   page_size = sysconf(_SC_PAGESIZE);
   if (page_size == -1) {
     perror("sysconf(_SC_PAGESIZE)");
     goto fail;
   }
 
-  page = mmap(NULL, page_size, PROT_READ, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+  page = mmap(NULL, page_size, PROT_READ, MAP_ANONYMOUS | MAP_PRIVATE, file_fd,
+              offset & ~(page_size - 1));
   if (page == MAP_FAILED) {
-    fputs("Failed to allocate a page!\n", stderr);
+    perror("mmap");
     goto fail;
   }
+
+  byte = page;
+  byte += offset & (page_size - 1);
 
 #ifdef USERFAULTFD
   userfaultfd_fd = userfaultfd(O_CLOEXEC);
@@ -238,11 +302,11 @@ int main() {
     timestamp_page_fault = __rdtscp(&aux);
 
     /* Trigger a page fault with the magic value in ebx. */
-    asm volatile("movb (%[page]), %[zero]"
+    asm volatile("movb (%[byte]), %[zero]"
                  : "=&a"(timestamp_iret_1), "=&d"(timestamp_iret_2),
                    "=&D"(timestamp_isr_entry_1),
                    "=&S"(timestamp_isr_entry_2), [zero] "=r"(zero)
-                 : [page] "r"(page), "b"(0xb141a52a)
+                 : [byte] "r"(byte), "b"(0xb141a52a)
                  : "ecx");
 
     timestamp_end = __rdtscp(&aux);
@@ -315,6 +379,7 @@ int main() {
     }
   }
 
+out:
   ret = EXIT_SUCCESS;
 
 fail:
@@ -328,6 +393,8 @@ fail:
 #endif
   if (page != MAP_FAILED)
     munmap(page, page_size);
+  if (file_fd != -1)
+    close(file_fd);
   if (timestamps_dir_fd != -1)
     close(timestamps_dir_fd);
 
