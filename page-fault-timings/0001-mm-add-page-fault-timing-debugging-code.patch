@@ -1,4 +1,4 @@
-From 919402fa8e6379cec6ae31ba33acbbf148766fec Mon Sep 17 00:00:00 2001
+From c0e7a62f519dd3dfb97ea114a1c478b92caf2aee Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Tue, 4 Mar 2025 13:50:40 +0100
 Subject: [PATCH] mm: add page fault timing debugging code
@@ -73,7 +73,7 @@ index f52dbe0ad93c..fb283d685e33 100644
  	 * This may fault.  Non-paranoid faults on return to userspace are
  	 * handled by fixup_bad_iret.  These include #SS, #GP, and #NP.
 diff --git a/arch/x86/mm/fault.c b/arch/x86/mm/fault.c
-index 296d294142c8..95defc081f54 100644
+index 296d294142c8..ff5a2cd2755f 100644
 --- a/arch/x86/mm/fault.c
 +++ b/arch/x86/mm/fault.c
 @@ -36,10 +36,13 @@
@@ -120,7 +120,7 @@ index 296d294142c8..95defc081f54 100644
 +	FAST_TRACEPOINT(first_handle_mm_fault_start, trace);
 +	fault = handle_mm_fault(vma, address, flags | FAULT_FLAG_VMA_LOCK, regs, trace);
 +	FAST_TRACEPOINT(first_handle_mm_fault_end, trace);
-+	
++
  	if (!(fault & (VM_FAULT_RETRY | VM_FAULT_COMPLETED)))
  		vma_end_read(vma);
  
