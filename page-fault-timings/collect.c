@@ -136,6 +136,35 @@ static void print_usage(const char *arg0) {
           arg0);
 }
 
+static bool open_write_close(const char *path, const void *buf, size_t n) {
+  int fd;
+  ssize_t written;
+  bool ok = false;
+
+  fd = open(path, O_WRONLY);
+  if (fd == -1) {
+    fprintf(stderr, "open(%s): %s\n", path, strerror(errno));
+    return false;
+  }
+
+  written = write(fd, buf, n);
+  if (written == -1) {
+    perror("write");
+  } else if (written != n) {
+    fprintf(stderr, "Could only write %zu bytes to %s.\n", written, path);
+  } else {
+    ok = true;
+  }
+
+  close(fd);
+
+  return ok;
+}
+
+static bool drop_caches() {
+  return open_write_close("/proc/sys/vm/drop_caches", "1\n", 2);
+}
+
 int main(int argc, char **argv) {
   const char *arg0;
   int opt;
@@ -377,6 +406,11 @@ int main(int argc, char **argv) {
       perror("mmap");
       goto fail;
     }
+
+    if (file_fd != -1 && !drop_caches())
+      goto fail;
+
+    usleep(1000000);
   }
 
 out:

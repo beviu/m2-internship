@@ -79,7 +79,7 @@ int main() {
   zeropage_args.range = register_args.range;
 
   puts("end");
-  
+
   for (int i = 0; i < 100000; ++i) {
     start_tsc = rdtsc();
 
