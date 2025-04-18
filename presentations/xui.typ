@@ -148,8 +148,11 @@ User-space notification mechanisms
 Steps for sending/receiving a user interrupt:
 + `senduipi` #math.arrow.r sender updates UPID.
 + Local APIC of sender sends interrupt to local APIC of receiver.
-+
-+
++ Local APIC of the receiver notifies the core by raising an interrupt signal line.
++ _Notification processing_ microcode procedure.
++ _User interrupt delivery_ microcode procedure.
++ The handler executes.
++ `uiret`.
 
 = The xUI enhancements
 
@@ -173,3 +176,5 @@ New CPU instruction to start a periodic or one-shot timer. The timer sends a use
 == Interrupt forwarding
 
 - Devices can send user interrupts
+
+= Evaluation
