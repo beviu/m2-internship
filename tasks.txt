@@ -1,0 +1,7 @@
+- [ ] Make a model for the cost of the user interrupt solution.
+  - [ ] Make a model for the cost of the userfaultfd solution.
+    - [ ] Do it assuming there is no indirect cost (such as cache pollution).
+	  - [ ] Do more measurements with different types of page faults.
+	    - [ ] Modify code to do a major page fault with a file on disk.
+- [ ] Tidy up the internship repository.
+  - [ ] Make the printk thing work.
