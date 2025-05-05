@@ -118,6 +118,7 @@ static void *userfaultfd_thread_routine(void *data) {
 static const struct option long_options[] = {
     {"file", required_argument, 0, 'f'},
     {"offset", required_argument, 0, 'o'},
+    {"minor", no_argument, 0, 'm'},
     {"help", no_argument, 0, 'h'},
     {0, 0, 0, 0}};
 
@@ -132,6 +133,7 @@ static void print_usage(const char *arg0) {
           "and reading a byte from it\n"
           "  -o, --offset=OFFSET  set the offset to read from the start of the "
           "memory mapping (useful with -f)\n"
+          "  -m, --minor          do minor page faults\n"
           "      --help           display this help and exit\n",
           arg0);
 }
@@ -171,6 +173,7 @@ int main(int argc, char **argv) {
   const char *file = NULL;
   const char *cursor;
   uint64_t offset = 0;
+  bool minor = false;
   int ret = EXIT_FAILURE;
   int file_fd = -1;
   cpu_set_t cpu_set;
@@ -213,7 +216,7 @@ int main(int argc, char **argv) {
 
   arg0 = argv[0] ? argv[0] : "collect";
 
-  while ((opt = getopt_long(argc, argv, "f:o:", long_options, NULL)) != -1) {
+  while ((opt = getopt_long(argc, argv, "f:o:m", long_options, NULL)) != -1) {
     switch (opt) {
     case 'f':
       file = optarg;
@@ -224,6 +227,9 @@ int main(int argc, char **argv) {
         fprintf(stderr, "%s: invalid offset: ‘%s’\n", arg0, optarg);
         goto fail;
       }
+      break;
+    case 'm':
+      minor = true;
       break;
     case 'h':
       print_usage(arg0);
@@ -402,15 +408,10 @@ int main(int argc, char **argv) {
 
 #undef R
 
-    if (madvise(page, page_size, MADV_DONTNEED) == -1) {
-      perror("mmap");
+    if (madvise(page, page_size, minor ? MADV_DONTNEED : MADV_PAGEOUT) == -1) {
+      perror("madvise");
       goto fail;
     }
-
-    if (file_fd != -1 && !drop_caches())
-      goto fail;
-
-    usleep(1000000);
   }
 
 out:
