@@ -47,14 +47,14 @@ static bool read_timestamp(const char *name, uint64_t *timestamp) {
 
   timestamp_fd = openat(timestamps_dir_fd, name, O_RDONLY);
   if (timestamp_fd == -1) {
-    fprintf(stderr, "open(/proc/sys/debug/fast-tracepoints/%s): %s\n", name,
+    fprintf(stderr, "open(/proc/sys/debug/fast_tracepoints/%s): %s\n", name,
             strerror(errno));
     goto fail;
   }
 
   n = read(timestamp_fd, buf, sizeof(buf));
   if (n == -1) {
-    fprintf(stderr, "read(/proc/sys/debug/fast-tracepoints/%s): %s\n", name,
+    fprintf(stderr, "read(/proc/sys/debug/fast_tracepoints/%s): %s\n", name,
             strerror(errno));
     goto fail;
   }
@@ -163,10 +163,6 @@ static bool open_write_close(const char *path, const void *buf, size_t n) {
   return ok;
 }
 
-static bool drop_caches() {
-  return open_write_close("/proc/sys/vm/drop_caches", "1\n", 2);
-}
-
 int main(int argc, char **argv) {
   const char *arg0;
   int opt;
@@ -187,11 +183,13 @@ int main(int argc, char **argv) {
   uint8_t zero;
   uint32_t timestamp_iret_1;
   uint32_t timestamp_iret_2;
-  uint32_t timestamp_isr_entry_1;
-  uint32_t timestamp_isr_entry_2;
+  uint32_t timestamp_c_exit_1;
+  uint32_t timestamp_c_exit_2;
   uint64_t timestamp_end;
   uint64_t timestamp_iret;
+  uint64_t timestamp_c_exit;
   uint64_t timestamp_isr_entry;
+  uint64_t timestamp_c_entry;
   uint64_t timestamp_lock_vma_under_rcu_start;
   uint64_t timestamp_lock_vma_under_rcu_end;
   uint64_t timestamp_first_handle_mm_fault_start;
@@ -241,9 +239,9 @@ int main(int argc, char **argv) {
   }
 
   timestamps_dir_fd =
-      open("/proc/sys/debug/fast-tracepoints", O_DIRECTORY | O_PATH);
+      open("/proc/sys/debug/fast_tracepoints", O_DIRECTORY | O_PATH);
   if (timestamps_dir_fd == -1) {
-    perror("open(/proc/sys/debug/fast-tracepoints)");
+    perror("open(/proc/sys/debug/fast_tracepoints)");
     goto fail;
   }
 
@@ -321,16 +319,17 @@ int main(int argc, char **argv) {
     goto fail;
   }
 
-  puts("isr_entry, lock_vma_under_rcu_start, lock_vma_under_rcu_end, "
+  puts("isr_entry, c_entry, lock_vma_under_rcu_start, lock_vma_under_rcu_end, "
        "first_handle_mm_fault_start, first_page_table_walk_end, "
        "wake_up_userfaultfd_start, wake_up_userfaultfd_end, "
        "first_handle_mm_fault_end, lock_mm_and_find_vma_start, "
        "lock_mm_and_find_vma_end, second_handle_mm_fault_start, "
-       "second_page_table_walk_end, second_handle_mm_fault_end, iret, end");
+       "second_page_table_walk_end, second_handle_mm_fault_end, c_exit, iret, "
+       "end");
 #else
-  puts("isr_entry, lock_vma_under_rcu_start, lock_vma_under_rcu_end, "
+  puts("isr_entry, c_entry, lock_vma_under_rcu_start, lock_vma_under_rcu_end, "
        "first_handle_mm_fault_start, first_page_table_walk_end, "
-       "first_handle_mm_fault_end, iret, end");
+       "first_handle_mm_fault_end, c_exit, iret, end");
 #endif
 
   for (i = 0; i < 100000; ++i) {
@@ -339,22 +338,22 @@ int main(int argc, char **argv) {
     /* Trigger a page fault with the magic value in ebx. */
     asm volatile("movb (%[byte]), %[zero]"
                  : "=&a"(timestamp_iret_1), "=&d"(timestamp_iret_2),
-                   "=&D"(timestamp_isr_entry_1),
-                   "=&S"(timestamp_isr_entry_2), [zero] "=r"(zero)
+                   "=&D"(timestamp_c_exit_1),
+                   "=&S"(timestamp_c_exit_2), [zero] "=r"(zero)
                  : [byte] "r"(byte), "b"(0xb141a52a)
                  : "ecx");
 
     timestamp_end = __rdtscp(&aux);
 
     timestamp_iret = timestamp_iret_1 | ((uint64_t)timestamp_iret_2 << 32);
-    timestamp_isr_entry =
-        timestamp_isr_entry_1 | ((uint64_t)timestamp_isr_entry_2 << 32);
+    timestamp_c_exit =
+        timestamp_c_exit_1 | ((uint64_t)timestamp_c_exit_2 << 32);
 
 #define R(name) read_timestamp(#name, &timestamp_##name)
 
-    if (!R(lock_vma_under_rcu_start) || !R(lock_vma_under_rcu_end) ||
-        !R(first_handle_mm_fault_start) || !R(first_page_table_walk_end) ||
-        !R(first_handle_mm_fault_end))
+    if (!R(isr_entry) || !R(c_entry) || !R(lock_vma_under_rcu_start) ||
+        !R(lock_vma_under_rcu_end) || !R(first_handle_mm_fault_start) ||
+        !R(first_page_table_walk_end) || !R(first_handle_mm_fault_end))
       goto fail;
 
 #ifdef USERFAULTFD
@@ -375,8 +374,9 @@ int main(int argc, char **argv) {
     printf("%" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64
            ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64
            ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64
-           "\n",
+           ", %" PRIu64 ", %" PRIu64 "\n",
            timestamp_isr_entry - timestamp_page_fault,
+           timestamp_c_entry - timestamp_page_fault,
            timestamp_lock_vma_under_rcu_start - timestamp_page_fault,
            timestamp_lock_vma_under_rcu_end - timestamp_page_fault,
            timestamp_first_handle_mm_fault_start - timestamp_page_fault,
@@ -389,19 +389,23 @@ int main(int argc, char **argv) {
            timestamp_second_handle_mm_fault_start - timestamp_page_fault,
            timestamp_second_page_table_walk_end - timestamp_page_fault,
            timestamp_second_handle_mm_fault_end - timestamp_page_fault,
+           timestamp_c_exit - timestamp_page_fault,
            timestamp_iret - timestamp_page_fault,
            timestamp_end - timestamp_page_fault);
 
     atomic_store_explicit(&timestamp_msg_received, 0, memory_order_relaxed);
 #else
     printf("%" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64
-           ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 "\n",
+           ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64
+           "\n",
            timestamp_isr_entry - timestamp_page_fault,
+           timestamp_c_entry - timestamp_page_fault,
            timestamp_lock_vma_under_rcu_start - timestamp_page_fault,
            timestamp_lock_vma_under_rcu_end - timestamp_page_fault,
            timestamp_first_handle_mm_fault_start - timestamp_page_fault,
            timestamp_first_page_table_walk_end - timestamp_page_fault,
            timestamp_first_handle_mm_fault_end - timestamp_page_fault,
+           timestamp_c_exit - timestamp_page_fault,
            timestamp_iret - timestamp_page_fault,
            timestamp_end - timestamp_page_fault);
 #endif

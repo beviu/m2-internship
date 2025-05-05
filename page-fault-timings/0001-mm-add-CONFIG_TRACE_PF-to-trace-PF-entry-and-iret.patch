@@ -1,0 +1,105 @@
+From 5276377e2a6d3a138cfeb9efe6b803fff3336bc7 Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Fri, 2 May 2025 12:30:51 +0200
+Subject: [PATCH 1/3] mm: add CONFIG_TRACE_PF to trace PF entry and iret
+
+---
+ arch/x86/Kconfig.debug    | 15 +++++++++++++++
+ arch/x86/entry/entry_64.S | 28 ++++++++++++++++++++++++++++
+ arch/x86/mm/fault.c       |  8 ++++++++
+ 3 files changed, 51 insertions(+)
+
+diff --git a/arch/x86/Kconfig.debug b/arch/x86/Kconfig.debug
+index c95c3aaadf97..47c1d0db3f33 100644
+--- a/arch/x86/Kconfig.debug
++++ b/arch/x86/Kconfig.debug
+@@ -173,6 +173,21 @@ config DEBUG_ENTRY
+ 
+ 	  If unsure, say N.
+ 
++config TRACE_PF
++	bool "Trace page faults"
++	help
++	  This option enables debugging code to read and save the TSC:
++	  1. on page fault entry to make it possible to measure the time between the
++	     fault and the exception handler starting to execute, and
++	  2. right before iret is called to make it possible to measure the time
++	     between the iret and the return to user space.
++
++	  This is only active when ebx contains the value 0xb141a52a before a page
++	  fault. When active and a page fault occurs, the TSC at (1) is saved in
++	  edi:esi, the TSC at (2) is saved in eax:edx, and rcx may be clobbered.
++
++	  If unsure, say N.
++
+ config DEBUG_NMI_SELFTEST
+ 	bool "NMI Selftest"
+ 	depends on DEBUG_KERNEL && X86_LOCAL_APIC
+diff --git a/arch/x86/entry/entry_64.S b/arch/x86/entry/entry_64.S
+index f40bdf97d390..ab6a30102d16 100644
+--- a/arch/x86/entry/entry_64.S
++++ b/arch/x86/entry/entry_64.S
+@@ -337,6 +337,21 @@ SYM_CODE_START(\asmsym)
+ 	.endif
+ 
+ 	ENDBR
++
++#ifdef CONFIG_TRACE_PF
++	.if \vector == X86_TRAP_PF
++		/* Check for a magic number to read the counter. On a recent CPU, a predicted
++		   branch that is not taken has a latency of less than a cycle, and the cmp
++		   instruction has a latency of a single cycle. */
++		cmpl	$0xb141a52a, %ebx
++		jne	1f
++		ALTERNATIVE_2 "rdtsc", \
++			"lfence; rdtsc", X86_FEATURE_LFENCE_RDTSC, \
++			"rdtscp", X86_FEATURE_RDTSCP
++1:
++	.endif
++#endif
++
+ 	ASM_CLAC
+ 	cld
+ 
+@@ -650,6 +665,19 @@ SYM_INNER_LABEL(early_xen_iret_patch, SYM_L_GLOBAL)
+ 
+ SYM_INNER_LABEL(native_irq_return_iret, SYM_L_GLOBAL)
+ 	ANNOTATE_NOENDBR // exc_double_fault
++
++#ifdef CONFIG_TRACE_PF
++	/* Check for a magic number to read the counter. On a recent CPU, a predicted
++	   branch that is not taken has a latency of less than a cycle, and the cmp
++	   instruction has a latency of a single cycle. */
++	cmpl	$0xb141a52a, %ebx
++	jne	1f
++	ALTERNATIVE_2 "rdtsc", \
++		"lfence; rdtsc", X86_FEATURE_LFENCE_RDTSC, \
++		"rdtscp", X86_FEATURE_RDTSCP
++1:
++#endif
++
+ 	/*
+ 	 * This may fault.  Non-paranoid faults on return to userspace are
+ 	 * handled by fixup_bad_iret.  These include #SS, #GP, and #NP.
+diff --git a/arch/x86/mm/fault.c b/arch/x86/mm/fault.c
+index 296d294142c8..5651689f4761 100644
+--- a/arch/x86/mm/fault.c
++++ b/arch/x86/mm/fault.c
+@@ -1493,6 +1493,14 @@ DEFINE_IDTENTRY_RAW_ERRORCODE(exc_page_fault)
+ {
+ 	irqentry_state_t state;
+ 	unsigned long address;
++	bool trace = (regs->bx & 0xffffffff) == 0xb141a52a;
++
++	if (IS_ENABLED(CONFIG_TRACE_PF) && likely(trace)) {
++		/* Save the PF ISR entry timestamp because it will be overwritten in the
++		   assembly return code. */
++		regs->di = regs->ax & 0xffffffff;
++		regs->si = regs->dx & 0xffffffff;
++	}
+ 
+ 	address = cpu_feature_enabled(X86_FEATURE_FRED) ? fred_event_data(regs) : read_cr2();
+ 
+-- 
+2.49.0
+
