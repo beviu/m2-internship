@@ -292,7 +292,7 @@ int main(int argc, char **argv) {
   userfaultfd_fd = userfaultfd(O_CLOEXEC);
   if (userfaultfd_fd == -1) {
     perror("userfaultfd");
-    goto unmap;
+    goto cleanup_page;
   }
 
   api_args.api = UFFD_API;
@@ -317,8 +317,6 @@ int main(int argc, char **argv) {
     fprintf(stderr, "pthread_create: %s\n", strerror(err));
     goto cleanup_userfaultfd_fd;
   }
-
-  started_userfaultfd_thread = true;
 
 #ifdef TWO_CPUS
   CPU_ZERO(&cpu_set);

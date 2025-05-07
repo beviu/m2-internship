@@ -1,4 +1,4 @@
-From 728a0546e41d783614e4d57e00c408c7399ec721 Mon Sep 17 00:00:00 2001
+From c48c10443e4a7d184e72071182697059402750ad Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 2 May 2025 14:35:23 +0200
 Subject: [PATCH 2/3] mm: add PF fast tracepoints
@@ -9,12 +9,12 @@ fault.
 It collect CPU timestamp counters (TSC) at various points during page
 fault handling that are accessible through sysctls.
 ---
- arch/x86/mm/fault.c           |  50 ++++++++++++---
+ arch/x86/mm/fault.c           |  50 ++++++++++++----
  drivers/iommu/iommu-sva.c     |   2 +-
  fs/userfaultfd.c              |   8 ++-
  include/linux/mm.h            |   2 +-
  include/linux/userfaultfd_k.h |   2 +-
- include/trace/fast.h          | 112 ++++++++++++++++++++++++++++++++++
+ include/trace/fast.h          | 105 ++++++++++++++++++++++++++++++++++
  kernel/trace/Kconfig          |   9 +++
  kernel/trace/Makefile         |   1 +
  kernel/trace/fast.c           |  41 +++++++++++++
@@ -22,9 +22,9 @@ fault handling that are accessible through sysctls.
  mm/huge_memory.c              |   4 +-
  mm/hugetlb.c                  |   4 +-
  mm/ksm.c                      |   2 +-
- mm/memory.c                   |  39 +++++++-----
+ mm/memory.c                   |  40 ++++++++-----
  mm/shmem.c                    |   4 +-
- 15 files changed, 246 insertions(+), 38 deletions(-)
+ 15 files changed, 240 insertions(+), 38 deletions(-)
  create mode 100644 include/trace/fast.h
  create mode 100644 kernel/trace/fast.c
 
@@ -240,10 +240,10 @@ index 75342022d144..980b1beffc78 100644
  typedef unsigned int __bitwise uffd_flags_t;
 diff --git a/include/trace/fast.h b/include/trace/fast.h
 new file mode 100644
-index 000000000000..ced250633cb7
+index 000000000000..cfb70fb4394c
 --- /dev/null
 +++ b/include/trace/fast.h
-@@ -0,0 +1,112 @@
+@@ -0,0 +1,105 @@
 +/* SPDX-License-Identifier: GPL-2.0 */
 +#ifndef _TRACE_FAST_H
 +#define _TRACE_FAST_H
@@ -265,8 +265,6 @@ index 000000000000..ced250633cb7
 +static inline void __fast_tracepoints_begin(const char *first_tracepoint_name,
 +                                            u64 start_timestamp)
 +{
-+	smp_rmb();
-+	
 +	prev_fast_tracepoint_name = first_fast_tracepoint;
 +	prev_fast_tracepoint_timestamp = start_timestamp;
 +}
@@ -297,8 +295,6 @@ index 000000000000..ced250633cb7
 +{
 +	__fast_tracepoint_common(tracepoint_name);
 +
-+	smp_wmb();
-+	
 +	return rdtsc_ordered();
 +}
 +
@@ -329,7 +325,6 @@ index 000000000000..ced250633cb7
 +
 +#define fast_tracepoints_begin(tracepoint_name, start_timestamp)               \
 +	do {                                                                   \
-+		smp_rmb();                                                     \
 +		fast_tracepoint_timestamp_##tracepoint_name = start_timestamp; \
 +	} while (0)
 +
@@ -338,8 +333,6 @@ index 000000000000..ced250633cb7
 +
 +static inline u64 __fast_tracepoints_end(void)
 +{
-+	smp_wmb();
-+
 +	return rdtsc_ordered();
 +}
 +
@@ -352,7 +345,7 @@ index 000000000000..ced250633cb7
 +#define fast_tracepoints_begin(tracepoint_name, start_timestamp)
 +#define fast_tracepoint(tracepoint_name)
 +#define fast_tracepoints_end(tracepoint_name)
-+		
++
 +#endif /* CONFIG_FAST_TRACEPOINTS */
 +
 +#endif /* _TRACE_FAST_H */
@@ -515,7 +508,7 @@ index 8583fb91ef13..e7f517bcad8f 100644
  	/*
  	 * We must loop until we no longer find a KSM page because
 diff --git a/mm/memory.c b/mm/memory.c
-index ba3ea0a82f7f..d8f9f60da66b 100644
+index ba3ea0a82f7f..c39a44c63469 100644
 --- a/mm/memory.c
 +++ b/mm/memory.c
 @@ -78,6 +78,7 @@
@@ -583,17 +576,7 @@ index ba3ea0a82f7f..d8f9f60da66b 100644
  {
  	struct vm_area_struct *vma = vmf->vma;
  	unsigned long addr = vmf->address;
-@@ -4968,6 +4970,9 @@ static vm_fault_t do_anonymous_page(struct vm_fault *vmf)
- 	if (pte_alloc(vma->vm_mm, vmf->pmd))
- 		return VM_FAULT_OOM;
- 
-+	if (likely(trace))
-+		fast_tracepoint(first_page_table_walk_end);
-+
- 	/* Use the zero-page for reads */
- 	if (!(vmf->flags & FAULT_FLAG_WRITE) &&
- 			!mm_forbids_zeropage(vma->vm_mm)) {
-@@ -4987,7 +4992,7 @@ static vm_fault_t do_anonymous_page(struct vm_fault *vmf)
+@@ -4987,7 +4989,7 @@ static vm_fault_t do_anonymous_page(struct vm_fault *vmf)
  		/* Deliver the page fault to userland, check inside PT lock */
  		if (userfaultfd_missing(vma)) {
  			pte_unmap_unlock(vmf->pte, vmf->ptl);
@@ -602,7 +585,7 @@ index ba3ea0a82f7f..d8f9f60da66b 100644
  		}
  		goto setpte;
  	}
-@@ -5037,7 +5042,7 @@ static vm_fault_t do_anonymous_page(struct vm_fault *vmf)
+@@ -5037,7 +5039,7 @@ static vm_fault_t do_anonymous_page(struct vm_fault *vmf)
  	if (userfaultfd_missing(vma)) {
  		pte_unmap_unlock(vmf->pte, vmf->ptl);
  		folio_put(folio);
@@ -611,7 +594,7 @@ index ba3ea0a82f7f..d8f9f60da66b 100644
  	}
  
  	folio_ref_add(folio, nr_pages - 1);
-@@ -5877,7 +5882,7 @@ static inline vm_fault_t wp_huge_pmd(struct vm_fault *vmf)
+@@ -5877,7 +5879,7 @@ static inline vm_fault_t wp_huge_pmd(struct vm_fault *vmf)
  		    userfaultfd_huge_pmd_wp(vma, vmf->orig_pmd)) {
  			if (userfaultfd_wp_async(vmf->vma))
  				goto split;
@@ -620,7 +603,7 @@ index ba3ea0a82f7f..d8f9f60da66b 100644
  		}
  		return do_huge_pmd_wp_page(vmf);
  	}
-@@ -5950,7 +5955,7 @@ static vm_fault_t wp_huge_pud(struct vm_fault *vmf, pud_t orig_pud)
+@@ -5950,7 +5952,7 @@ static vm_fault_t wp_huge_pud(struct vm_fault *vmf, pud_t orig_pud)
   * The mmap_lock may have been released depending on flags and our return value.
   * See filemap_fault() and __folio_lock_or_retry().
   */
@@ -629,19 +612,24 @@ index ba3ea0a82f7f..d8f9f60da66b 100644
  {
  	pte_t entry;
  
-@@ -5994,7 +5999,10 @@ static vm_fault_t handle_pte_fault(struct vm_fault *vmf)
+@@ -5993,8 +5995,15 @@ static vm_fault_t handle_pte_fault(struct vm_fault *vmf)
+ 		}
  	}
  
++	if (likely(trace)) {
++		if (vmf->flags & FAULT_FLAG_VMA_LOCK)
++			fast_tracepoint(first_page_table_walk_end);
++		else
++			fast_tracepoint(second_page_table_walk_end);
++	}
++
  	if (!vmf->pte)
 -		return do_pte_missing(vmf);
 +		return do_pte_missing(vmf, regs, trace);
-+
-+	if (likely(trace))
-+		fast_tracepoint(second_page_table_walk_end);
  
  	if (!pte_present(vmf->orig_pte))
  		return do_swap_page(vmf);
-@@ -6045,7 +6053,8 @@ static vm_fault_t handle_pte_fault(struct vm_fault *vmf)
+@@ -6045,7 +6054,8 @@ static vm_fault_t handle_pte_fault(struct vm_fault *vmf)
   * and __folio_lock_or_retry().
   */
  static vm_fault_t __handle_mm_fault(struct vm_area_struct *vma,
@@ -651,7 +639,7 @@ index ba3ea0a82f7f..d8f9f60da66b 100644
  {
  	struct vm_fault vmf = {
  		.vma = vma,
-@@ -6137,7 +6146,7 @@ static vm_fault_t __handle_mm_fault(struct vm_area_struct *vma,
+@@ -6137,7 +6147,7 @@ static vm_fault_t __handle_mm_fault(struct vm_area_struct *vma,
  		}
  	}
  
@@ -660,7 +648,7 @@ index ba3ea0a82f7f..d8f9f60da66b 100644
  }
  
  /**
-@@ -6272,7 +6281,7 @@ static vm_fault_t sanitize_fault_flags(struct vm_area_struct *vma,
+@@ -6272,7 +6282,7 @@ static vm_fault_t sanitize_fault_flags(struct vm_area_struct *vma,
   * return value.  See filemap_fault() and __folio_lock_or_retry().
   */
  vm_fault_t handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
@@ -669,7 +657,7 @@ index ba3ea0a82f7f..d8f9f60da66b 100644
  {
  	/* If the fault handler drops the mmap_lock, vma may be freed */
  	struct mm_struct *mm = vma->vm_mm;
-@@ -6306,7 +6315,7 @@ vm_fault_t handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
+@@ -6306,7 +6316,7 @@ vm_fault_t handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
  	if (unlikely(is_vm_hugetlb_page(vma)))
  		ret = hugetlb_fault(vma->vm_mm, vma, address, flags);
  	else
