@@ -146,7 +146,7 @@ static bool open_write_close(const char *path, const void *buf, size_t n) {
   fd = open(path, O_WRONLY);
   if (fd == -1) {
     fprintf(stderr, "open(%s): %s\n", path, strerror(errno));
-    return false;
+    goto out;
   }
 
   written = write(fd, buf, n);
@@ -160,6 +160,7 @@ static bool open_write_close(const char *path, const void *buf, size_t n) {
 
   close(fd);
 
+out:
   return ok;
 }
 
@@ -201,7 +202,6 @@ int main(int argc, char **argv) {
   struct uffdio_register register_args = {0};
   struct userfaultfd_thread_args thread_args;
   pthread_t userfaultfd_thread;
-  bool started_userfaultfd_thread = false;
   uint64_t timestamp_msg_received_copy;
   uint64_t timestamp_wake_up_userfaultfd_start;
   uint64_t timestamp_wake_up_userfaultfd_end;
@@ -223,7 +223,7 @@ int main(int argc, char **argv) {
       cursor = optarg;
       if (!parse_uint64_t(&cursor, optarg + strlen(optarg), &offset)) {
         fprintf(stderr, "%s: invalid offset: ‘%s’\n", arg0, optarg);
-        goto fail;
+        goto out;
       }
       break;
     case 'm':
@@ -234,7 +234,7 @@ int main(int argc, char **argv) {
       goto out;
     default:
       fprintf(stderr, "Try '%s --help' for more information.\n", arg0);
-      goto fail;
+      goto out;
     }
   }
 
@@ -242,7 +242,7 @@ int main(int argc, char **argv) {
       open("/proc/sys/debug/fast_tracepoints", O_DIRECTORY | O_PATH);
   if (timestamps_dir_fd == -1) {
     perror("open(/proc/sys/debug/fast_tracepoints)");
-    goto fail;
+    goto out;
   }
 
   CPU_ZERO(&cpu_set);
@@ -250,44 +250,55 @@ int main(int argc, char **argv) {
   err = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set), &cpu_set);
   if (err) {
     fprintf(stderr, "pthread_setaffinity_np: %s\n", strerror(err));
-    goto fail;
+    goto cleanup_timestamps_dir_fd;
   }
 
   if (file) {
     file_fd = open(file, O_RDONLY);
     if (file_fd == -1) {
       perror("open");
-      goto fail;
+      goto cleanup_timestamps_dir_fd;
     }
   }
 
   page_size = sysconf(_SC_PAGESIZE);
   if (page_size == -1) {
     perror("sysconf(_SC_PAGESIZE)");
-    goto fail;
+    goto cleanup_file_fd;
   }
 
-  page = mmap(NULL, page_size, PROT_READ, MAP_ANONYMOUS | MAP_PRIVATE, file_fd,
-              offset & ~(page_size - 1));
+  page = mmap(NULL, page_size,
+              file_fd == -1 ? (PROT_READ | PROT_WRITE) : PROT_READ,
+              MAP_ANONYMOUS | MAP_PRIVATE, file_fd, offset & ~(page_size - 1));
   if (page == MAP_FAILED) {
     perror("mmap");
-    goto fail;
+    goto cleanup_file_fd;
   }
 
   byte = page;
   byte += offset & (page_size - 1);
 
+  /* Prevent the kernel from using the special zero page. */
+  if (file_fd == -1) {
+    *byte = 1;
+
+    if (mprotect(page, page_size, PROT_READ) == -1) {
+      perror("mprotect");
+      goto cleanup_page;
+    }
+  }
+
 #ifdef USERFAULTFD
   userfaultfd_fd = userfaultfd(O_CLOEXEC);
   if (userfaultfd_fd == -1) {
     perror("userfaultfd");
-    goto fail;
+    goto unmap;
   }
 
   api_args.api = UFFD_API;
   if (ioctl(userfaultfd_fd, UFFDIO_API, &api_args) == -1) {
     perror("ioctl(UFFDIO_API)");
-    goto fail;
+    goto cleanup_userfaultfd_fd;
   }
 
   register_args.range.start = (uint64_t)page;
@@ -295,7 +306,7 @@ int main(int argc, char **argv) {
   register_args.mode = UFFDIO_REGISTER_MODE_MISSING;
   if (ioctl(userfaultfd_fd, UFFDIO_REGISTER, &register_args) == -1) {
     perror("ioctl(UFFDIO_REGISTER)");
-    goto fail;
+    goto cleanup_userfaultfd_fd;
   }
 
   thread_args.userfaultfd_fd = userfaultfd_fd;
@@ -304,7 +315,7 @@ int main(int argc, char **argv) {
                        &thread_args);
   if (err) {
     fprintf(stderr, "pthread_create: %s\n", strerror(err));
-    goto fail;
+    goto cleanup_userfaultfd_fd;
   }
 
   started_userfaultfd_thread = true;
@@ -316,7 +327,7 @@ int main(int argc, char **argv) {
   err = pthread_setaffinity_np(userfaultfd_thread, sizeof(cpu_set), &cpu_set);
   if (err) {
     fprintf(stderr, "pthread_setaffinity_np: %s\n", strerror(err));
-    goto fail;
+    goto cleanup_userfaultfd_thread;
   }
 
   puts("isr_entry, c_entry, lock_vma_under_rcu_start, lock_vma_under_rcu_end, "
@@ -333,6 +344,11 @@ int main(int argc, char **argv) {
 #endif
 
   for (i = 0; i < 100000; ++i) {
+    if (madvise(page, page_size, minor ? MADV_DONTNEED : MADV_PAGEOUT) == -1) {
+      perror("madvise");
+      goto cleanup;
+    }
+
     timestamp_page_fault = __rdtscp(&aux);
 
     /* Trigger a page fault with the magic value in ebx. */
@@ -354,7 +370,7 @@ int main(int argc, char **argv) {
     if (!R(isr_entry) || !R(c_entry) || !R(lock_vma_under_rcu_start) ||
         !R(lock_vma_under_rcu_end) || !R(first_handle_mm_fault_start) ||
         !R(first_page_table_walk_end) || !R(first_handle_mm_fault_end))
-      goto fail;
+      goto cleanup;
 
 #ifdef USERFAULTFD
     timestamp_msg_received_copy =
@@ -362,14 +378,14 @@ int main(int argc, char **argv) {
     if (timestamp_msg_received_copy == 0) {
       fputs("userfaultfd thread was not notified.\n", stderr);
       ret = EXIT_FAILURE;
-      goto fail;
+      goto cleanup;
     }
 
     if (!R(wake_up_userfaultfd_start) || !R(wake_up_userfaultfd_end) ||
         !R(lock_mm_and_find_vma_start) || !R(lock_mm_and_find_vma_end) ||
         !R(second_handle_mm_fault_start) || !R(second_page_table_walk_end) ||
         !R(second_handle_mm_fault_end))
-      goto fail;
+      goto cleanup;
 
     printf("%" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64
            ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64
@@ -411,31 +427,30 @@ int main(int argc, char **argv) {
 #endif
 
 #undef R
-
-    if (madvise(page, page_size, minor ? MADV_DONTNEED : MADV_PAGEOUT) == -1) {
-      perror("madvise");
-      goto fail;
-    }
   }
 
-out:
   ret = EXIT_SUCCESS;
 
-fail:
+cleanup:
 #ifdef USERFAULTFD
-  if (started_userfaultfd_thread) {
-    pthread_cancel(userfaultfd_thread);
-    pthread_join(userfaultfd_thread, NULL);
-  }
-  if (userfaultfd_fd != -1)
-    close(userfaultfd_fd);
+cleanup_userfaultfd_thread:
+  pthread_cancel(userfaultfd_thread);
+  pthread_join(userfaultfd_thread, NULL);
+
+cleanup_userfaultfd_fd:
+  close(userfaultfd_fd);
 #endif
-  if (page != MAP_FAILED)
-    munmap(page, page_size);
+
+cleanup_page:
+  munmap(page, page_size);
+
+cleanup_file_fd:
   if (file_fd != -1)
     close(file_fd);
-  if (timestamps_dir_fd != -1)
-    close(timestamps_dir_fd);
 
+cleanup_timestamps_dir_fd:
+  close(timestamps_dir_fd);
+
+out:
   return ret;
 }
