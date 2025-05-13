@@ -1,0 +1,114 @@
+From 9b54f88a60b99a05ee8cd71b60d12eacb3724b85 Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Tue, 13 May 2025 17:21:19 +0200
+Subject: [PATCH 5/6] mm: add fast_tracepoints to handle_usm_fault
+
+---
+ fs/userfaultfd.c              | 12 ++++++++++--
+ include/linux/userfaultfd_k.h |  2 +-
+ include/trace/fast.h          |  4 ++++
+ mm/memory.c                   |  2 +-
+ 4 files changed, 16 insertions(+), 4 deletions(-)
+
+diff --git a/fs/userfaultfd.c b/fs/userfaultfd.c
+index 6302a9d4633e..9a8f531a6d2f 100644
+--- a/fs/userfaultfd.c
++++ b/fs/userfaultfd.c
+@@ -766,7 +766,7 @@ void dequeue_usm_fault(void)	//..but, nah, just take some address and boom one u
+ 	Of course, many ints to be changed to bit ranges! As said in the paper! #TODO
+ */
+ 
+-vm_fault_t handle_usm_fault(struct vm_fault *vmf)		// TODO : some cond_sched...
++vm_fault_t handle_usm_fault(struct vm_fault *vmf, bool trace)		// TODO : some cond_sched...
+ {
+ 	struct mm_struct *mm = vmf->vma->vm_mm;
+ 	int *status = (int *)(current->usm_ctx+sizeof(int));		// .. cache misses shouldn't be as important... hence short dismissed for now...
+@@ -812,6 +812,8 @@ vm_fault_t handle_usm_fault(struct vm_fault *vmf)		// TODO : some cond_sched...
+ 
+ 	//ret=0;
+ 
++	if (IS_ENABLED(CONFIG_TRACE_PF) && likely(trace))
++		fast_tracepoint(handle_usm_fault_poll_ready_start);
+ 	while(READ_ONCE(*status)!=0 /*|| unlikely(READ_ONCE(*(int *)current->usm_ctx)==0)*/) { //READ_ONCE(*(int *)current->usm_ctx)==0))
+ #ifdef DEBUG_USM
+ 		if(prt++ == 100000000) {
+@@ -821,6 +823,8 @@ vm_fault_t handle_usm_fault(struct vm_fault *vmf)		// TODO : some cond_sched...
+ #endif
+ 		cond_resched();//printk(KERN_INFO "Should never happen.. #USM (though.. if userspace does some weird thingies..)");
+ 	}
++	if (IS_ENABLED(CONFIG_TRACE_PF) && likely(trace))
++		fast_tracepoint(handle_usm_fault_poll_ready_end);
+ 
+ 	WRITE_ONCE(*vaddr,address);
+ 	//printk(KERN_INFO "Put %lu vaddr #USM'%d'%d", *vaddr, current->pid, current->tgid);
+@@ -837,6 +841,8 @@ vm_fault_t handle_usm_fault(struct vm_fault *vmf)		// TODO : some cond_sched...
+ //cycle:
+ 	//ts=rdtsc();
+ 	queue_usm_fault();
++	if (IS_ENABLED(CONFIG_TRACE_PF) && likely(trace))
++		fast_tracepoint(handle_usm_fault_poll_returned_start);
+ 	while(READ_ONCE(*status)==1) { //{
+ 		//if (current->pid-current->tgid>NR_CPUS-3)
+ #ifdef DEBUG_USM
+@@ -860,6 +866,8 @@ vm_fault_t handle_usm_fault(struct vm_fault *vmf)		// TODO : some cond_sched...
+ 		}*/
+ 	//}
+ 	}
++	if (IS_ENABLED(CONFIG_TRACE_PF) && likely(trace))
++		fast_tracepoint(handle_usm_fault_poll_returned_end);
+ 
+ 	//printk(KERN_INFO "ZonePFN'%lu |\tReceived PFN %lu\t '%d'%d", usmpage, *paddr, current->pid, current->tgid);
+ 	page=pfn_to_page(READ_ONCE(*paddr));
+@@ -1131,7 +1139,7 @@ vm_fault_t handle_usm_fault_ut(struct vm_fault *vmf)		// TODO : some cond_sched.
+ #ifdef DEBUG_USM
+ 		printk(KERN_INFO "[Fault] Ye boi.. oof\t%u\t%d", uuid, *(int *)current->usm_ctx);
+ #endif
+-		return handle_usm_fault(vmf);
++		return handle_usm_fault(vmf, false);
+ 	}
+ 
+ 	
+diff --git a/include/linux/userfaultfd_k.h b/include/linux/userfaultfd_k.h
+index c97b24b52ec0..2a29d59889ae 100644
+--- a/include/linux/userfaultfd_k.h
++++ b/include/linux/userfaultfd_k.h
+@@ -40,7 +40,7 @@
+ extern int sysctl_unprivileged_userfaultfd;
+ 
+ extern vm_fault_t handle_userfault(struct vm_fault *vmf, unsigned long reason, bool trace);
+-extern vm_fault_t handle_usm_fault(struct vm_fault *vmf);
++extern vm_fault_t handle_usm_fault(struct vm_fault *vmf, bool trace);
+ extern vm_fault_t handle_usm_fault_ut(struct vm_fault *vmf);
+ extern vm_fault_t handle_usm_swap(struct vm_fault *vmf);
+ extern vm_fault_t handle_usm_swap_ut(struct vm_fault *vmf);
+diff --git a/include/trace/fast.h b/include/trace/fast.h
+index b5ad1f8cb29a..41bb846d81e1 100644
+--- a/include/trace/fast.h
++++ b/include/trace/fast.h
+@@ -19,6 +19,10 @@
+ 	x(page_allocation_end)					      \
+ 	x(wake_up_userfaultfd_start)				      \
+ 	x(wake_up_userfaultfd_end)				      \
++	x(handle_usm_fault_poll_ready_start)			      \
++	x(handle_usm_fault_poll_ready_end)			      \
++	x(handle_usm_fault_poll_returned_start)			      \
++	x(handle_usm_fault_poll_returned_end)			      \
+ 	x(first_try_handle_mm_fault_with_mm_lock_end)		      \
+ 	x(retry_lock_mm_and_find_vma_start)			      \
+ 	x(retry_lock_mm_and_find_vma_end)			      \
+diff --git a/mm/memory.c b/mm/memory.c
+index 5235d6ead401..f51230ce1b81 100644
+--- a/mm/memory.c
++++ b/mm/memory.c
+@@ -4087,7 +4087,7 @@ static vm_fault_t do_anonymous_page(struct vm_fault *vmf, bool trace)
+ 					goto oom;
+ 			if(vma->vm_flags & VM_USM_UT)
+ 				return handle_usm_fault_ut(vmf);
+-			return handle_usm_fault(vmf);
++			return handle_usm_fault(vmf, trace);
+     }
+ 
+ 	/* Use the zero-page for reads */
+-- 
+2.49.0
+

@@ -1,7 +1,7 @@
-From 17caa6215dd36d718c7733981deb1af0d6c4678f Mon Sep 17 00:00:00 2001
+From 636c9adf1e15edf038ff6902c10af69ec57e4de6 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 2 May 2025 10:20:26 +0200
-Subject: [PATCH 3/3] mm: swap: add SWAP_FLAG_SYNCHRONOUS_WRITE
+Subject: [PATCH 5/5] mm: swap: add SWAP_FLAG_SYNCHRONOUS_WRITE
 
 madvise(MADV_PAGEOUT) can be used to tell the kernel to swap out pages,
 but there is no easy way to wait for them to actually be removed from
@@ -107,10 +107,10 @@ index 4bce19df557b..481c26d66dca 100644
  	else
  		swap_writepage_bdev_async(folio, wbc, sis);
 diff --git a/mm/swapfile.c b/mm/swapfile.c
-index 2eff8b51a945..1d97b7d2d84f 100644
+index 412ccd6543b3..a02c8f7c3a5e 100644
 --- a/mm/swapfile.c
 +++ b/mm/swapfile.c
-@@ -3377,6 +3377,9 @@ SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)
+@@ -3395,6 +3395,9 @@ SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)
  	if (si->bdev && bdev_synchronous(si->bdev))
  		si->flags |= SWP_SYNCHRONOUS_IO;
  

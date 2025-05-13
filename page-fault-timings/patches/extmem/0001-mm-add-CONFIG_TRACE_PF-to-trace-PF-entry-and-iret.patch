@@ -1,24 +1,31 @@
-From cea2c573b9c4593e13bcf6b44056398ff4004a81 Mon Sep 17 00:00:00 2001
+From 4057ff8b2f262d395a0fd372d3a4a340ec4d6ddb Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 2 May 2025 12:30:51 +0200
-Subject: [PATCH 1/3] mm: add CONFIG_TRACE_PF to trace PF entry and iret
+Subject: [PATCH 1/5] mm: add CONFIG_TRACE_PF to trace PF entry and iret
 
+Add trace points around the page fault ISR to measure the time of entry
+and exit when CONFIG_TRACE_PF is enabled.
+
+Applications opt into tracing by setting ebx to 0xb141a52a before doing
+a page fault. When active and a page fault occurs, the TSC at ISR entry
+is saved in rax, the TSC before ISR return is saved in rcx, and rdx will
+be clobbered.
 ---
- arch/x86/Kconfig.debug    | 15 +++++++++++++++
- arch/x86/entry/entry_64.S | 28 ++++++++++++++++++++++++++++
- arch/x86/mm/fault.c       |  8 ++++++++
- 3 files changed, 51 insertions(+)
+ arch/x86/Kconfig.debug    | 16 ++++++++++++++++
+ arch/x86/entry/entry_64.S | 35 +++++++++++++++++++++++++++++++++++
+ 2 files changed, 51 insertions(+)
 
 diff --git a/arch/x86/Kconfig.debug b/arch/x86/Kconfig.debug
-index c95c3aaadf97..47c1d0db3f33 100644
+index d3a6f74a94bd..c53ad50cb412 100644
 --- a/arch/x86/Kconfig.debug
 +++ b/arch/x86/Kconfig.debug
-@@ -173,6 +173,21 @@ config DEBUG_ENTRY
+@@ -177,6 +177,22 @@ config DEBUG_ENTRY
  
  	  If unsure, say N.
  
 +config TRACE_PF
 +	bool "Trace page faults"
++	depends on X86_64
 +	help
 +	  This option enables debugging code to read and save the TSC:
 +	  1. on page fault entry to make it possible to measure the time between the
@@ -28,7 +35,7 @@ index c95c3aaadf97..47c1d0db3f33 100644
 +
 +	  This is only active when ebx contains the value 0xb141a52a before a page
 +	  fault. When active and a page fault occurs, the TSC at (1) is saved in
-+	  edi:esi, the TSC at (2) is saved in eax:edx, and rcx may be clobbered.
++	  rax, the TSC at (2) is saved in rcx, and rdx will be clobbered.
 +
 +	  If unsure, say N.
 +
@@ -36,13 +43,13 @@ index c95c3aaadf97..47c1d0db3f33 100644
  	bool "NMI Selftest"
  	depends on DEBUG_KERNEL && X86_LOCAL_APIC
 diff --git a/arch/x86/entry/entry_64.S b/arch/x86/entry/entry_64.S
-index f40bdf97d390..ab6a30102d16 100644
+index e38a4cf795d9..d11b2ea81e70 100644
 --- a/arch/x86/entry/entry_64.S
 +++ b/arch/x86/entry/entry_64.S
-@@ -337,6 +337,21 @@ SYM_CODE_START(\asmsym)
- 	.endif
- 
- 	ENDBR
+@@ -350,6 +350,23 @@ SYM_CODE_END(ret_from_fork)
+ .macro idtentry vector asmsym cfunc has_error_code:req
+ SYM_CODE_START(\asmsym)
+ 	UNWIND_HINT_IRET_REGS offset=\has_error_code*8
 +
 +#ifdef CONFIG_TRACE_PF
 +	.if \vector == X86_TRAP_PF
@@ -51,55 +58,43 @@ index f40bdf97d390..ab6a30102d16 100644
 +		   instruction has a latency of a single cycle. */
 +		cmpl	$0xb141a52a, %ebx
 +		jne	1f
-+		ALTERNATIVE_2 "rdtsc", \
-+			"lfence; rdtsc", X86_FEATURE_LFENCE_RDTSC, \
-+			"rdtscp", X86_FEATURE_RDTSCP
++		ALTERNATIVE_2 "mfence; rdtsc; lfence", \
++			"mfence; lfence; rdtsc; lfence", X86_FEATURE_LFENCE_RDTSC, \
++			"mfence; rdtscp; lfence", X86_FEATURE_RDTSCP
++		salq	$32, %rdx
++		orq	%rdx, %rax
 +1:
 +	.endif
 +#endif
 +
  	ASM_CLAC
- 	cld
  
-@@ -650,6 +665,19 @@ SYM_INNER_LABEL(early_xen_iret_patch, SYM_L_GLOBAL)
+ 	.if \has_error_code == 0
+@@ -636,6 +653,24 @@ SYM_INNER_LABEL_ALIGN(native_iret, SYM_L_GLOBAL)
+ #endif
  
  SYM_INNER_LABEL(native_irq_return_iret, SYM_L_GLOBAL)
- 	ANNOTATE_NOENDBR // exc_double_fault
-+
 +#ifdef CONFIG_TRACE_PF
 +	/* Check for a magic number to read the counter. On a recent CPU, a predicted
 +	   branch that is not taken has a latency of less than a cycle, and the cmp
 +	   instruction has a latency of a single cycle. */
 +	cmpl	$0xb141a52a, %ebx
 +	jne	1f
-+	ALTERNATIVE_2 "rdtsc", \
-+		"lfence; rdtsc", X86_FEATURE_LFENCE_RDTSC, \
-+		"rdtscp", X86_FEATURE_RDTSCP
++	pushq	%rdx
++	pushq	%rax
++	ALTERNATIVE "mfence; rdtsc; lfence", \
++		"mfence; lfence; rdtsc; lfence", X86_FEATURE_LFENCE_RDTSC
++	salq	$32, %rdx
++	orq	%rdx, %rax
++	movq	%rax, %rcx
++	popq	%rax
++	popq	%rdx
 +1:
 +#endif
 +
  	/*
  	 * This may fault.  Non-paranoid faults on return to userspace are
  	 * handled by fixup_bad_iret.  These include #SS, #GP, and #NP.
-diff --git a/arch/x86/mm/fault.c b/arch/x86/mm/fault.c
-index 296d294142c8..5651689f4761 100644
---- a/arch/x86/mm/fault.c
-+++ b/arch/x86/mm/fault.c
-@@ -1493,6 +1493,14 @@ DEFINE_IDTENTRY_RAW_ERRORCODE(exc_page_fault)
- {
- 	irqentry_state_t state;
- 	unsigned long address;
-+	bool trace = (regs->bx & 0xffffffff) == 0xb141a52a;
-+
-+	if (IS_ENABLED(CONFIG_TRACE_PF) && likely(trace)) {
-+		/* Save the PF ISR entry timestamp because it will be overwritten in the
-+		   assembly return code. */
-+		regs->di = regs->ax & 0xffffffff;
-+		regs->si = regs->dx & 0xffffffff;
-+	}
- 
- 	address = cpu_feature_enabled(X86_FEATURE_FRED) ? fred_event_data(regs) : read_cr2();
- 
 -- 
 2.49.0
 
