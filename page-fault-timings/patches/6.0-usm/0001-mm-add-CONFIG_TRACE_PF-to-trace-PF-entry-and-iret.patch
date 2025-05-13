@@ -1,24 +1,32 @@
-From cea2c573b9c4593e13bcf6b44056398ff4004a81 Mon Sep 17 00:00:00 2001
+From 4c0a2a595ca37b9b1db88fd798a8b24661b0d256 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 2 May 2025 12:30:51 +0200
-Subject: [PATCH 1/3] mm: add CONFIG_TRACE_PF to trace PF entry and iret
+Subject: [PATCH 1/6] mm: add CONFIG_TRACE_PF to trace PF entry and iret
 
+Add trace points around the page fault ISR to measure the time of entry
+and exit when CONFIG_TRACE_PF is enabled.
+
+Applications opt into tracing by setting ebx to 0xb141a52a before doing
+a page fault. When active and a page fault occurs, the TSC at ISR entry
+is saved in edi:esi, the TSC before ISR return is saved in eax:edx, and
+rcx may be clobbered.
 ---
- arch/x86/Kconfig.debug    | 15 +++++++++++++++
+ arch/x86/Kconfig.debug    | 16 ++++++++++++++++
  arch/x86/entry/entry_64.S | 28 ++++++++++++++++++++++++++++
  arch/x86/mm/fault.c       |  8 ++++++++
- 3 files changed, 51 insertions(+)
+ 3 files changed, 52 insertions(+)
 
 diff --git a/arch/x86/Kconfig.debug b/arch/x86/Kconfig.debug
-index c95c3aaadf97..47c1d0db3f33 100644
+index bdfe08f1a930..129eeba923aa 100644
 --- a/arch/x86/Kconfig.debug
 +++ b/arch/x86/Kconfig.debug
-@@ -173,6 +173,21 @@ config DEBUG_ENTRY
+@@ -173,6 +173,22 @@ config DEBUG_ENTRY
  
  	  If unsure, say N.
  
 +config TRACE_PF
 +	bool "Trace page faults"
++	depends on X86_64
 +	help
 +	  This option enables debugging code to read and save the TSC:
 +	  1. on page fault entry to make it possible to measure the time between the
@@ -36,12 +44,12 @@ index c95c3aaadf97..47c1d0db3f33 100644
  	bool "NMI Selftest"
  	depends on DEBUG_KERNEL && X86_LOCAL_APIC
 diff --git a/arch/x86/entry/entry_64.S b/arch/x86/entry/entry_64.S
-index f40bdf97d390..ab6a30102d16 100644
+index 9953d966d124..79ae40268608 100644
 --- a/arch/x86/entry/entry_64.S
 +++ b/arch/x86/entry/entry_64.S
-@@ -337,6 +337,21 @@ SYM_CODE_START(\asmsym)
- 	.endif
- 
+@@ -384,6 +384,21 @@ SYM_CODE_END(xen_error_entry)
+ SYM_CODE_START(\asmsym)
+ 	UNWIND_HINT_IRET_REGS offset=\has_error_code*8
  	ENDBR
 +
 +#ifdef CONFIG_TRACE_PF
@@ -51,9 +59,9 @@ index f40bdf97d390..ab6a30102d16 100644
 +		   instruction has a latency of a single cycle. */
 +		cmpl	$0xb141a52a, %ebx
 +		jne	1f
-+		ALTERNATIVE_2 "rdtsc", \
-+			"lfence; rdtsc", X86_FEATURE_LFENCE_RDTSC, \
-+			"rdtscp", X86_FEATURE_RDTSCP
++		ALTERNATIVE_2 "mfence; rdtsc; lfence", \
++			"mfence; lfence; rdtsc; lfence", X86_FEATURE_LFENCE_RDTSC, \
++			"mfence; rdtscp; lfence", X86_FEATURE_RDTSCP
 +1:
 +	.endif
 +#endif
@@ -61,7 +69,7 @@ index f40bdf97d390..ab6a30102d16 100644
  	ASM_CLAC
  	cld
  
-@@ -650,6 +665,19 @@ SYM_INNER_LABEL(early_xen_iret_patch, SYM_L_GLOBAL)
+@@ -693,6 +708,19 @@ SYM_INNER_LABEL(early_xen_iret_patch, SYM_L_GLOBAL)
  
  SYM_INNER_LABEL(native_irq_return_iret, SYM_L_GLOBAL)
  	ANNOTATE_NOENDBR // exc_double_fault
@@ -72,9 +80,9 @@ index f40bdf97d390..ab6a30102d16 100644
 +	   instruction has a latency of a single cycle. */
 +	cmpl	$0xb141a52a, %ebx
 +	jne	1f
-+	ALTERNATIVE_2 "rdtsc", \
-+		"lfence; rdtsc", X86_FEATURE_LFENCE_RDTSC, \
-+		"rdtscp", X86_FEATURE_RDTSCP
++	ALTERNATIVE_2 "mfence; rdtsc; lfence", \
++		"mfence; lfence; rdtsc; lfence", X86_FEATURE_LFENCE_RDTSC, \
++		"mfence; rdtscp; lfence", X86_FEATURE_RDTSCP
 +1:
 +#endif
 +
@@ -82,23 +90,23 @@ index f40bdf97d390..ab6a30102d16 100644
  	 * This may fault.  Non-paranoid faults on return to userspace are
  	 * handled by fixup_bad_iret.  These include #SS, #GP, and #NP.
 diff --git a/arch/x86/mm/fault.c b/arch/x86/mm/fault.c
-index 296d294142c8..5651689f4761 100644
+index fa71a5d12e87..1f24a62a4028 100644
 --- a/arch/x86/mm/fault.c
 +++ b/arch/x86/mm/fault.c
-@@ -1493,6 +1493,14 @@ DEFINE_IDTENTRY_RAW_ERRORCODE(exc_page_fault)
+@@ -1501,6 +1501,14 @@ DEFINE_IDTENTRY_RAW_ERRORCODE(exc_page_fault)
  {
+ 	unsigned long address = read_cr2();
  	irqentry_state_t state;
- 	unsigned long address;
-+	bool trace = (regs->bx & 0xffffffff) == 0xb141a52a;
++	bool trace = IS_ENABLED(CONFIG_TRACE_PF) && likely((regs->bx & 0xffffffff) == 0xb141a52a);
 +
-+	if (IS_ENABLED(CONFIG_TRACE_PF) && likely(trace)) {
++	if (trace) {
 +		/* Save the PF ISR entry timestamp because it will be overwritten in the
 +		   assembly return code. */
 +		regs->di = regs->ax & 0xffffffff;
 +		regs->si = regs->dx & 0xffffffff;
 +	}
  
- 	address = cpu_feature_enabled(X86_FEATURE_FRED) ? fred_event_data(regs) : read_cr2();
+ 	prefetchw(&current->mm->mmap_lock);
  
 -- 
 2.49.0

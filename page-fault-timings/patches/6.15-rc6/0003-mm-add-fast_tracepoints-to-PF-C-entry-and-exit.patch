@@ -1,0 +1,69 @@
+From 337f340bddf8c4551c9c02f65e66ab6735e38e1a Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Mon, 12 May 2025 19:19:29 +0200
+Subject: [PATCH 3/5] mm: add fast_tracepoints to PF C entry and exit
+
+---
+ arch/x86/mm/fault.c  | 16 ++++++++++++----
+ include/trace/fast.h |  4 +++-
+ 2 files changed, 15 insertions(+), 5 deletions(-)
+
+diff --git a/arch/x86/mm/fault.c b/arch/x86/mm/fault.c
+index 4c1796876509..fc93e91e57a1 100644
+--- a/arch/x86/mm/fault.c
++++ b/arch/x86/mm/fault.c
+@@ -40,6 +40,8 @@
+ #define CREATE_TRACE_POINTS
+ #include <asm/trace/exceptions.h>
+ 
++#include <trace/fast.h>
++
+ /*
+  * Returns 0 if mmiotrace is disabled, or if the fault is not
+  * handled by mmiotrace:
+@@ -1494,12 +1496,12 @@ DEFINE_IDTENTRY_RAW_ERRORCODE(exc_page_fault)
+ 	irqentry_state_t state;
+ 	unsigned long address;
+ 	bool trace = IS_ENABLED(CONFIG_TRACE_PF) && likely((regs->bx & 0xffffffff) == 0xb141a52a);
++	u64 timestamp;
+ 
+ 	if (trace) {
+-		/* Save the PF ISR entry timestamp because it will be overwritten in the
+-		   assembly return code. */
+-		regs->di = regs->ax & 0xffffffff;
+-		regs->si = regs->dx & 0xffffffff;
++		timestamp = (regs->ax & 0xffffffff) | ((regs->dx & 0xffffffff) << 32);
++		fast_tracepoints_begin(isr_entry, timestamp);
++		fast_tracepoint(c_entry);
+ 	}
+ 
+ 	address = cpu_feature_enabled(X86_FEATURE_FRED) ? fred_event_data(regs) : read_cr2();
+@@ -1547,4 +1549,10 @@ DEFINE_IDTENTRY_RAW_ERRORCODE(exc_page_fault)
+ 	instrumentation_end();
+ 
+ 	irqentry_exit(regs, state);
++
++	if (trace) {
++		timestamp = fast_tracepoints_end(c_exit);
++		regs->di = timestamp & 0xffffffff;
++		regs->si = timestamp >> 32;
++	}
+ }
+diff --git a/include/trace/fast.h b/include/trace/fast.h
+index e28c7fa18884..14565c261a26 100644
+--- a/include/trace/fast.h
++++ b/include/trace/fast.h
+@@ -57,7 +57,9 @@ static inline u64 __fast_tracepoints_end(const char *tracepoint_name)
+ 
+ #else
+ 
+-#define ENUMERATE_FAST_TRACEPOINTS(x)
++#define ENUMERATE_FAST_TRACEPOINTS(x) \
++	x(isr_entry) \
++	x(c_entry)
+ 
+ #define DECLARE_FAST_TRACEPOINT(name) extern u64 fast_tracepoint_timestamp_##name;
+ ENUMERATE_FAST_TRACEPOINTS(DECLARE_FAST_TRACEPOINT)
+-- 
+2.49.0
+
