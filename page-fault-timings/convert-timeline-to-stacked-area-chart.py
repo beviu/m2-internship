@@ -23,6 +23,8 @@ def reorder(array, order):
     last = 0
     for i in order:
         value = int(array[i])
+        if value < last:
+            raise Exception("tracepoints do not follow specified order")
         yield value - last
         last = value
 
@@ -32,8 +34,11 @@ def print_stacked_chart(f, order):
     columns = [columns[i] for i in order]
     print(",".join(columns))
     for row in reader:
-        durations = map(str, reorder(row, order))
-        print(",".join(durations))
+        try:
+            durations = map(str, reorder(row, order))
+            print(",".join(durations))
+        except:
+            pass
 
 def main():
     with open(sys.argv[1]) as f:
