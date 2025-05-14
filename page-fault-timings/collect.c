@@ -23,6 +23,13 @@
 #define MAX_FAST_TRACEPOINTS 32
 #define PF_TRACING_MAGIC 0xb141a52a
 
+static bool no_msg_received = false;
+static int fast_tracepoints_dir_fd = -1;
+static int userfaultfd_fd;
+static ssize_t page_size;
+static char *fast_tracepoints[MAX_FAST_TRACEPOINTS + 1];
+static struct uffdio_range userfaultfd_range;
+
 static bool parse_uint64_t(const char **buf, const char *end, uint64_t *out) {
   if (*buf == end || **buf < '0' || **buf > '9')
     return false;
@@ -38,9 +45,7 @@ static bool parse_uint64_t(const char **buf, const char *end, uint64_t *out) {
   return true;
 }
 
-static int fast_tracepoints_dir_fd = -1;
-
-static bool read_timestamp(const char *name, uint64_t *timestamp) {
+static bool read_fast_tracepoint(const char *name, uint64_t *out) {
   int timestamp_fd;
   char buf[21];
   ssize_t n;
@@ -62,7 +67,7 @@ static bool read_timestamp(const char *name, uint64_t *timestamp) {
   }
 
   cursor = buf;
-  if (!parse_uint64_t(&cursor, buf + n, timestamp)) {
+  if (!parse_uint64_t(&cursor, buf + n, out)) {
     fprintf(stderr, "Failed to parse timestamp: %.*s.\n", (int)n, buf);
     goto fail;
   }
@@ -76,11 +81,6 @@ fail:
 }
 
 static int userfaultfd(int flags) { return syscall(SYS_userfaultfd, flags); }
-
-struct userfaultfd_thread_args {
-  int userfaultfd_fd;
-  struct uffdio_range range;
-};
 
 static inline uint64_t rdtsc_serialize() {
   uint32_t counter_low, counter_high;
@@ -97,13 +97,14 @@ static _Atomic uint64_t timestamp_msg_received;
 
 static void *userfaultfd_thread_routine(void *data) {
   size_t n;
-  struct userfaultfd_thread_args *args = (struct userfaultfd_thread_args *)data;
   struct uffd_msg msg;
   unsigned int aux;
   struct uffdio_zeropage zeropage_args = {0};
 
+  (void)data;
+
   for (;;) {
-    n = read(args->userfaultfd_fd, &msg, sizeof(msg));
+    n = read(userfaultfd_fd, &msg, sizeof(msg));
     if (n == -1) {
       perror("read");
       break;
@@ -112,12 +113,17 @@ static void *userfaultfd_thread_routine(void *data) {
       break;
     }
 
-    atomic_store_explicit(&timestamp_msg_received, rdtsc_serialize(),
-                          memory_order_relaxed);
+    if (msg.event != UFFD_EVENT_PAGEFAULT)
+      continue;
 
-    zeropage_args.range = args->range;
+    if (!no_msg_received)
+      atomic_store_explicit(&timestamp_msg_received, rdtsc_serialize(),
+                            memory_order_relaxed);
+
+    zeropage_args.range.start = msg.arg.pagefault.address & ~(page_size - 1);
+    zeropage_args.range.len = page_size;
     zeropage_args.mode = 0;
-    if (ioctl(args->userfaultfd_fd, UFFDIO_ZEROPAGE, &zeropage_args) == -1) {
+    if (ioctl(userfaultfd_fd, UFFDIO_ZEROPAGE, &zeropage_args) == -1) {
       perror("ioctl(UFFDIO_ZEROPAGE)");
       break;
     }
@@ -127,58 +133,36 @@ static void *userfaultfd_thread_routine(void *data) {
 }
 
 static void print_usage(const char *arg0) {
-  fprintf(stdout,
-          "Usage: %s [OPTION]...\n"
-          "Collect page fault timings.\n"
-          "\n"
-          "Mandatory arguments to long options are mandatory for short options "
-          "too.\n"
-          "  -f, --file=FILE      do a major page fault by memory-mapping FILE "
-          "and reading a byte from it\n"
-          "  -o, --offset=OFFSET  set the offset to read from the start of the "
-          "memory mapping (useful with -f)\n"
-          "  -m, --minor          do minor page faults\n"
-          "  -a, --access=ACCESS  set the type of access, can be read, write, "
-          "or rw (do a read before collecting timings for a write)\n"
-          "  -u, --userfaultfd    use userfaultfd\n"
-          "  -c, --two-cpus       pin the faulting thread and userfaultfd "
-          "thread to different CPUs\n"
-          "      --help           display this help and exit\n",
-          arg0);
+  fprintf(
+      stdout,
+      "Usage: %s [OPTION]...\n"
+      "Collect page fault timings.\n"
+      "\n"
+      "Mandatory arguments to long options are mandatory for short options "
+      "too.\n"
+      "  -f, --file=FILE              access a memory mapping of FILE instead "
+      "of an anonymous mapping\n"
+      "  -s, --start=OFFSET           start reading from OFFSET in the memory "
+      "mapping\n"
+      "  -l, --length=LENGTH          read pages spanning LENGTH bytes\n"
+      "  -i, --iterations=COUNT       do COUNT iterations\n"
+      "  -t, --type=TYPE              set the type of fault, can be major or "
+      "minor\n"
+      "  -a, --access=ACCESS          set the type of access, can be read, "
+      "write, "
+      "or rw (do a read before collecting timings for a write)\n"
+      "  -u, --userfaultfd            use userfaultfd\n"
+      "  -c, --userfaultfd-same-cpus  pin the faulting thread and userfaultfd "
+      "thread to the same CPUs\n"
+      "  -n, --no-msg-received        disable the msg_received timing\n"
+      "      --help                   display this help and exit\n",
+      arg0);
 }
-
-static bool open_write_close(const char *path, const void *buf, size_t n) {
-  int fd;
-  ssize_t written;
-  bool ok = false;
-
-  fd = open(path, O_WRONLY);
-  if (fd == -1) {
-    fprintf(stderr, "open(%s): %s\n", path, strerror(errno));
-    return false;
-  }
-
-  written = write(fd, buf, n);
-  if (written == -1) {
-    perror("write");
-  } else if (written != n) {
-    fprintf(stderr, "Could only write %zu bytes to %s.\n", written, path);
-  } else {
-    ok = true;
-  }
-
-  close(fd);
-
-  return ok;
-}
-
-static const char *fast_tracepoints[MAX_FAST_TRACEPOINTS + 1];
 
 static bool list_fast_tracepoints() {
   DIR *dir;
   struct dirent *entry;
   int i = 0;
-  bool ok = false;
 
   dir = opendir("/proc/sys/debug/fast-tracepoints");
   if (!dir) {
@@ -191,93 +175,206 @@ static bool list_fast_tracepoints() {
       if (i == MAX_FAST_TRACEPOINTS) {
         fputs("Too many fast tracepoints! Increase MAX_FAST_TRACEPOINTS.\n",
               stderr);
-        goto cleanup;
+        while (--i > 0)
+          free(fast_tracepoints[i]);
+        closedir(dir);
+        return false;
       }
       fast_tracepoints[i++] = strdup(entry->d_name);
     }
   }
 
-  ok = true;
-
-cleanup:
   closedir(dir);
 
-out:
-  return ok;
+  return true;
 }
 
-static void print_first_row() {
+static void print_columns() {
   int i = 0;
 
-  fputs("isr_entry,iret,end,msg_received", stdout);
+  fputs("end", stdout);
 
-  while (fast_tracepoints[i] != NULL)
-    fprintf(stdout, ",%s", fast_tracepoints[i++]);
+  if (!no_msg_received)
+    fputs(",msg_received", stdout);
+
+  if (fast_tracepoints_dir_fd != -1) {
+    fputs(",isr_entry,iret", stdout);
+
+    while (fast_tracepoints[i] != NULL)
+      fprintf(stdout, ",%s", fast_tracepoints[i++]);
+  }
 
   fputs("\n", stdout);
 }
 
 static const struct option long_options[] = {
-    {"file", required_argument, 0, 'f'},
-    {"offset", required_argument, 0, 'o'},
-    {"minor", no_argument, 0, 'm'},
+    {"length", required_argument, 0, 'l'},
+    {"iterations", required_argument, 0, 'i'},
+    {"type", required_argument, 0, 't'},
     {"access", required_argument, 0, 'a'},
     {"userfaultfd", no_argument, 0, 'u'},
+    {"userfaultfd-same-cpus", no_argument, 0, 'c'},
+    {"no-msg_received", no_argument, 0, 'n'},
     {"help", no_argument, 0, 'h'},
     {0, 0, 0, 0}};
+
+static bool do_iteration(uint64_t length, int access, bool with_userfaultfd,
+                         size_t page_size) {
+  void *memory;
+  struct uffdio_register register_args = {0};
+  volatile uint8_t *byte;
+  uint64_t timestamp_page_fault;
+  uint64_t timestamp_isr_entry;
+  uint64_t timestamp_iret;
+  uint8_t byte_copy;
+  uint64_t timestamp_end;
+  uint64_t timestamp_msg_received_copy;
+  int i;
+  uint64_t timestamp;
+
+  print_columns();
+
+  memory = mmap(NULL, length, access, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+  if (memory == MAP_FAILED) {
+    perror("mmap");
+    return false;
+  }
+
+  if (with_userfaultfd) {
+    register_args.range.start = (uint64_t)memory;
+    register_args.range.len = length;
+    register_args.mode = UFFDIO_REGISTER_MODE_MISSING;
+    if (ioctl(userfaultfd_fd, UFFDIO_REGISTER, &register_args) == -1) {
+      perror("ioctl(UFFDIO_REGISTER)");
+      munmap(memory, length);
+      return false;
+    }
+  }
+
+  for (byte = memory; (uintptr_t)byte - (uintptr_t)memory < length;
+       byte += page_size) {
+    if (access == (PROT_READ | PROT_WRITE))
+      *byte;
+
+    timestamp_page_fault = rdtsc_serialize();
+
+    if (fast_tracepoints_dir_fd == -1) {
+      if (access == PROT_READ) {
+        *byte;
+      } else {
+        *byte = 0;
+      }
+    } else {
+      /* Trigger a page fault with the magic value in ebx. */
+      if (access == PROT_READ) {
+        asm volatile("movb (%[byte]), %[byte_copy]"
+                     : "=&a"(timestamp_isr_entry),
+                       "=&c"(timestamp_iret), [byte_copy] "=r"(byte_copy)
+                     : [byte] "r"(byte), "b"(PF_TRACING_MAGIC)
+                     : "edx");
+      } else {
+        asm volatile("movb $0, (%[byte])"
+                     : "=&a"(timestamp_isr_entry), "=&c"(timestamp_iret)
+                     : [byte] "r"(byte), "b"(PF_TRACING_MAGIC)
+                     : "edx");
+      }
+    }
+
+    timestamp_end = rdtsc_serialize();
+
+    printf("%" PRIu64, timestamp_end - timestamp_page_fault);
+
+    if (with_userfaultfd && !no_msg_received) {
+      timestamp_msg_received_copy =
+          atomic_load_explicit(&timestamp_msg_received, memory_order_relaxed);
+
+      if (timestamp_msg_received_copy > timestamp_page_fault)
+        printf(",%" PRIu64, timestamp_msg_received_copy - timestamp_page_fault);
+      else
+        fputc(',', stdout);
+    }
+
+    if (fast_tracepoints_dir_fd != -1) {
+      printf(",%" PRIu64 ",%" PRIu64,
+             timestamp_isr_entry - timestamp_page_fault,
+             timestamp_iret - timestamp_page_fault);
+
+      for (i = 0; fast_tracepoints[i] != NULL; ++i) {
+        if (!read_fast_tracepoint(fast_tracepoints[i], &timestamp)) {
+          munmap(memory, length);
+          return false;
+        }
+        /* Check if the tracepoint was hit. */
+        if (timestamp > timestamp_page_fault)
+          printf(",%" PRIu64, timestamp - timestamp_page_fault);
+        else
+          fputc(',', stdout);
+      }
+    }
+
+    fputc('\n', stdout);
+
+    if (with_userfaultfd && !no_msg_received)
+      atomic_store_explicit(&timestamp_msg_received, 0, memory_order_relaxed);
+  }
+
+  munmap(memory, length);
+
+  return true;
+}
 
 int main(int argc, char **argv) {
   const char *arg0;
   int opt;
-  const char *file = NULL;
   const char *cursor;
-  uint64_t offset = 0;
-  bool do_minor_faults = false;
+  uint64_t length = 1;
+  uint64_t iteration_count = 1;
+  bool do_major_faults = false;
   int access = PROT_READ;
   bool with_userfaultfd = false;
-  bool use_two_cpus = true;
+  bool userfaultfd_same_cpus = true;
   int ret = EXIT_FAILURE;
   struct stat stat_buf;
   cpu_set_t cpu_set;
   int err;
-  int file_fd = -1;
-  ssize_t page_size;
   int initial_prot;
-  void *page = MAP_FAILED;
+  void *memory = MAP_FAILED;
   uint8_t *byte;
   uint8_t byte_copy;
-  int userfaultfd_fd = -1;
   struct uffdio_api api_args = {0};
-  struct uffdio_register register_args = {0};
-  struct userfaultfd_thread_args thread_args;
   pthread_t userfaultfd_thread;
   unsigned int aux;
   int i;
-  uint64_t timestamp_page_fault;
-  uint64_t timestamp_isr_entry;
-  uint64_t timestamp_iret;
-  uint64_t timestamp_end;
-  uint64_t timestamp_msg_received_copy;
   uint64_t timestamp;
-  int j;
 
   arg0 = argv[0] ? argv[0] : "collect";
 
-  while ((opt = getopt_long(argc, argv, "f:o:ma:uch", long_options, NULL)) !=
+  while ((opt = getopt_long(argc, argv, "s:l:i:t:a:uch", long_options, NULL)) !=
          -1) {
     switch (opt) {
-    case 'f':
-      file = optarg;
-      break;
-    case 'o':
+    case 'l':
       cursor = optarg;
-      if (!parse_uint64_t(&cursor, optarg + strlen(optarg), &offset)) {
-        fprintf(stderr, "%s: invalid offset: ‘%s’\n", arg0, optarg);
+      if (!parse_uint64_t(&cursor, optarg + strlen(optarg), &length)) {
+        fprintf(stderr, "%s: invalid length: ‘%s’\n", arg0, optarg);
         goto out;
       }
       break;
-    case 'm':
-      do_minor_faults = true;
+    case 'i':
+      cursor = optarg;
+      if (!parse_uint64_t(&cursor, optarg + strlen(optarg), &iteration_count)) {
+        fprintf(stderr, "%s: invalid iteration count: ‘%s’\n", arg0, optarg);
+        goto out;
+      }
+      break;
+    case 't':
+      if (!strcmp(optarg, "minor")) {
+        do_major_faults = false;
+      } else if (!strcmp(optarg, "major")) {
+        do_major_faults = true;
+      } else {
+        fprintf(stderr, "%s: invalid fault type: ‘%s’\n", arg0, optarg);
+        goto out;
+      }
       break;
     case 'a':
       if (!strcmp(optarg, "read")) {
@@ -295,7 +392,10 @@ int main(int argc, char **argv) {
       with_userfaultfd = true;
       break;
     case 'c':
-      use_two_cpus = true;
+      userfaultfd_same_cpus = true;
+      break;
+    case 'n':
+      no_msg_received = true;
       break;
     case 'h':
       print_usage(arg0);
@@ -306,75 +406,36 @@ int main(int argc, char **argv) {
     }
   }
 
-  if (with_userfaultfd && file) {
-    fprintf(
-        stderr,
-        "%s: only anonymous mappings are supported when using userfaultfd\n",
-        arg0);
+  if (with_userfaultfd && do_major_faults) {
+    fprintf(stderr,
+            "%s: major page faults are not supported when using userfaultfd\n",
+            arg0);
     goto out;
   }
 
   fast_tracepoints_dir_fd =
       open("/proc/sys/debug/fast-tracepoints", O_DIRECTORY | O_PATH);
   if (fast_tracepoints_dir_fd == -1) {
-    perror("open(/proc/sys/debug/fast-tracepoints)");
-    goto out;
-  }
-
-  if (!list_fast_tracepoints())
-    goto cleanup_fast_tracepoints_dir_fd;
-
-  CPU_ZERO(&cpu_set);
-  CPU_SET(0, &cpu_set);
-  err = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set), &cpu_set);
-  if (err) {
-    fprintf(stderr, "pthread_setaffinity_np: %s\n", strerror(err));
-    goto cleanup_fast_tracepoints_dir_fd;
-  }
-
-  if (file) {
-    file_fd = open(file, access == PROT_READ ? O_RDONLY : O_RDWR);
-    if (file_fd == -1) {
-      perror("open");
-      goto cleanup_fast_tracepoints_dir_fd;
+    if (errno != ENOENT) {
+      perror("open(/proc/sys/debug/fast-tracepoints)");
+      goto out;
     }
   }
+
+  if (fast_tracepoints_dir_fd != -1 && !list_fast_tracepoints())
+    goto cleanup_fast_tracepoints_dir_fd;
 
   page_size = sysconf(_SC_PAGESIZE);
   if (page_size == -1) {
     perror("sysconf(_SC_PAGESIZE)");
-    goto cleanup_file_fd;
-  }
-
-  initial_prot = (file_fd == -1 && !do_minor_faults) ? PROT_WRITE : PROT_READ;
-  page = mmap(NULL, page_size, initial_prot, MAP_ANONYMOUS | MAP_PRIVATE,
-              file_fd, offset & ~(page_size - 1));
-  if (page == MAP_FAILED) {
-    perror("mmap");
-    goto cleanup_file_fd;
-  }
-
-  byte = page;
-  byte += offset & (page_size - 1);
-
-  if (file_fd == -1 && !do_minor_faults) {
-    /* Prevent the kernel from using the special zero page. */
-    byte_copy = 1;
-    *byte = byte_copy;
-  } else if (access == PROT_WRITE) {
-    byte_copy = *byte;
-  }
-
-  if (access != initial_prot && mprotect(page, page_size, access) == -1) {
-    perror("mprotect");
-    goto cleanup_page;
+    goto cleanup_fast_tracepoints;
   }
 
   if (with_userfaultfd) {
     userfaultfd_fd = userfaultfd(O_CLOEXEC);
     if (userfaultfd_fd == -1) {
       perror("userfaultfd");
-      goto cleanup_page;
+      goto cleanup_fast_tracepoints;
     }
 
     api_args.api = UFFD_API;
@@ -383,95 +444,36 @@ int main(int argc, char **argv) {
       goto cleanup_userfaultfd_fd;
     }
 
-    register_args.range.start = (uint64_t)page;
-    register_args.range.len = page_size;
-    register_args.mode = UFFDIO_REGISTER_MODE_MISSING;
-    if (ioctl(userfaultfd_fd, UFFDIO_REGISTER, &register_args) == -1) {
-      perror("ioctl(UFFDIO_REGISTER)");
-      goto cleanup_userfaultfd_fd;
-    }
-
-    thread_args.userfaultfd_fd = userfaultfd_fd;
-    thread_args.range = register_args.range;
     err = pthread_create(&userfaultfd_thread, NULL, userfaultfd_thread_routine,
-                         &thread_args);
+                         NULL);
     if (err) {
       fprintf(stderr, "pthread_create: %s\n", strerror(err));
       goto cleanup_userfaultfd_fd;
     }
 
-    if (use_two_cpus) {
+    if (userfaultfd_same_cpus) {
       CPU_ZERO(&cpu_set);
-      CPU_SET(1, &cpu_set);
-    }
+      CPU_SET(0, &cpu_set);
 
-    err = pthread_setaffinity_np(userfaultfd_thread, sizeof(cpu_set), &cpu_set);
-    if (err) {
-      fprintf(stderr, "pthread_setaffinity_np: %s\n", strerror(err));
-      goto cleanup;
-    }
-  }
-
-  print_first_row();
-
-  for (i = 0; i < 100000; ++i) {
-    if (madvise(page, page_size,
-                do_minor_faults ? MADV_DONTNEED : MADV_PAGEOUT) == -1) {
-      perror("madvise");
-      goto cleanup;
-    }
-
-    if (access == (PROT_READ | PROT_WRITE))
-      *(volatile uint8_t *)byte;
-
-    timestamp_page_fault = rdtsc_serialize();
-
-    /* Trigger a page fault with the magic value in ebx. */
-    if (access == PROT_READ) {
-      asm volatile("movb (%[byte]), %[byte_copy]"
-                   : "=a"(timestamp_isr_entry),
-                     "=c"(timestamp_iret), [byte_copy] "=r"(byte_copy)
-                   : [byte] "r"(byte), "b"(PF_TRACING_MAGIC)
-                   : "edx");
-    } else {
-      asm volatile("movb %[byte_copy], (%[byte])"
-                   : "=a"(timestamp_isr_entry), "=c"(timestamp_iret)
-                   : [byte_copy] "r"(byte_copy), [byte] "r"(byte),
-                     "b"(PF_TRACING_MAGIC)
-                   : "edx");
-    }
-
-    timestamp_end = rdtsc_serialize();
-
-    printf("%" PRIu64 ",%" PRIu64 ",%" PRIu64,
-           timestamp_isr_entry - timestamp_page_fault,
-           timestamp_iret - timestamp_page_fault,
-           timestamp_end - timestamp_page_fault);
-
-    if (with_userfaultfd)
-      timestamp_msg_received_copy =
-          atomic_load_explicit(&timestamp_msg_received, memory_order_relaxed);
-
-    if (with_userfaultfd && timestamp_msg_received_copy > timestamp_page_fault)
-      printf(",%" PRIu64, timestamp_msg_received_copy - timestamp_page_fault);
-    else
-      fputc(',', stdout);
-
-    for (j = 0; fast_tracepoints[j] != NULL; ++j) {
-      if (!read_timestamp(fast_tracepoints[j], &timestamp))
+      err = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set), &cpu_set);
+      if (err) {
+        fprintf(stderr, "pthread_setaffinity_np: %s\n", strerror(err));
         goto cleanup;
-      /* Check if the tracepoint was hit. */
-      if (timestamp > timestamp_page_fault)
-        printf(",%" PRIu64, timestamp - timestamp_page_fault);
-      else
-        fputc(',', stdout);
+      }
+
+      err =
+          pthread_setaffinity_np(userfaultfd_thread, sizeof(cpu_set), &cpu_set);
+      if (err) {
+        fprintf(stderr, "pthread_setaffinity_np: %s\n", strerror(err));
+        goto cleanup;
+      }
     }
-
-    fputc('\n', stdout);
-
-    if (with_userfaultfd)
-      atomic_store_explicit(&timestamp_msg_received, 0, memory_order_relaxed);
   }
+
+  length = (length + page_size - 1) & ~(page_size - 1);
+
+  for (i = 0; i < iteration_count; ++i)
+    do_iteration(length, access, with_userfaultfd, page_size);
 
   ret = EXIT_SUCCESS;
 
@@ -482,17 +484,16 @@ cleanup:
   }
 
 cleanup_userfaultfd_fd:
-  close(userfaultfd_fd);
+  if (with_userfaultfd)
+    close(userfaultfd_fd);
 
-cleanup_page:
-  munmap(page, page_size);
-
-cleanup_file_fd:
-  if (file_fd != -1)
-    close(file_fd);
+cleanup_fast_tracepoints:
+  for (i = 0; fast_tracepoints[i] != NULL; ++i)
+    free(fast_tracepoints[i]);
 
 cleanup_fast_tracepoints_dir_fd:
-  close(fast_tracepoints_dir_fd);
+  if (fast_tracepoints_dir_fd != -1)
+    close(fast_tracepoints_dir_fd);
 
 out:
   return ret;
