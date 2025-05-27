@@ -1,0 +1,56 @@
+From 8822f01ed128ea5b898bd568b9395d6ea4997ee7 Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Wed, 28 May 2025 13:51:41 +0200
+Subject: [PATCH 2/4] x86/uintr: Add UINTR_HANDLER_FLAG_SET_UPIR
+
+Add a flag to set the UPIR field in the UPID to a nonzero value so that
+the CPU thinks there is a pending user interrupt. This is useful in
+conjunction with the UINTR_HANDLER_FLAG_VECTOR_SET_UINV flag.
+---
+ arch/x86/include/uapi/asm/uintr.h | 1 +
+ arch/x86/kernel/uintr.c           | 9 +++++++--
+ 2 files changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/include/uapi/asm/uintr.h b/arch/x86/include/uapi/asm/uintr.h
+index 0d3996f756df..b78179c23a4c 100644
+--- a/arch/x86/include/uapi/asm/uintr.h
++++ b/arch/x86/include/uapi/asm/uintr.h
+@@ -25,5 +25,6 @@
+ #define UINTR_HANDLER_FLAG_SET_UINV		0x1
+ #define UINTR_HANDLER_FLAG_UINV_SHIFT		24
+ #define UINTR_HANDLER_FLAG_UINV_MASK		0xff000000
++#define UINTR_HANDLER_FLAG_SET_UPIR		0x4
+ 
+ #endif
+diff --git a/arch/x86/kernel/uintr.c b/arch/x86/kernel/uintr.c
+index 18e7b5ff0a98..90291a5c02e1 100644
+--- a/arch/x86/kernel/uintr.c
++++ b/arch/x86/kernel/uintr.c
+@@ -979,6 +979,11 @@ static int do_uintr_register_handler(u64 handler, unsigned int flags, u8 uinv)
+ 	upid->nc.nv = UINTR_NOTIFICATION_VECTOR;
+ 	upid->nc.ndst = cpu_to_ndst(cpu);
+ 
++	if (flags & UINTR_HANDLER_FLAG_SET_UPIR) {
++		/* Trigger a user interrupt with vector 0. */
++		upid->puir = 1 << 0;
++	}
++
+ 	xsave_wrmsrl(xstate, MSR_IA32_UINTR_HANDLER, handler);
+ 
+ 	xsave_wrmsrl(xstate, MSR_IA32_UINTR_PD, (u64)upid);
+@@ -1027,10 +1032,10 @@ SYSCALL_DEFINE2(uintr_register_handler, u64 __user *, handler, unsigned int, fla
+ 		flags &= ~(UINTR_HANDLER_FLAG_SET_UINV | UINTR_HANDLER_FLAG_UINV_MASK);
+ 	}
+ 
+-	if (flags & ~UINTR_HANDLER_FLAG_WAITING_ANY)
++	if (flags & ~(UINTR_HANDLER_FLAG_WAITING_ANY | UINTR_HANDLER_FLAG_SET_UPIR))
+ 		return -EINVAL;
+ 
+-	if (flags && !IS_ENABLED(CONFIG_X86_UINTR_BLOCKING))
++	if ((flags & UINTR_HANDLER_FLAG_WAITING_ANY) && !IS_ENABLED(CONFIG_X86_UINTR_BLOCKING))
+ 		return -EINVAL;
+ 
+ 	/* TODO: Validate the handler address */
+-- 
+2.49.0
+

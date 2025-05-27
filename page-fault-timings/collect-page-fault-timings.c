@@ -133,8 +133,7 @@ static void *userfaultfd_thread_routine(void *data) {
 }
 
 static void print_usage(const char *arg0) {
-  fprintf(
-      stdout,
+  printf(
       "Usage: %s [OPTION]...\n"
       "Collect page fault timings.\n"
       "\n"
@@ -155,7 +154,7 @@ static void print_usage(const char *arg0) {
       "  -c, --userfaultfd-same-cpus  pin the faulting thread and userfaultfd "
       "thread to the same CPUs\n"
       "  -n, --no-msg-received        disable the msg_received timing\n"
-      "      --help                   display this help and exit\n",
+      "  -h, --help                   display this help and exit\n",
       arg0);
 }
 
@@ -347,21 +346,23 @@ int main(int argc, char **argv) {
   int i;
   uint64_t timestamp;
 
-  arg0 = argv[0] ? argv[0] : "collect";
+  arg0 = argv[0] ? argv[0] : "collect-page-fault-timings";
 
   while ((opt = getopt_long(argc, argv, "s:l:i:t:a:uch", long_options, NULL)) !=
          -1) {
     switch (opt) {
     case 'l':
       cursor = optarg;
-      if (!parse_uint64_t(&cursor, optarg + strlen(optarg), &length)) {
+      if (!parse_uint64_t(&cursor, optarg + strlen(optarg), &length) ||
+          *cursor) {
         fprintf(stderr, "%s: invalid length: ‘%s’\n", arg0, optarg);
         goto out;
       }
       break;
     case 'i':
       cursor = optarg;
-      if (!parse_uint64_t(&cursor, optarg + strlen(optarg), &iteration_count)) {
+      if (!parse_uint64_t(&cursor, optarg + strlen(optarg), &iteration_count) ||
+          *cursor) {
         fprintf(stderr, "%s: invalid iteration count: ‘%s’\n", arg0, optarg);
         goto out;
       }

@@ -1,0 +1,72 @@
+From eddfdd6f56a07b81a50b0139101d91d9b5d68327 Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Wed, 28 May 2025 13:52:38 +0200
+Subject: [PATCH 3/4] x86/uintr: Add UINTR_HANDLER_FLAG_NO_SELF_IPI
+
+Add a flag to disable delivery of outstanding notifications using self
+IPIs on user mode return.
+---
+ arch/x86/include/asm/uintr.h      | 1 +
+ arch/x86/include/uapi/asm/uintr.h | 1 +
+ arch/x86/kernel/uintr.c           | 8 +++++---
+ 3 files changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/arch/x86/include/asm/uintr.h b/arch/x86/include/asm/uintr.h
+index 11b86bcfc96f..a999e938525b 100644
+--- a/arch/x86/include/asm/uintr.h
++++ b/arch/x86/include/asm/uintr.h
+@@ -32,6 +32,7 @@ struct uintr_upid_ctx {
+ 	refcount_t refs;
+ 	bool receiver_active;		/* Flag for UPID being mapped to a receiver */
+ 	bool waiting;			/* Flag for UPID blocked in the kernel */
++	bool no_self_ipi;
+ 	u8 uinv;
+ 	unsigned int waiting_cost;	/* Flags for who pays the waiting cost */
+ };
+diff --git a/arch/x86/include/uapi/asm/uintr.h b/arch/x86/include/uapi/asm/uintr.h
+index b78179c23a4c..af2ee7e1fcec 100644
+--- a/arch/x86/include/uapi/asm/uintr.h
++++ b/arch/x86/include/uapi/asm/uintr.h
+@@ -26,5 +26,6 @@
+ #define UINTR_HANDLER_FLAG_UINV_SHIFT		24
+ #define UINTR_HANDLER_FLAG_UINV_MASK		0xff000000
+ #define UINTR_HANDLER_FLAG_SET_UPIR		0x4
++#define UINTR_HANDLER_FLAG_NO_SELF_IPI		0x8
+ 
+ #endif
+diff --git a/arch/x86/kernel/uintr.c b/arch/x86/kernel/uintr.c
+index 90291a5c02e1..dee4b9830139 100644
+--- a/arch/x86/kernel/uintr.c
++++ b/arch/x86/kernel/uintr.c
+@@ -1007,6 +1007,8 @@ static int do_uintr_register_handler(u64 handler, unsigned int flags, u8 uinv)
+ 			upid_ctx->waiting_cost = UPID_WAITING_COST_SENDER;
+ 	}
+ 
++	upid_ctx->no_self_ipi = flags & UINTR_HANDLER_FLAG_NO_SELF_IPI;
++
+ 	pr_debug("recv: task=%d register handler=%llx upid %px flags=%d\n",
+ 		 t->pid, handler, upid, flags);
+ 
+@@ -1032,7 +1034,7 @@ SYSCALL_DEFINE2(uintr_register_handler, u64 __user *, handler, unsigned int, fla
+ 		flags &= ~(UINTR_HANDLER_FLAG_SET_UINV | UINTR_HANDLER_FLAG_UINV_MASK);
+ 	}
+ 
+-	if (flags & ~(UINTR_HANDLER_FLAG_WAITING_ANY | UINTR_HANDLER_FLAG_SET_UPIR))
++	if (flags & ~(UINTR_HANDLER_FLAG_WAITING_ANY | UINTR_HANDLER_FLAG_SET_UPIR | UINTR_HANDLER_FLAG_NO_SELF_IPI))
+ 		return -EINVAL;
+ 
+ 	if ((flags & UINTR_HANDLER_FLAG_WAITING_ANY) && !IS_ENABLED(CONFIG_X86_UINTR_BLOCKING))
+@@ -1428,8 +1430,8 @@ void switch_uintr_return(void)
+ 	 * the UIRR. In that case the kernel would need to carefully manage the
+ 	 * race with the hardware if the UPID gets updated after the read.
+ 	 */
+-	if (READ_ONCE(upid->puir))
+-		apic->send_IPI_self(UINTR_NOTIFICATION_VECTOR);
++	if (!upid_ctx->no_self_ipi && READ_ONCE(upid->puir))
++		apic->send_IPI_self(upid_ctx->upid_nv);
+ }
+ 
+ /* Check does SN need to be set here */
+-- 
+2.49.0
+

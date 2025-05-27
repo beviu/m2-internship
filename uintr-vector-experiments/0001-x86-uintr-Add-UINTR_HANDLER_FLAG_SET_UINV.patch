@@ -1,0 +1,138 @@
+From 945520d9f1f27cb4091a185a91f2f69fa367311e Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Wed, 28 May 2025 13:48:06 +0200
+Subject: [PATCH 1/4]   x86/uintr: Add UINTR_HANDLER_FLAG_SET_UINV
+
+  This patch is used to test if IRQs can be turned into user interrupts
+  by setting the UINV (notification vector in the MSR_IA32_UINTR_MISC
+  MSR) to the IRQ vector number.
+
+  This is not useful yet because there is no way to modify the UPIR field
+  in the UPID to tell the CPU that a user interrupt is pending.
+
+  This is just for debugging, do not use on a production kernel!
+---
+ arch/x86/include/asm/uintr.h      |  1 +
+ arch/x86/include/uapi/asm/uintr.h |  3 +++
+ arch/x86/kernel/uintr.c           | 21 ++++++++++++++++-----
+ 3 files changed, 20 insertions(+), 5 deletions(-)
+
+diff --git a/arch/x86/include/asm/uintr.h b/arch/x86/include/asm/uintr.h
+index d7b3ce46eb37..11b86bcfc96f 100644
+--- a/arch/x86/include/asm/uintr.h
++++ b/arch/x86/include/asm/uintr.h
+@@ -32,6 +32,7 @@ struct uintr_upid_ctx {
+ 	refcount_t refs;
+ 	bool receiver_active;		/* Flag for UPID being mapped to a receiver */
+ 	bool waiting;			/* Flag for UPID blocked in the kernel */
++	u8 uinv;
+ 	unsigned int waiting_cost;	/* Flags for who pays the waiting cost */
+ };
+ 
+diff --git a/arch/x86/include/uapi/asm/uintr.h b/arch/x86/include/uapi/asm/uintr.h
+index 6e8623248290..0d3996f756df 100644
+--- a/arch/x86/include/uapi/asm/uintr.h
++++ b/arch/x86/include/uapi/asm/uintr.h
+@@ -22,5 +22,8 @@
+ #define UINTR_HANDLER_FLAG_WAITING_SENDER	0x2000
+ #define UINTR_HANDLER_FLAG_WAITING_ANY		(UINTR_HANDLER_FLAG_WAITING_SENDER | \
+ 						 UINTR_HANDLER_FLAG_WAITING_RECEIVER)
++#define UINTR_HANDLER_FLAG_SET_UINV		0x1
++#define UINTR_HANDLER_FLAG_UINV_SHIFT		24
++#define UINTR_HANDLER_FLAG_UINV_MASK		0xff000000
+ 
+ #endif
+diff --git a/arch/x86/kernel/uintr.c b/arch/x86/kernel/uintr.c
+index ecef63974f68..18e7b5ff0a98 100644
+--- a/arch/x86/kernel/uintr.c
++++ b/arch/x86/kernel/uintr.c
+@@ -931,7 +931,7 @@ static inline u32 cpu_to_ndst(int cpu)
+ 	return apicid;
+ }
+ 
+-static int do_uintr_register_handler(u64 handler, unsigned int flags)
++static int do_uintr_register_handler(u64 handler, unsigned int flags, u8 uinv)
+ {
+ 	struct uintr_upid_ctx *upid_ctx;
+ 	struct uintr_upid *upid;
+@@ -960,6 +960,8 @@ static int do_uintr_register_handler(u64 handler, unsigned int flags)
+ 		t->thread.upid_ctx = upid_ctx;
+ 	}
+ 
++	upid_ctx->uinv = uinv;
++
+ 	/*
+ 	 * UPID and upid_activated will be referenced during context switch. Need to
+ 	 * disable preemption while modifying the MSRs, UPID and upid_activated
+@@ -986,7 +988,7 @@ static int do_uintr_register_handler(u64 handler, unsigned int flags)
+ 
+ 	/* Modify only the relevant bits of the MISC MSR */
+ 	xsave_rdmsrl(xstate, MSR_IA32_UINTR_MISC, &misc_msr);
+-	misc_msr |= (u64)UINTR_NOTIFICATION_VECTOR << 32;
++	misc_msr |= (u64)upid_ctx->uinv << 32;
+ 	xsave_wrmsrl(xstate, MSR_IA32_UINTR_MISC, misc_msr);
+ 
+ 	t->thread.upid_activated = true;
+@@ -1012,6 +1014,7 @@ static int do_uintr_register_handler(u64 handler, unsigned int flags)
+ SYSCALL_DEFINE2(uintr_register_handler, u64 __user *, handler, unsigned int, flags)
+ {
+ 	int ret;
++	u8 uinv = UINTR_NOTIFICATION_VECTOR;
+ 
+ 	if (!cpu_feature_enabled(X86_FEATURE_UINTR))
+ 		return -ENOSYS;
+@@ -1019,6 +1022,11 @@ SYSCALL_DEFINE2(uintr_register_handler, u64 __user *, handler, unsigned int, fla
+ 	pr_debug("recv: requesting register handler task=%d flags %d handler %lx\n",
+ 		 current->pid, flags, (unsigned long)handler);
+ 
++	if (flags & UINTR_HANDLER_FLAG_SET_UINV) {
++		uinv = (flags & UINTR_HANDLER_FLAG_UINV_MASK) >> UINTR_HANDLER_FLAG_UINV_SHIFT;
++		flags &= ~(UINTR_HANDLER_FLAG_SET_UINV | UINTR_HANDLER_FLAG_UINV_MASK);
++	}
++
+ 	if (flags & ~UINTR_HANDLER_FLAG_WAITING_ANY)
+ 		return -EINVAL;
+ 
+@@ -1029,7 +1037,7 @@ SYSCALL_DEFINE2(uintr_register_handler, u64 __user *, handler, unsigned int, fla
+ 	if (!handler)
+ 		return -EFAULT;
+ 
+-	ret = do_uintr_register_handler((u64)handler, flags);
++	ret = do_uintr_register_handler((u64)handler, flags, uinv);
+ 
+ 	pr_debug("recv: register handler task=%d flags %d handler %lx ret %d\n",
+ 		 current->pid, flags, (unsigned long)handler, ret);
+@@ -1362,6 +1370,7 @@ void switch_uintr_prepare(struct task_struct *prev)
+  */
+ void switch_uintr_return(void)
+ {
++	struct uintr_upid_ctx *upid_ctx;
+ 	struct uintr_upid *upid;
+ 	u64 misc_msr;
+ 
+@@ -1385,10 +1394,12 @@ void switch_uintr_return(void)
+ 	 */
+ 	WARN_ON_ONCE(test_thread_flag(TIF_NEED_FPU_LOAD));
+ 
++	upid_ctx = current->thread.upid_ctx;
++
+ 	/* Modify only the relevant bits of the MISC MSR */
+ 	rdmsrl(MSR_IA32_UINTR_MISC, misc_msr);
+ 	if (!(misc_msr & GENMASK_ULL(39, 32))) {
+-		misc_msr |= (u64)UINTR_NOTIFICATION_VECTOR << 32;
++		misc_msr |= (u64)upid_ctx->upid_nv << 32;
+ 		wrmsrl(MSR_IA32_UINTR_MISC, misc_msr);
+ 	}
+ 
+@@ -1396,7 +1407,7 @@ void switch_uintr_return(void)
+ 	 * It is necessary to clear the SN bit after we set UINV and NDST to
+ 	 * avoid incorrect interrupt routing.
+ 	 */
+-	upid = current->thread.upid_ctx->upid;
++	upid = upid_ctx->upid;
+ 	upid->nc.ndst = cpu_to_ndst(smp_processor_id());
+ 	clear_bit(UINTR_UPID_STATUS_SN, (unsigned long *)&upid->nc.status);
+ 
+-- 
+2.49.0
+
