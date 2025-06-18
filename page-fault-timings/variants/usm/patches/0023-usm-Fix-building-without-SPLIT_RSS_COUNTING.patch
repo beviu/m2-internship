@@ -1,0 +1,43 @@
+From 2ffd273de1806d0a745d40a34b05740f5719255b Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Wed, 11 Jun 2025 10:32:43 +0200
+Subject: [PATCH 23/30] usm: Fix building without SPLIT_RSS_COUNTING
+
+---
+ fs/userfaultfd.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/fs/userfaultfd.c b/fs/userfaultfd.c
+index f41eaa4e344d..e62ac385c6e1 100644
+--- a/fs/userfaultfd.c
++++ b/fs/userfaultfd.c
+@@ -900,7 +900,7 @@ vm_fault_t handle_usm_fault(struct vm_fault *vmf)		// TODO : some cond_sched...
+ 
+ 	//inc_mm_counter_fast(vma->vm_mm, MM_ANONPAGES);
+ 	//if (likely(current->mm == mm))
+-	current->rss_stat.count[MM_ANONPAGES]++;
++	inc_mm_counter(current->mm, MM_ANONPAGES);
+ 	//else
+ 		//add_mm_counter(mm, MM_ANONPAGES, 1);
+ 
+@@ -1056,7 +1056,7 @@ vm_fault_t handle_usm_fault(struct vm_fault *vmf)		// TODO : some cond_sched...
+ 
+ 			//inc_mm_counter_fast(vma->vm_mm, MM_ANONPAGES);
+ 			//if (likely(current->mm == mm))
+-			current->rss_stat.count[MM_ANONPAGES]++;
++			inc_mm_counter(current->mm, MM_ANONPAGES);
+ 			//else
+ 				//add_mm_counter(mm, MM_ANONPAGES, 1);
+ 
+@@ -1268,7 +1268,7 @@ vm_fault_t handle_usm_swap(struct vm_fault *vmf)		// TODO : some cond_sched...
+ 
+ 	//inc_mm_counter_fast(vma->vm_mm, MM_ANONPAGES);
+ 	//if (likely(current->mm == mm))
+-	current->rss_stat.count[MM_ANONPAGES]++;				// bro.. down it up then, when swapping out..? Hmm..
++	inc_mm_counter(current->mm, MM_ANONPAGES);				// bro.. down it up then, when swapping out..? Hmm..
+ 	//else
+ 		//add_mm_counter(mm, MM_ANONPAGES, 1);
+ 
+-- 
+2.49.0
+

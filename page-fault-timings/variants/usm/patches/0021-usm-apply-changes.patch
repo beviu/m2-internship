@@ -1,0 +1,4152 @@
+From 4345509fd932e5a9bb0fc9dbfbc553a12e4e220f Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Tue, 13 May 2025 17:03:41 +0200
+Subject: [PATCH 21/30] usm: apply changes
+
+Apply USM's kernel changes up to commit
+1de7097247a82bbec9e6861af991c39da6a8845e ("Some more tidying up and
+accounting of FAULT_EXISTs, quite rare but important").
+---
+ arch/x86/kernel/irq.c            |    2 +
+ arch/x86/kernel/uintr.c          |   59 +-
+ fs/userfaultfd.c                 | 2009 +++++++++++++++++++++++++++++-
+ include/linux/mm.h               |   17 +
+ include/linux/mm_types.h         |    2 +
+ include/linux/page-flags.h       |    4 +-
+ include/linux/sched.h            |    4 +
+ include/linux/shmem_fs.h         |    8 +
+ include/linux/userfaultfd_k.h    |  100 +-
+ include/trace/events/mmflags.h   |    6 +-
+ include/uapi/linux/userfaultfd.h |   22 +
+ kernel/exit.c                    |   30 +
+ kernel/fork.c                    |    2 +-
+ kernel/sched/core.c              |    1 +
+ mm/madvise.c                     |    7 +-
+ mm/memory.c                      |   32 +-
+ mm/mmap.c                        |   20 +-
+ mm/page-writeback.c              |    5 +-
+ mm/page_alloc.c                  |   99 +-
+ mm/rmap.c                        |    5 +-
+ mm/shmem.c                       |  136 ++
+ mm/swap.c                        |   26 +-
+ mm/userfaultfd.c                 |  609 ++++++++-
+ mm/util.c                        |    6 +-
+ 24 files changed, 3104 insertions(+), 107 deletions(-)
+
+diff --git a/arch/x86/kernel/irq.c b/arch/x86/kernel/irq.c
+index aed0f81d88e7..7b0bbbf5d357 100644
+--- a/arch/x86/kernel/irq.c
++++ b/arch/x86/kernel/irq.c
+@@ -394,6 +394,8 @@ DEFINE_IDTENTRY_SYSVEC(sysvec_uintr_kernel_notification)
+ 	pr_debug_ratelimited("uintr: Kernel notification interrupt on %d\n",
+ 			     smp_processor_id());
+ 
++	// printk(KERN_INFO "Yay waking!\n");
++
+ 	if (IS_ENABLED(CONFIG_X86_UINTR_BLOCKING))
+ 		uintr_wake_up_process();
+ }
+diff --git a/arch/x86/kernel/uintr.c b/arch/x86/kernel/uintr.c
+index ecef63974f68..9aeadc8c2f0e 100644
+--- a/arch/x86/kernel/uintr.c
++++ b/arch/x86/kernel/uintr.c
+@@ -1233,6 +1233,17 @@ struct file *uvecfd_fget(int fd)
+ }
+ EXPORT_SYMBOL_GPL(uvecfd_fget);
+ 
++static void uintr_switch_to_kernel_interrupt(struct uintr_upid_ctx *upid_ctx)
++{
++	unsigned long flags;
++
++	upid_ctx->upid->nc.nv = UINTR_KERNEL_VECTOR;
++	upid_ctx->waiting = true;
++	spin_lock_irqsave(&uintr_wait_lock, flags);
++	list_add(&upid_ctx->node, &uintr_wait_list);
++	spin_unlock_irqrestore(&uintr_wait_lock, flags);
++}
++
+ static int uintr_receiver_wait(ktime_t *expires)
+ {
+ 	struct task_struct *tsk = current;
+@@ -1243,29 +1254,29 @@ static int uintr_receiver_wait(ktime_t *expires)
+ 
+ 	pr_debug("uintr: Pause for uintr for task %d\n", tsk->pid);
+ 
+-	// uintr_switch_to_kernel_interrupt(tsk);
++	uintr_switch_to_kernel_interrupt(tsk->thread.upid_ctx);
+ 
+-	hrtimer_init_sleeper_on_stack(&t, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+-	hrtimer_set_expires_range_ns(&t.timer, *expires, 0);
+-	hrtimer_sleeper_start_expires(&t, HRTIMER_MODE_REL);
++	// hrtimer_init_sleeper_on_stack(&t, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
++	// hrtimer_set_expires_range_ns(&t.timer, *expires, 0);
++	// hrtimer_sleeper_start_expires(&t, HRTIMER_MODE_REL);
+ 
+ 	set_current_state(TASK_INTERRUPTIBLE);
+ 
+-	if (t.task)
++	// if (tsk)	// if (t.task)
+ 		schedule();
+ 
+-	hrtimer_cancel(&t.timer);
+-	destroy_hrtimer_on_stack(&t.timer);
++	// hrtimer_cancel(&t.timer);
++	// destroy_hrtimer_on_stack(&t.timer);
+ 
+-	//if (!t.task)
+-	//	uintr_remove_task_wait(tsk);
++	if (!t.task)
++		uintr_remove_task_wait(tsk);
+ 
+ 	__set_current_state(TASK_RUNNING);
+ 
+ 	pr_debug("recv: Returned from schedule task=%d\n",
+ 		 current->pid);
+ 
+-	return !t.task ? 0 : -EINTR;
++	return !t.task ? 0 : -EINTR;	// no other way to know that it was interrupted in syscall.. but ain't anyway what we want..
+ }
+ 
+ /* For now, use a max value of 1000 seconds */
+@@ -1298,17 +1309,6 @@ SYSCALL_DEFINE2(uintr_wait, u64, usec, unsigned int, flags)
+ 	return uintr_receiver_wait(&expires);
+ }
+ 
+-static void uintr_switch_to_kernel_interrupt(struct uintr_upid_ctx *upid_ctx)
+-{
+-	unsigned long flags;
+-
+-	upid_ctx->upid->nc.nv = UINTR_KERNEL_VECTOR;
+-	upid_ctx->waiting = true;
+-	spin_lock_irqsave(&uintr_wait_lock, flags);
+-	list_add(&upid_ctx->node, &uintr_wait_list);
+-	spin_unlock_irqrestore(&uintr_wait_lock, flags);
+-}
+-
+ static void uintr_set_blocked_upid_bit(struct uintr_upid_ctx *upid_ctx)
+ {
+ 	set_bit(UINTR_UPID_STATUS_BLKD, (unsigned long *)&upid_ctx->upid->nc.status);
+@@ -1325,6 +1325,12 @@ static inline bool is_uintr_waiting_enabled(struct task_struct *t)
+ 	return (t->thread.upid_ctx->waiting_cost != UPID_WAITING_COST_NONE);
+ }
+ 
++/* Always make sure task is_uintr_receiver() before calling */
++static inline bool is_uintr_waiting(struct task_struct *t)
++{
++	return t->thread.upid_ctx->waiting;
++}
++
+ /* Suppress notifications since this task is being context switched out */
+ void switch_uintr_prepare(struct task_struct *prev)
+ {
+@@ -1352,7 +1358,10 @@ void switch_uintr_prepare(struct task_struct *prev)
+ 		uintr_set_blocked_upid_bit(upid_ctx);
+ 	}
+ 
+-	set_bit(UINTR_UPID_STATUS_SN, (unsigned long *)&upid_ctx->upid->nc.status);
++	if (/*is_uintr_receiver(prev) && ...redundant.. */!is_uintr_waiting(prev)) {
++		set_bit(UINTR_UPID_STATUS_SN, (unsigned long *)&upid_ctx->upid->nc.status);
++	}
++	// set_bit(UINTR_UPID_STATUS_SN, (unsigned long *)&upid_ctx->upid->nc.status);		// up^
+ }
+ 
+ /*
+@@ -1445,12 +1454,6 @@ static void uintr_clear_blocked_bit(struct uintr_upid_ctx *upid_ctx)
+ 	clear_bit(UINTR_UPID_STATUS_BLKD, (unsigned long *)&upid_ctx->upid->nc.status);
+ }
+ 
+-/* Always make sure task is_uintr_receiver() before calling */
+-static inline bool is_uintr_waiting(struct task_struct *t)
+-{
+-	return t->thread.upid_ctx->waiting;
+-}
+-
+ void switch_uintr_finish(struct task_struct *next)
+ {
+ 	if (IS_ENABLED(CONFIG_X86_UINTR_BLOCKING) &&
+diff --git a/fs/userfaultfd.c b/fs/userfaultfd.c
+index 0c1d33c4f74c..f41eaa4e344d 100644
+--- a/fs/userfaultfd.c
++++ b/fs/userfaultfd.c
+@@ -30,10 +30,54 @@
+ #include <linux/security.h>
+ #include <linux/hugetlb.h>
+ #include <linux/swapops.h>
++#include <linux/fdtable.h>
++#include <asm/io.h>
++
++#ifdef CONFIG_X86_USER_INTERRUPTS
++#include <asm/apic.h>
++#include <asm/uintr.h>
++
++extern struct apic *apic;
++
++#endif
++
++#include <linux/shmem_fs.h>
+ 
+ int sysctl_unprivileged_userfaultfd __read_mostly;
+ 
+ static struct kmem_cache *userfaultfd_ctx_cachep __read_mostly;
++// static struct kmem_cache *usm_nfp_cachep;
++
++// Dude.. we gotta just have a list of ctx.s USM wise, while tagging every other ctx with a ref. back to our list. TODO
++/* Pain to get back thingies/placeholders.. other var.(s) for them reclaims TODO */ 	// actually, just make it wrap up for now.. and on user-level side bug on +X proc.s up.
++//atomic_t usmids_counter;
++//atomic_t usm_default_channel;
++/* Mem.-zones... TODO dynamicalize* */
++//char *uthread [100];		// not to be called uthreads anymore..
++
++struct usm_ctx *usm_list;
++
++EXPORT_SYMBOL(usm_list);
++
++DEFINE_SPINLOCK(usm_list_lock);		// temp., make it one per buddy... and maybe use list_heads...
++
++EXPORT_SYMBOL(usm_list_lock);
++
++LIST_HEAD(usm_sleepers_map_list);	// struct usm_ctx_p *usm_sleepers_map_list;
++
++EXPORT_SYMBOL(usm_sleepers_map_list);
++
++DEFINE_SPINLOCK(usm_sleepers_map_list_lock);
++
++EXPORT_SYMBOL(usm_sleepers_map_list_lock);
++
++/*static */ DECLARE_WAIT_QUEUE_HEAD(usm_wait);
++
++EXPORT_SYMBOL(usm_wait);
++
++int unmap_sleepers = 0;
++
++EXPORT_SYMBOL(unmap_sleepers);
+ 
+ /*
+  * Start with fault_pending_wqh and fault_wqh so they're more likely
+@@ -49,31 +93,112 @@ static struct kmem_cache *userfaultfd_ctx_cachep __read_mostly;
+  * since fd_wqh.lock is taken by aio_poll() while it's holding a lock that's
+  * also taken in IRQ context.
+  */
+-struct userfaultfd_ctx {
+-	/* waitqueue head for the pending (i.e. not read) userfaults */
+-	wait_queue_head_t fault_pending_wqh;
+-	/* waitqueue head for the userfaults */
+-	wait_queue_head_t fault_wqh;
+-	/* waitqueue head for the pseudo fd to wakeup poll/read */
+-	wait_queue_head_t fd_wqh;
+-	/* waitqueue head for events */
+-	wait_queue_head_t event_wqh;
+-	/* a refile sequence protected by fault_pending_wqh lock */
+-	seqcount_spinlock_t refile_seq;
+-	/* pseudo fd refcounting */
+-	refcount_t refcount;
+-	/* userfaultfd syscall flags */
+-	unsigned int flags;
+-	/* features requested from the userspace */
+-	unsigned int features;
+-	/* released */
+-	bool released;
+-	/* memory mappings are changing because of non-cooperative event */
+-	atomic_t mmap_changing;
+-	/* mm with one ore more vmas attached to this userfaultfd_ctx */
+-	struct mm_struct *mm;
++
++	/*
++		Flop.. to _k.h
++	*/
++/*struct usm_ctx_p {
++	void	*uctx;
++	// unsigned int usmid;
++	struct list_head ilist;
++};*/
++
++/*struct usm_ctx {
++	unsigned int usmid;
++	unsigned int status;			// 0 0 0 0 0 .. >> &		#define BIT(nr)			(UL(1) << (nr)).. for a freaking setting up of bit. |UI
++	unsigned long vaddr;		// and just the size.. manually...
++	unsigned long paddr;
++};*/
++
++//static void queue_usmmph(struct userfaultfd_ctx *ctx, char * usmmem) 	/* TODO check ret's. */
++/*{
++	struct usm_ctx_p *usm_cp=kmalloc(sizeof(struct usm_ctx_p), GFP_KERNEL);
++	WRITE_ONCE(usm_cp->uctx,usmmem); // usm_cp->uctx=usmmem;
++	INIT_LIST_HEAD(&(usm_cp->ilist));
++	spin_lock(&ctx->usmlock);
++	list_add_tail(&(usm_cp->ilist),usmmph);
++	spin_unlock(&ctx->usmlock);
++	//printk(KERN_INFO "Queued one! #USM\n");
++}*/
++
++//static void dequeue_usmmph(struct userfaultfd_ctx *ctx, struct usm_ctx_p *usmcp) 	/* TODO check ret's. */
++/*{
++	spin_lock(&ctx->usmlock);
++	list_del(&(usmcp->ilist));
++	spin_unlock(&ctx->usmlock);
++	kfree(usmcp);
++}*/
++
++//struct list_head cxDescList;
++/* LIST_HEAD(cxDescList);
++int listCount = 0;
++
++//spinlock_t cxDescLock;
++static DEFINE_SPINLOCK(cxDescLock);*/
++
++// static DEFINE_SPINLOCK(usmAccountingLock);
++
++struct cxDescStruct {
++     struct userfaultfd_ctx *ctx;
++     struct task_struct *toWake;
++     struct list_head cxlist;
+ };
+ 
++//struct list_head usmmph;
++/*LIST_HEAD(usmmph);
++// char *
++EXPORT_SYMBOL(usmmph);*/
++
++static int queue_usmmph(struct userfaultfd_ctx *ctx, char * usmmem) 	/* TODO check ret's. */		/* Freaking just collocate all related pollings to a central thingy, like for processes. Much simpler.. and, by doing so, uffd one's becomes unnecessary. */
++{
++	struct usm_ctx_p *usm_cp=kmalloc(sizeof(struct usm_ctx_p), GFP_KERNEL);
++	// int usmid, manChannel;
++	if(unlikely(!usm_cp)) {
++		printk(KERN_INFO "[queue_usmmph] Yup.. kmalloc failed!\n");
++		return -ENOMEM;
++	}
++	WRITE_ONCE(usm_cp->uctx,usmmem); // usm_cp->uctx=usmmem;
++	WRITE_ONCE(usm_cp->ucx,current->usm_x);
++	INIT_LIST_HEAD(&(usm_cp->ilist));
++	spin_lock(&ctx->usmlock);
++	list_add_tail(&(usm_cp->ilist),&ctx->usmmph);
++	/*if(atomic_read(&ctx->usmids_counter)==100) // nope, mmap!
++		atomic_set(&ctx->usmids_counter, 0);*/
++	spin_unlock(&ctx->usmlock);
++
++	/*while(unlikely(!ctx->uctx)) {
++		printk(KERN_INFO "[USM/Mayday] Yup, waiting for arming...\n");
++	}*/
++
++	/*spin_lock(&ctx->uctx->usmAccountingLock);
++	usmid=atomic_read(&ctx->uctx->usmids_counter);
++	atomic_inc(&ctx->uctx->usmids_counter);
++	manChannel=atomic_read(&ctx->uctx->usm_default_channel);		// hence up there.. pre-register thingies.. like "if +1 -> boom max., pre-make another.., not in chooseWorker..!" or smthn else more elegant.. TODO | plus temporary.. channels' counts unphased between UPace and KPace..
++	spin_unlock(&ctx->uctx->usmAccountingLock);*/ 	// now done at mmap, with all these following thingies..	| copies now again done at each place of interest.. temp. TODO, factorize..
++	//spin_lock(&ctx->uctx->usmAccountingLock);
++	//manChannel=atomic_read(&ctx->uctx->usm_default_channel);	// lock shouldn't be needed..
++	//spin_unlock(&ctx->uctx->usmAccountingLock);
++	// WRITE_ONCE(*((unsigned int *)(usmmem+4096-sizeof(unsigned int))), usmid);
++	// printk(KERN_INFO "[queue_usmmph] One USM counter at %u by %u!\n", usmid, manChannel);
++	/* Just get a copy of workers' number here and act accordingly.. and check on another bit field their "occupation" by managed tasks!*/
++	/* Though, main limitation be them 64 bits of long long.. we could use whole page but copying it up to calculate would be heavy... anyway, fixable! */
++	// WRITE_ONCE(current->usm_x, ctx->uctx->uthread[manChannel /*usmid/64*/]);						// of i/default_worker.. then dynamically modifiable through ioctl or other...	| man, better be ready to correctly take care of these id.s... fire up another worker if read in UPace value not compliant?.. temporary, and freaking make macros.
++	// printk(KERN_INFO "[queue_usmmph] One USM task at %u channel..!\n", manChannel);
++	WRITE_ONCE(*(int *)(usmmem/*current->usm_ctx ... lol */+sizeof(int)), 9);	// value even never used.. 0's just needed to do anything on the channel..
++	wake_up_poll(&ctx->fd_wqh, EPOLLPRI);	/* ..here... */
++	//printk(KERN_INFO "Queued one! #USM\n");
++	return 0;
++}
++
++//struct list_head usmPagesList;
++//LIST_HEAD(usmPagesList);
++//unsigned long usmPagesCount = 0;
++//spinlock_t usmPagesLock;
++//DEFINE_SPINLOCK(usmPagesLock);
++//EXPORT_SYMBOL(usmPagesList);
++//EXPORT_SYMBOL(usmPagesCount);
++// EXPORT_SYMBOL(usmPagesLock);
++
+ struct userfaultfd_fork_ctx {
+ 	struct userfaultfd_ctx *orig;
+ 	struct userfaultfd_ctx *new;
+@@ -183,7 +308,7 @@ static void userfaultfd_ctx_put(struct userfaultfd_ctx *ctx)
+ 
+ static inline void msg_init(struct uffd_msg *msg)
+ {
+-	BUILD_BUG_ON(sizeof(struct uffd_msg) != 32);
++	BUILD_BUG_ON(sizeof(struct uffd_msg) != 40);
+ 	/*
+ 	 * Must use memset to zero out the paddings or kernel data is
+ 	 * leaked to userland.
+@@ -191,20 +316,18 @@ static inline void msg_init(struct uffd_msg *msg)
+ 	memset(msg, 0, sizeof(struct uffd_msg));
+ }
+ 
+-static inline struct uffd_msg userfault_msg(unsigned long address,
+-					    unsigned long real_address,
+-					    unsigned int flags,
++static inline struct uffd_msg userfault_msg(struct vm_fault *vmf,
+ 					    unsigned long reason,
+ 					    unsigned int features)
+ {
+ 	struct uffd_msg msg;
+-
++	unsigned long address = vmf->real_address;
+ 	msg_init(&msg);
+ 	msg.event = UFFD_EVENT_PAGEFAULT;
+ 
+-	msg.arg.pagefault.address = (features & UFFD_FEATURE_EXACT_ADDRESS) ?
+-				    real_address : address;
+-
++	if (!(features & UFFD_FEATURE_EXACT_ADDRESS))
++		address &= PAGE_MASK;
++	msg.arg.pagefault.address = address;
+ 	/*
+ 	 * These flags indicate why the userfault occurred:
+ 	 * - UFFD_PAGEFAULT_FLAG_WP indicates a write protect fault.
+@@ -214,14 +337,18 @@ static inline struct uffd_msg userfault_msg(unsigned long address,
+ 	 * Separately, UFFD_PAGEFAULT_FLAG_WRITE indicates it was a write
+ 	 * fault. Otherwise, it was a read fault.
+ 	 */
+-	if (flags & FAULT_FLAG_WRITE)
++	if (vmf->flags & FAULT_FLAG_WRITE)
+ 		msg.arg.pagefault.flags |= UFFD_PAGEFAULT_FLAG_WRITE;
+ 	if (reason & VM_UFFD_WP)
+ 		msg.arg.pagefault.flags |= UFFD_PAGEFAULT_FLAG_WP;
+ 	if (reason & VM_UFFD_MINOR)
+ 		msg.arg.pagefault.flags |= UFFD_PAGEFAULT_FLAG_MINOR;
++	if (reason & VM_UFFD_SWAPPING) {
++		msg.arg.pagefault.flags |= UFFD_PAGEFAULT_FLAG_SWAP;
++		msg.arg.pagefault.entry_content = vmf->orig_pte.pte;
++	}
+ 	if (features & UFFD_FEATURE_THREAD_ID)
+-		msg.arg.pagefault.feat.ptid = task_pid_vnr(current);
++		msg.arg.pagefault.feat.ptid = task_pid_vnr(current);				/* TODO some feat. for PFNs... */
+ 	return msg;
+ }
+ 
+@@ -393,7 +520,7 @@ vm_fault_t handle_userfault(struct vm_fault *vmf, unsigned long reason)
+ 	 * shmem_vm_ops->fault method is invoked even during
+ 	 * coredumping without mmap_lock and it ends up here.
+ 	 */
+-	if (current->flags & (PF_EXITING|PF_DUMPCORE))
++	if (unlikely(current->flags & (PF_EXITING|PF_DUMPCORE)))		// although we could... do we need to? TODO
+ 		goto out;
+ 
+ 	/*
+@@ -402,10 +529,18 @@ vm_fault_t handle_userfault(struct vm_fault *vmf, unsigned long reason)
+ 	 */
+ 	mmap_assert_locked(mm);
+ 
++	if (!vmf->vma->vm_userfaultfd_ctx.ctx)
++		vmf->vma->vm_userfaultfd_ctx.ctx=current->mm->vm_userfaultfd_ctu.ctx;			/* we shouldn't need this... TODO fasten/r path */
++
+ 	ctx = vmf->vma->vm_userfaultfd_ctx.ctx;
+ 	if (!ctx)
+ 		goto out;
+ 
++	if (unlikely((atomic_read(&(ctx->mm)->mm_users)==0 && (ctx->mm->def_flags & VM_UFFD_MISSING)))) { // current->mm->vm_userfaultfd_ctu.ctx==NULL + make be NULL at exit should work too... #One&
++		printk(KERN_INFO "Attempted murder!\n");
++		goto out;
++	}
++
+ 	BUG_ON(ctx->mm != mm);
+ 
+ 	/* Any unrecognized flag is a bug. */
+@@ -490,8 +625,8 @@ vm_fault_t handle_userfault(struct vm_fault *vmf, unsigned long reason)
+ 
+ 	init_waitqueue_func_entry(&uwq.wq, userfaultfd_wake_function);
+ 	uwq.wq.private = current;
+-	uwq.msg = userfault_msg(vmf->address, vmf->real_address, vmf->flags,
+-				reason, ctx->features);
++	uwq.msg = userfault_msg(vmf, reason,
++			ctx->features);
+ 	uwq.ctx = ctx;
+ 	uwq.waken = false;
+ 
+@@ -554,7 +689,969 @@ vm_fault_t handle_userfault(struct vm_fault *vmf, unsigned long reason)
+ 	 * ctx may go away after this if the userfault pseudo fd is
+ 	 * already released.
+ 	 */
+-	userfaultfd_ctx_put(ctx);
++	userfaultfd_ctx_put(ctx);		// so.. finally... FREAKING NO in release..
++
++out:
++	return ret;
++}
++
++/*int*/ void queue_usm_fault(void)	//..but, nah, just take some address and boom one up.. and there'll be only one per instance, so go for it (pre-prepare that slot... haahhh))
++{
++	unsigned int* u_bitfield=(unsigned int *)current->usm_x;
++	unsigned int usmid = *(unsigned int *)(current->usm_ctx+4096-sizeof(unsigned int));
++	// tsk->mm->vm_userfaultfd_ctu.ctx		// hardlink 'em here.. if new? Nah, create two.. one at creation, one at Idk.. | hey, bits! One page! BOOOOOOM.. hmm.... hm. YES, GET A COUNTER! LOCK! But how to get 'em back.. BY THE COUNTER!... so why the need of the page.. o_o' Y..e..s.h. Decoupling of mem. zones if counters used! Simple linking: moved when USM decides.. func. in module. HM. Table, here. usmid, sched (yes, shut up for now).
++	// man.. wait up.. we just need to wake the worker if sleeping man... man.. man.... man man man. Simplify it ALL THEN COMPLEXIFY ALL YOU FREAKING WANT!
++	// struct userfaultfd_ctx *ctx = current->mm->vm_userfaultfd_ctu.ctx;
++	// spin_lock(&ctx->usmlock);	// shan't|udn't be needed..			// actually freakin' is.. but(!)! Hehehehee, boi.
++	struct userfaultfd_ctx *ctx = current->mm->vm_userfaultfd_ctu.ctx;
++	spin_lock(&ctx->uctx->faultsLock);		// actual hang again.. in attempts to get some more juice on redis throughput..
++	// __atomic_fetch_or(u_bitfield, (unsigned int)((unsigned int)1 << usmid), __ATOMIC_RELAXED); 
++	WRITE_ONCE(*u_bitfield, *u_bitfield|(unsigned int)((unsigned int)1 << usmid)); 	//list_add_tail(&(usm_cp->ilist),&ctx->usmmph);--
++	spin_unlock(&ctx->uctx->faultsLock); 	// spin_unlock(&ctx->usmlock);
++
++	// __atomic_fetch_or(u_bitfield, (unsigned int)((unsigned int)1 << usmid), __ATOMIC_RELAXED);
++	// __atomic_fetch_xor(u_bitfield, (unsigned int)((unsigned int)1 << usmid), __ATOMIC_RELAXED);
++#ifdef DEBUG_USM		
++	printk(KERN_INFO "[INF/Stat] %u, %u\n", *u_bitfield, usmid);
++#endif
++	// look : one id used here'll be one used there. So, by the id, we get the freaking boomer up there.. and switch its bit to 1, then switch it back to 0 after done...
++	// or just use that POLL_PRI? Then get this value and pass it up? No..., no man, that reverts all the benefits of zero-copy thingies until now..
++	// send a signal.. yes, by the worker ID.. though that shouldn't be important.. we can just get the worker ID up there then trigger it up if not running, but, what info. to give and how?
++	// Sure, that last last thing woudln't revert everything.. it'd just add up some thingy, which doesn't build up latency that much up compared to what the signals already break it all down by..
++	// But still.. what to give and how?
++
++	// Our main problem's that uthreads don't freaking have a task counterpart...buut, is that really a problem... hmmm.. just do a mmap and get a random zone retrieved here by id..? Think that's best..
++
++	// here gets something done.. what (?)...	'up
++	// 'down..
++	// do some "register_worker"s.. each one fixes UPace part... but, hear me out : they get put som... but yeah, that retrieval's still h u g e MAN..(ctx then checks - back)		okay.. just do sum shooty shoot then optimize....
++	// so ye, register_worker... -> mem-zone... each uthread does it before looping then yielding after three tries.
++		// said mem. zone's gotten back kernel-side by usmid.. instead of hashmaps.. why not simply round trip a table of 4096 b*i*ts.. nah, just integers.. hence taking half a page.. meh... let's say 1000 for now, and further split that ctx's creation....; ye, not so fast nor nowhere now.
++	
++	// Ha! Let's test out what we cooked.. smells mild -_-'..'
++	// okay man, as we'll be limited anyway in our bit field's length.. why not map one page for everyone? 
++			// direct basic preliminar	 answer.. : freaking contention...
++
++
++	// instead of regrouping them workers' thingies to do "under the hood", gather them up up there and check 'em one by one. Freak's sake.
++		// and put in proc. them freaking mem. zones.. hence, with ID, boom to there (wait.. nope o_o').. ye, nope. Other table to make.
++	// return 0;
++}
++
++void dequeue_usm_fault(void)	//..but, nah, just take some address and boom one up.. and there'll be only one per instance, so go for it (pre-prepare that slot... haahhh))
++{
++	unsigned int* u_bitfield=(unsigned int *)current->usm_x;
++	unsigned int usmid = *(unsigned int *)(current->usm_ctx+4096-sizeof(unsigned int));
++	struct userfaultfd_ctx *ctx = current->mm->vm_userfaultfd_ctu.ctx;
++	spin_lock(&ctx->uctx->faultsLock);	// shan't|udn't be needed..			// actually freakin' is.. but(!)! Hehehehee, boi.
++	WRITE_ONCE(*u_bitfield, *u_bitfield&(~((unsigned int)1 << usmid))); 	//list_add_tail(&(usm_cp->ilist),&ctx->usmmph);--
++	// __atomic_fetch_and(u_bitfield, (unsigned int)(~((unsigned int)1 << usmid)), __ATOMIC_RELAXED);
++	spin_unlock(&ctx->uctx->faultsLock);
++	// __atomic_fetch_and(u_bitfield, (unsigned int)(~((unsigned int)1 << usmid)), __ATOMIC_RELAXED);
++	// __atomic_fetch_xor(u_bitfield, (unsigned int)((unsigned int)1 << usmid), __ATOMIC_RELAXED);
++#ifdef DEBUG_USM		
++	printk(KERN_INFO "[INF/Stat/De.] %u, %u\n", *u_bitfield, usmid);
++#endif
++	// return 0;
++}
++
++/*
++	| usmfd (int) | status (int) | vaddr (unsigned long) | paddr (unsigned long) | flags (unsigned long) | state (int) | rem_size (unsigned long) | further_alloc | extra_allocs_plh....reserved for multiple allocations.. should be really long, so not bothering to get max. for now, but meh, yes, later.
++
++	Of course, many ints to be changed to bit ranges! As said in the paper! #TODO
++*/
++
++vm_fault_t handle_usm_fault(struct vm_fault *vmf)		// TODO : some cond_sched...
++{
++	struct mm_struct *mm = vmf->vma->vm_mm;
++	int *status = (int *)(current->usm_ctx+sizeof(int));		// .. cache misses shouldn't be as important... hence short dismissed for now...
++	int *state = (int *)(current->usm_ctx+sizeof(int)*2+sizeof(unsigned long)*3);
++	unsigned long *vaddr = (unsigned long *)(current->usm_ctx+sizeof(int)*2);
++	unsigned long *paddr = (unsigned long *)(current->usm_ctx+sizeof(int)*2+sizeof(unsigned long));
++	unsigned long *flags = (unsigned long *)(current->usm_ctx+sizeof(int)*2+sizeof(unsigned long)*2);
++	unsigned long *rem_size = (unsigned long *)(current->usm_ctx+sizeof(int)*3+sizeof(unsigned long)*3);
++	int *further_alloc = (int *)(current->usm_ctx+sizeof(int)*3+sizeof(unsigned long)*4);
++	unsigned long address = vmf->address;
++	int fr_a;
++
++	// unsigned int usmid = *(unsigned int *)(current->usm_ctx+4096-sizeof(unsigned int));			// just once.. instead of some more useless access to shared zone.. #locks'EludingAttempts
++#ifdef DEBUG_USM
++	unsigned long prt = 0;
++	unsigned int usmid = *(unsigned int *)(current->usm_ctx+4096-sizeof(unsigned int));
++	unsigned int* u_bitfield=(unsigned int *)current->usm_x;
++#endif
++	//unsigned long ts, tsl;
++	//unsigned long usmpage = page_to_pfn(virt_to_page(current->usm_ctx));
++	struct page *page/*, *usmCheckPage*/;
++	pte_t entry;
++	struct vm_area_struct *vma = vmf->vma;
++	vm_fault_t ret = 0;
++
++	/*
++	 * Coredumping runs without mmap_lock so we can only check that
++	 * the mmap_lock is held, if PF_DUMPCORE was not set.
++	 */
++	//mmap_assert_locked(mm);
++	
++	if (unlikely((/*atomic_read(&mm->mm_users)==0 ||*/ READ_ONCE(*state)==10/* && (mm->def_flags & VM_USM)*/))) { // current->mm->vm_userfaultfd_ctu.ctx==NULL + make be NULL at exit should work too... #One&
++		printk(KERN_INFO "Attempted murder! #BF\n");
++		ret=VM_FAULT_NOPAGE;
++		// vma->vm_flags &= ~VM_USM;	on main poll!
++		goto out;
++	}
++
++	/*if(unlikely(READ_ONCE(*state)==10)) {
++		printk(KERN_INFO "Thread dead!\n");
++		goto out;
++	}*/
++
++	//ret=0;
++
++	while(READ_ONCE(*status)!=0 /*|| unlikely(READ_ONCE(*(int *)current->usm_ctx)==0)*/) { //READ_ONCE(*(int *)current->usm_ctx)==0))
++#ifdef DEBUG_USM
++		if(prt++ == 100000000) {
++			printk(KERN_INFO "Spinning!\t%d\t%u\t%d\n", usmid, *u_bitfield, *status);
++			prt=0;
++		}
++#endif
++		cond_resched();//printk(KERN_INFO "Should never happen.. #USM (though.. if userspace does some weird thingies..)");
++	}
++
++	WRITE_ONCE(*vaddr,address);
++	//printk(KERN_INFO "Put %lu vaddr #USM'%d'%d", *vaddr, current->pid, current->tgid);
++	WRITE_ONCE(*rem_size, ((vmf->vma->vm_end-address)/PAGE_SIZE)-1);
++	if(vmf->flags & FAULT_FLAG_WRITE)
++		WRITE_ONCE(*flags, *flags | UFFD_PAGEFAULT_FLAG_WRITE);
++	//printk(KERN_INFO "Put status to %lu (1)", *(int*)(current->usm_ctx+sizeof(int)));
++	WRITE_ONCE(*status, 1);
++	/*while(1) {
++		//smp_mb();
++		if(READ_ONCE(*status)==2)
++			break;
++	}*/
++//cycle:
++	//ts=rdtsc();
++	queue_usm_fault();
++	while(READ_ONCE(*status)==1) { //{
++		//if (current->pid-current->tgid>NR_CPUS-3)
++#ifdef DEBUG_USM
++		if(prt++ == 100000000) {
++			printk(KERN_INFO "Spinning'!\t%d\t%u\n", usmid, *u_bitfield);
++			prt=0;
++		}
++#endif
++		/*if(unlikely(!(*(unsigned int *)current->usm_x&((unsigned int)((unsigned int)1 << usmid))))) {
++			WRITE_ONCE(*(unsigned int *)current->usm_x, *(unsigned int *)current->usm_x|(unsigned int)((unsigned int)1 << usmid)); 	//list_add_tail(&(usm_cp->ilist),&ctx->usmmph);--
++			// spin_unlock(&ctx->usmlock);
++#ifdef DEBUG_USM		
++				printk(KERN_INFO "[INF/Stat/Emerg.] %u, %u\n", *(unsigned int *)current->usm_x, usmid);
++#endif
++		}*/
++		cond_resched();//pause();
++		/*tsl=rdtsc();
++		if(tsl-ts==100) {
++			cond_resched();
++			goto cycle;
++		}*/
++	//}
++	}
++
++	//printk(KERN_INFO "ZonePFN'%lu |\tReceived PFN %lu\t '%d'%d", usmpage, *paddr, current->pid, current->tgid);
++	page=pfn_to_page(READ_ONCE(*paddr));
++	/*if (unlikely(!page)) {
++		WRITE_ONCE(*status, 4);
++		goto oom;
++	}*/
++
++	__SetPageUptodate(page);
++
++
++	entry = mk_pte(page, vma->vm_page_prot);
++	entry = pte_sw_mkyoung(entry);
++	if (vma->vm_flags & VM_WRITE)									// check FAULT_FLAG_WRITE...
++		entry = pte_mkwrite(pte_mkdirty(entry));
++
++	vmf->pte = pte_offset_map_lock(vma->vm_mm, vmf->pmd, address,
++			&vmf->ptl);
++	if (!pte_none(*vmf->pte)) {
++		update_mmu_cache(vma, address, vmf->pte);
++		WRITE_ONCE(*status, 7);
++		goto unlock;
++		//return 0;
++	}
++
++	ret = test_bit(MMF_OOM_VICTIM, &(vma->vm_mm)->flags);
++	if (unlikely(ret)) {
++		/*while((*further_alloc)) {
++			int pos = (*further_alloc)--;
++			*rem_size |= ((unsigned long)1 << pos);
++		}*/
++		WRITE_ONCE(*status, 5);
++		ret=VM_FAULT_OOM;
++		goto unlock;
++	}
++
++	/*if(*further_alloc) {
++		;//...
++	}
++	else
++		WRITE_ONCE(*status, 3);*/
++
++
++	//inc_mm_counter_fast(vma->vm_mm, MM_ANONPAGES);
++	//if (likely(current->mm == mm))
++	current->rss_stat.count[MM_ANONPAGES]++;
++	//else
++		//add_mm_counter(mm, MM_ANONPAGES, 1);
++
++	//__page_set_anon_rmap(page, vma, vmf->address, 1); //page_add_new_anon_rmap(page, vma, vmf->address, false);
++	//if (!PageAnon(page)){
++		WRITE_ONCE(page->mapping, (struct address_space *) ((void *) vma->anon_vma + PAGE_MAPPING_ANON));
++		WRITE_ONCE(page->index,vmf->pgoff);	//page->index = linear_page_index(vma, address);	linear_page_index(vma,address)
++	//}
++	//lru_cache_add_inactive_or_unevictable(page, vma);
++
++	set_pte_at(vma->vm_mm, address, vmf->pte, entry);
++
++	/* No need to invalidate - it was non-present before */
++	update_mmu_cache(vma, address, vmf->pte);
++//unlock:
++	pte_unmap_unlock(vmf->pte, vmf->ptl);
++	//*status=3;
++	// if (unlikely(ret)) goto oom..
++#ifdef DEBUG_USM
++	printk(KERN_INFO "Applied first %lu page\n", READ_ONCE(*paddr));
++#endif
++	fr_a=READ_ONCE(*further_alloc);
++	if(fr_a) {
++		//int cfs=sizeof(int)*4+sizeof(unsigned long)*4;
++		/*pgd_t *a_pgd;
++		p4d_t *a_p4d;
++		pud_t *a_pud;
++		pmd_t *a_pmd, *pm=vmf->pmd;
++		pte_t *a_pte;
++		int pos;*/
++		pte_t *a_pte;
++		int offt = sizeof(int)*4+sizeof(unsigned long)*4, offt_r = sizeof(int)*4+sizeof(unsigned long)*4;	// (unsigned long *)(current->usm_ctx+...);
++		//unsigned long *extra_allocs_plh=(unsigned long *)(current->usm_ctx+offt), extra_alloc_v=READ_ONCE(*extra_allocs_plh);
++		unsigned long extra_alloc_v=READ_ONCE(*(unsigned long *)(current->usm_ctx+offt));
++		//unsigned int *extra_nb_p=(unsigned int *)(current->usm_ctx+offt+sizeof(unsigned long)), extra_nb=READ_ONCE(*extra_nb_p);
++		unsigned int extra_nb=READ_ONCE(*(unsigned int *)(current->usm_ctx+offt+sizeof(unsigned long)));
++
++		//unsigned long eap_val;
++		WRITE_ONCE(*rem_size, 0);	// outta here normally.. but meh.. man...
++		while(fr_a--) {
++			//pos = fr_a--;
++			/*if(!current->usm_ctx) {
++				printk(KERN_INFO "Bruh.. aborting!\n");
++				break;
++			}*/
++			//printk("Refcount : %d!\n", atomic_read(&(usmCheckPage)->_refcount)); 
++			//printk("Mapcount : %d!\n", atomic_read(&(usmCheckPage)->_mapcount));
++			//smp_mb();
++			//eap_val = READ_ONCE(*extra_allocs_plh);		// freaking maybe print out the page's ref. all the time.... ye... shoot...
++			//cfs+=sizeof(unsigned long);
++			//if(cfs>=3000)
++				//printk(KERN_INFO "Next : %d!\n",cfs);
++			address+=PAGE_SIZE;
++			page=pfn_to_page(extra_alloc_v++);
++			if (unlikely(!page || !test_bit(PG_usm, &page->flags))) {
++				printk(KERN_INFO "Page %lu ain't valid! #USM\nReverse pos : %d\n\n", extra_alloc_v-1, fr_a);
++				*rem_size++; // |= ((unsigned long)1 << pos); //WRITE_ONCE(*status, 4);	// on the bit field
++				//extra_allocs_plh++;
++				//continue;
++				goto acct;
++			}
++			__SetPageUptodate(page);
++			entry = mk_pte(page, vma->vm_page_prot);
++			entry = pte_sw_mkyoung(entry);
++			if (vma->vm_flags & VM_WRITE)									// check FAULT_FLAG_WRITE... hmm.. look into this again, and freaking optimize this check.. do so just ONCE.
++				entry = pte_mkwrite(pte_mkdirty(entry));
++			
++			//a_pgd = pgd_offset(mm, address);
++			/*if(pg!=a_pgd) {
++				printk(KERN_INFO "One pgd diff. #USM!\n");
++				pg=a_pgd;
++			}*/
++			/*if (unlikely(pgd_none(*a_pgd) || pgd_bad(*a_pgd))) {
++				printk(KERN_INFO "PGD entry not present #USMPreAlloc\n");
++				*rem_size++;
++				extra_allocs_plh++;
++				continue;
++			}
++			a_p4d = p4d_offset(a_pgd, address);*/
++			/*if(p4!=a_p4d) {
++				printk(KERN_INFO "One p4d diff. #USM!\n");
++				pg=a_pgd;
++			}*/
++			/*if (unlikely(p4d_none(*a_p4d) || p4d_bad(*a_p4d))) {
++				printk(KERN_INFO "\tP4D entry not present, creating it.. #USMPreAlloc\n");
++				a_p4d = p4d_alloc(mm, a_pgd, address);
++				if (unlikely(!a_p4d)) {
++					printk(KERN_INFO "P4D entry creation failed, aborting. #USMPreAlloc\n");
++					*rem_size++;
++					extra_allocs_plh++;
++					continue;
++				}
++			}
++			
++			a_pud = pud_offset(a_p4d, address);*/
++			/*if(pu!=a_pud) {
++				printk(KERN_INFO "One p4d diff. #USM!\n");
++				pu=a_pud;
++			}*/
++			/*if (unlikely(pud_none(*a_pud) || pud_bad(*a_pud))) {
++				printk(KERN_INFO "\tPUD entry not present, creating it.. #USMPreAlloc\n");
++				a_pud = pud_alloc(mm, a_p4d, address);
++				if (unlikely(!a_pud)) {
++					printk(KERN_INFO "PUD entry creation failed, aborting. #USMPreAlloc\n");
++					*rem_size++;
++					extra_allocs_plh++;
++					continue;
++				}
++			}
++
++			a_pmd = pmd_offset(a_pud, address);
++			if(pm!=a_pmd) {
++				printk(KERN_INFO "One pmd diff. #USM!\n");
++				pm=a_pmd;
++			}
++			if (unlikely(pmd_none(*a_pmd) || pmd_bad(*a_pmd))) {
++				printk(KERN_INFO "\tPMD entry not present, creating it.. #USMPreAlloc\n");
++				a_pmd = pmd_alloc(mm, a_pud, address);
++				if (unlikely(!a_pmd || __pte_alloc(mm, a_pmd))) {
++					printk(KERN_INFO "PMD entry creation failed, aborting. #USMPreAlloc\n");
++					*rem_size++;
++					extra_allocs_plh++;
++					continue;
++				}
++			}*/
++			
++			/*if (unlikely(pte_present(*a_pte))) {	..int., dt
++				pte_unmap_unlock(a_pte, ptl);
++				return -EEXIST;
++			}*/
++
++			a_pte = pte_offset_map_lock(mm, vmf->pmd, address,
++					&vmf->ptl);
++			if (unlikely(!pte_none(*a_pte))) {
++				update_mmu_cache(vma, address, a_pte);
++				//printk(KERN_INFO "Page %lu unconsumed (already mapped %lu)!\n", eap_val, address);
++				//return 0;		// hey, one's already allocated!.. hmm.. what to do... just keep going, or simply tag said page as not taken.... DILEMMA! For now, just tagging page as untaken.
++				pte_unmap_unlock(a_pte, vmf->ptl);
++				*rem_size++; //|= ((unsigned long)1 << pos);
++				WRITE_ONCE(*(unsigned long *)(current->usm_ctx+offt_r), extra_alloc_v-1);
++				offt_r+=(sizeof(unsigned long)+sizeof(unsigned int));		// TODO optimize, if contig..
++				goto acct;
++				//extra_allocs_plh++;
++				//continue;
++			}
++
++			/*ret = test_bit(MMF_OOM_VICTIM, &(vma->vm_mm)->flags);
++			if (ret) {
++				WRITE_ONCE(*status, 5);
++				goto unlock;
++			}*/		// but man.. could it have gotten oom killed out here..?				BTW, when USM "kills" something.. we won't be needing to use freed pages' path... yeah, let's add something to tell killed process not to unmap/free/mark USM's pages!
++
++
++			//inc_mm_counter_fast(vma->vm_mm, MM_ANONPAGES);
++			//if (likely(current->mm == mm))
++			current->rss_stat.count[MM_ANONPAGES]++;
++			//else
++				//add_mm_counter(mm, MM_ANONPAGES, 1);
++
++			//__page_set_anon_rmap(page, vma, vmf->address, 1); //page_add_new_anon_rmap(page, vma, vmf->address, false);
++			//if (!PageAnon(page)){
++				WRITE_ONCE(page->mapping, (struct address_space *) ((void *) vma->anon_vma + PAGE_MAPPING_ANON));
++				WRITE_ONCE(page->index,linear_page_index(vma,address));	//page->index = linear_page_index(vma, address);
++			//}
++			//lru_cache_add_inactive_or_unevictable(page, vma);
++
++			set_pte_at(mm, address, a_pte, entry);
++
++			/* No need to invalidate - it was non-present before */
++			update_mmu_cache(vma, address, a_pte);
++			pte_unmap_unlock(a_pte, vmf->ptl);
++acct:
++			if(!extra_nb--) {
++				WRITE_ONCE(*(unsigned int *)(current->usm_ctx+offt+sizeof(unsigned long)), 0);
++				if(!fr_a)
++					break;
++				offt+=(sizeof(unsigned long)+sizeof(int));
++				//extra_allocs_plh=(unsigned long *)(current->usm_ctx+offt);
++				extra_alloc_v=READ_ONCE(*(unsigned long *)(current->usm_ctx+offt));
++				//extra_nb_p=(unsigned int *)(current->usm_ctx+offt+sizeof(unsigned long));
++				extra_nb=READ_ONCE(*(unsigned int *)(current->usm_ctx+offt+sizeof(unsigned long)));
++			}
++			//printk(KERN_INFO "Page %lu consumed!\n", eap_val);
++		}
++#ifdef DEBUG_USM
++		printk(KERN_INFO "Applied last %lu page\n", extra_alloc_v-1);
++#endif
++		WRITE_ONCE(*further_alloc, 0);
++	}
++
++	WRITE_ONCE(*status, 3);
++	dequeue_usm_fault();
++	/*
++	 * ctx may go away after this if the userfault pseudo fd is
++	 * already released.
++	 */
++	//userfaultfd_ctx_put(ctx);		// so.. finally... FREAKING NO in release..
++
++out:
++	return ret;
++unlock:
++	pte_unmap_unlock(vmf->pte, vmf->ptl);
++	//WRITE_ONCE(*further_alloc, 0);
++	return ret;
++/*oom:
++	return VM_FAULT_OOM;*/
++}
++
++vm_fault_t handle_usm_fault_ut(struct vm_fault *vmf)		// TODO : some cond_sched...
++{
++	//struct mm_struct *mm = vmf->vma->vm_mm;
++	int *status = (int *)(current->usm_ctx+sizeof(int));
++	int *state = (int *)(current->usm_ctx+sizeof(int)*2+sizeof(unsigned long)*3);
++	unsigned long *vaddr = (unsigned long *)(current->usm_ctx+sizeof(int)*2);
++	unsigned long *paddr = (unsigned long *)(current->usm_ctx+sizeof(int)*2+sizeof(unsigned long));
++	unsigned long *flags = (unsigned long *)(current->usm_ctx+sizeof(int)*2+sizeof(unsigned long)*2);
++	unsigned long *rem_size = (unsigned long *)(current->usm_ctx+sizeof(int)*3+sizeof(unsigned long)*3);
++	unsigned int *ut_bitfield = (unsigned int *)(current->usm_ctx+4096-sizeof(unsigned int)*2);
++	unsigned int uuid = *(unsigned int *)(current->usm_ctx+4096-sizeof(unsigned int)*3);
++	vm_fault_t ret = 0;
++
++	if (unlikely(uuid == 100 /* MAX_IUTHREADS.. */)) {	// bit inefficient but meh, temp.
++#ifdef DEBUG_USM
++		printk(KERN_INFO "[Fault] Ye boi.. oof\t%u\t%d", uuid, *(int *)current->usm_ctx);
++#endif
++		return handle_usm_fault(vmf);
++	}
++
++	
++	if (unlikely(/*atomic_read(&mm->mm_users)==0 ||*/READ_ONCE(*state)==10)) { // current->mm->vm_userfaultfd_ctu.ctx==NULL + make be NULL at exit should work too... #One&
++		printk(KERN_INFO "Attempted murder! #BF_UT\n");
++		ret = VM_FAULT_NOPAGE;
++		//vma->vm_flags &= ~VM_USM;
++		goto out;
++	}
++
++
++	while(READ_ONCE(*status)!=0)
++		cond_resched();
++
++	WRITE_ONCE(*vaddr, vmf->address);
++	WRITE_ONCE(*paddr, vmf->orig_pte.pte);
++	if(vmf->flags & FAULT_FLAG_WRITE)
++		WRITE_ONCE(*flags, *flags | UFFD_PAGEFAULT_FLAG_WRITE);
++	WRITE_ONCE(*rem_size, ((vmf->vma->vm_end-vmf->address)/PAGE_SIZE)-1);
++
++	WRITE_ONCE(*status, 1);
++	queue_usm_fault();
++	WRITE_ONCE(*ut_bitfield, *ut_bitfield|(unsigned int)((unsigned int)1 << uuid));
++#ifdef DEBUG_USM
++		printk(KERN_INFO "[Fault_ut] %u! %u'ID!\n", *ut_bitfield, uuid);
++#endif
++#ifdef CONFIG_X86_USER_INTERRUPTS
++	if (!is_uintr_receiver(current))
++		send_sig(SIGUSR1, current, 0);
++	else {
++		struct uintr_upid *upid = current->thread.upid_ctx->upid;
++		WRITE_ONCE(upid->nc.status, upid->nc.status|(1 << 0));
++		WRITE_ONCE(upid->puir, upid->puir|(1 << 0));
++		apic->send_IPI_self(UINTR_NOTIFICATION_VECTOR);
++	}
++#else
++	send_sig(SIGUSR1, current, 0);
++#endif
++	while(READ_ONCE(*status)==1)
++		cond_resched();
++
++#ifdef DEBUG_USM
++		printk(KERN_INFO "[Fault_ut] One out in the wild!\t%u!\n", *ut_bitfield);
++#endif
++
++	/* Find a way to save dis vm_fault... for subsequent ioctl boost.. */
++
++out:
++	return ret;
++}
++
++vm_fault_t handle_usm_swap(struct vm_fault *vmf)		// TODO : some cond_sched...
++{
++	//struct mm_struct *mm = vmf->vma->vm_mm;
++	int *status = (int *)(current->usm_ctx+sizeof(int));
++	int *state = (int *)(current->usm_ctx+sizeof(int)*2+sizeof(unsigned long)*3);
++	unsigned long *vaddr = (unsigned long *)(current->usm_ctx+sizeof(int)*2);
++	unsigned long *paddr = (unsigned long *)(current->usm_ctx+sizeof(int)*2+sizeof(unsigned long));
++	unsigned long *flags = (unsigned long *)(current->usm_ctx+sizeof(int)*2+sizeof(unsigned long)*2);
++	unsigned long address = vmf->address;
++	//unsigned long ts, tsl;
++	struct page *page;
++	pte_t entry;
++	struct vm_area_struct *vma = vmf->vma;
++	vm_fault_t ret = 0;
++
++	
++	if (unlikely(/*atomic_read(&mm->mm_users)==0 ||*/READ_ONCE(*state)==10)) { // current->mm->vm_userfaultfd_ctu.ctx==NULL + make be NULL at exit should work too... #One&
++		printk(KERN_INFO "Attempted murder! #SW\n");
++		ret = VM_FAULT_NOPAGE;
++		//vma->vm_flags &= ~VM_USM;
++		goto out;
++	}
++
++	/*if(unlikely(READ_ONCE(*state)==10))
++		goto out;*/
++
++	ret=0;
++	while(READ_ONCE(*status)!=0)
++		cond_resched(); //printk(KERN_INFO "Should never happen.. #USM (though.. if userspace does some weird thingies..)");
++
++	WRITE_ONCE(*vaddr, vmf->address);
++	WRITE_ONCE(*paddr, vmf->orig_pte.pte);
++	WRITE_ONCE(*flags, *flags | UFFD_PAGEFAULT_FLAG_SWAP);
++	if(vmf->flags & FAULT_FLAG_WRITE)
++		WRITE_ONCE(*flags, *flags | UFFD_PAGEFAULT_FLAG_WRITE);
++//uagain:
++	WRITE_ONCE(*status, 1);
++	//printk(KERN_INFO "Put status to %lu (1)", *(int*)(current->usm_ctx+sizeof(int)));
++	//printk(KERN_INFO "Put %lu vaddr #USM", *vaddr);
++	/*while(READ_ONCE(*status)==1)		// !=2..
++		if (current->pid-current->tgid>NR_CPUS-3)
++			cond_resched();*/
++//cycle:
++	//ts=rdtsc();
++	queue_usm_fault();
++	while(READ_ONCE(*status)==1) //{
++		//if (current->pid-current->tgid>10-3)		// NR_CPUS but hyperthreading..
++			cond_resched();//pause();
++			//__asm volatile ("pause" ::: "memory");
++		/*tsl=rdtsc();
++		if(tsl-ts==100) {
++			cond_resched();
++			goto cycle;
++		}*/
++	//}
++	//printk(KERN_INFO "Received PFN %lu", *paddr);
++	page=pfn_to_page(READ_ONCE(*paddr));
++	/*if (!page) {
++		WRITE_ONCE(*status, 4);						// make it wait again.. goto...
++		//goto uagain;
++		goto oom;			// not gud..
++	}*/
++
++	__SetPageUptodate(page);		// later, to add some more synch.. TODO
++
++
++	entry = mk_pte(page, vma->vm_page_prot);
++	entry = pte_sw_mkyoung(entry);
++	entry = pte_mkwrite(pte_mkdirty(entry));
++
++	vmf->pte = pte_offset_map_lock(vma->vm_mm, vmf->pmd, address,
++			&vmf->ptl);
++
++	/*ret = test_bit(MMF_OOM_VICTIM, &(vma->vm_mm)->flags);
++	if (unlikely(ret)) {*/
++		/*while((*further_alloc)) {
++			int pos = (*further_alloc)--;
++			*rem_size |= ((unsigned long)1 << pos);
++		}*/
++		/*WRITE_ONCE(*status, 5);
++		ret=VM_FAULT_OOM;
++		goto unlock;
++	}*/
++
++	WRITE_ONCE(*status, 3);
++	dequeue_usm_fault();
++
++
++	//inc_mm_counter_fast(vma->vm_mm, MM_ANONPAGES);
++	//if (likely(current->mm == mm))
++	current->rss_stat.count[MM_ANONPAGES]++;				// bro.. down it up then, when swapping out..? Hmm..
++	//else
++		//add_mm_counter(mm, MM_ANONPAGES, 1);
++
++	//__page_set_anon_rmap(page, vma, vmf->address, 1); //page_add_new_anon_rmap(page, vma, vmf->address, false);
++	//if (!PageAnon(page)){
++		WRITE_ONCE(page->mapping, (struct address_space *) ((void *) vma->anon_vma + PAGE_MAPPING_ANON));
++		page->index = linear_page_index(vma, address);
++	//}
++	//lru_cache_add_inactive_or_unevictable(page, vma);
++
++	set_pte_at(vma->vm_mm, vmf->address, vmf->pte, entry);
++
++	/* No need to invalidate - it was non-present before */
++	update_mmu_cache(vma, vmf->address, vmf->pte);
++//unlock:
++	pte_unmap_unlock(vmf->pte, vmf->ptl);
++	//*status=3;
++	/*
++	 * ctx may go away after this if the userfault pseudo fd is
++	 * already released.
++	 */
++	//userfaultfd_ctx_put(ctx);		// so.. finally... FREAKING NO in release..
++
++out:
++	return ret;
++/*oom:
++	return VM_FAULT_OOM;*/
++}
++
++vm_fault_t handle_usm_swap_ut(struct vm_fault *vmf)		// TODO : some cond_sched...
++{
++	//struct mm_struct *mm = vmf->vma->vm_mm;
++	int *status = (int *)(current->usm_ctx+sizeof(int));
++	int *state = (int *)(current->usm_ctx+sizeof(int)*2+sizeof(unsigned long)*3);
++	unsigned long *vaddr = (unsigned long *)(current->usm_ctx+sizeof(int)*2);
++	unsigned long *paddr = (unsigned long *)(current->usm_ctx+sizeof(int)*2+sizeof(unsigned long));
++	unsigned long *flags = (unsigned long *)(current->usm_ctx+sizeof(int)*2+sizeof(unsigned long)*2);
++	unsigned int *ut_bitfield = (unsigned int *)(current->usm_ctx+4096-sizeof(unsigned int)*2);
++	unsigned int uuid = *(unsigned int *)(current->usm_ctx+4096-sizeof(unsigned int)*3);
++	vm_fault_t ret = 0;
++
++	if (unlikely(uuid == 100 /* MAX_IUTHREADS.. */)) {		// should never happen but meh.. sum situation... l o l .		| yup, should now happen consistently.. as per the init.'s patterns' directions.. o_o' 
++#ifdef DEBUG_USM
++		printk(KERN_INFO "[Swap/lol] Ye boi.. oof\t%u\t%d", uuid, *(int *)current->usm_ctx);
++#endif
++		return handle_usm_swap(vmf);
++	}
++
++
++	if (unlikely(/*atomic_read(&mm->mm_users)==0 ||*/READ_ONCE(*state)==10)) { // current->mm->vm_userfaultfd_ctu.ctx==NULL + make be NULL at exit should work too... #One&
++		printk(KERN_INFO "Attempted murder! #SW_UT\n");
++		ret = VM_FAULT_NOPAGE;
++		//vma->vm_flags &= ~VM_USM;
++		goto out;
++	}
++
++
++	while(READ_ONCE(*status)!=0)
++		cond_resched();
++
++	WRITE_ONCE(*vaddr, vmf->address);
++	WRITE_ONCE(*paddr, vmf->orig_pte.pte);
++	WRITE_ONCE(*flags, *flags | UFFD_PAGEFAULT_FLAG_SWAP);
++	if(vmf->flags & FAULT_FLAG_WRITE)
++		WRITE_ONCE(*flags, *flags | UFFD_PAGEFAULT_FLAG_WRITE);
++
++	WRITE_ONCE(*status, 1);
++	queue_usm_fault();
++	WRITE_ONCE(*ut_bitfield, *ut_bitfield|(unsigned int)((unsigned int)1 << uuid));
++#ifdef CONFIG_X86_USER_INTERRUPTS
++	if (!is_uintr_receiver(current))
++		send_sig(SIGUSR1, current, 0);
++	else {
++		struct uintr_upid *upid = current->thread.upid_ctx->upid;
++		WRITE_ONCE(upid->nc.status, upid->nc.status|(1 << 0));
++		WRITE_ONCE(upid->puir, upid->puir|(1 << 0));
++		apic->send_IPI_self(UINTR_NOTIFICATION_VECTOR);
++	}
++#else
++	send_sig(SIGUSR1, current, 0);
++#endif
++	while(READ_ONCE(*status)==1)
++		cond_resched();
++	
++	/* Find a way to save dis vm_fault... for subsequent ioctl boost.. */
++
++out:
++	return ret;
++}
++
++vm_fault_t handle_usm_shared(struct vm_fault *vmf)
++{
++	
++	/* serialize against truncate with the page table lock */
++	/*inode = dst_vma->vm_file->f_inode;
++	offset = linear_page_index(dst_vma, dst_addr);
++	max_off = DIV_ROUND_UP(i_size_read(inode), PAGE_SIZE);
++	ret = -EFAULT;
++	if (unlikely(offset >= max_off))
++		goto out_unlock;
++	*/
++
++	struct mm_struct *mm = vmf->vma->vm_mm;
++	struct vm_area_struct *vma = vmf->vma;
++	int *status = (int *)(current->usm_ctx+sizeof(int));	// uint_fast8_t
++	int *state = (int *)(current->usm_ctx+sizeof(int)*2+sizeof(unsigned long)*3);	// uint_fast8_t
++	unsigned long *vaddr = (unsigned long *)(current->usm_ctx+sizeof(int)*2);
++	unsigned long *paddr = (unsigned long *)(current->usm_ctx+sizeof(int)*2+sizeof(unsigned long));
++	unsigned long *flags = (unsigned long *)(current->usm_ctx+sizeof(int)*2+sizeof(unsigned long)*2);
++	unsigned long *rem_size = (unsigned long *)(current->usm_ctx+sizeof(int)*3+sizeof(unsigned long)*3);
++	int *further_alloc = (int *)(current->usm_ctx+sizeof(int)*3+sizeof(unsigned long)*4);
++	// unsigned long *extra_allocs_plh = (unsigned long *)(current->usm_ctx+sizeof(int)*4+sizeof(unsigned long)*4);
++	unsigned long address = vmf->address;
++	int fr_a;
++
++	// unsigned int usmid = *(unsigned int *)(current->usm_ctx+4096-sizeof(unsigned int));			// just once.. instead of some more useless access to shared zone.. #locks'EludingAttempts
++
++	//unsigned long ts, tsl;
++	struct page *page;
++	pte_t entry;
++	int error;
++#ifdef DEBUG_USM
++	unsigned int prt = 0;
++#endif
++	vm_fault_t ret = 0;
++
++	/*if (unlikely(current->flags & (PF_EXITING|PF_DUMPCORE)))		// although we could... do we need to? TODO
++		goto out;
++
++	mmap_assert_locked(mm);*/
++	
++	if (unlikely(/*atomic_read(&mm->mm_users)==0 ||*/ READ_ONCE(*state)==10)) { // current->mm->vm_userfaultfd_ctu.ctx==NULL + make be NULL at exit should work too... #One&
++		printk(KERN_INFO "Attempted murder! #SD\n");
++		ret = VM_FAULT_NOPAGE; //
++		// set task running..
++		//vma->vm_flags &= ~VM_USM;
++		goto out;
++	}
++
++	/*if(unlikely(READ_ONCE(*state)==10))
++		goto out;*/
++
++	//ret=0;
++
++	/*while(!current->usm_ctx){
++		cond_resched();
++	}*/
++
++	while(READ_ONCE(*status)!=0) {		// || unlikely(READ_ONCE(*(int *)current->usm_ctx)==0)
++#ifdef DEBUG_USM
++		if(prt++ == 100000000) {
++			printk(KERN_INFO "SpinningS!\n");
++			prt=0;
++		}
++#endif
++		cond_resched();//printk(KERN_INFO "Should never happen.. #USM (though.. if userspace does some weird thingies..)");
++	}
++	
++	WRITE_ONCE(*vaddr,vmf->address);
++	WRITE_ONCE(*rem_size, (vmf->vma->vm_end-address)/PAGE_SIZE-1);
++	if(vmf->flags & FAULT_FLAG_WRITE)
++		WRITE_ONCE(*flags, *flags | UFFD_PAGEFAULT_FLAG_WRITE);
++	WRITE_ONCE(*flags, *flags | UFFD_PAGEFAULT_FLAG_SHARED);
++	WRITE_ONCE(*status,1);
++	//printk(KERN_INFO "Put status to %lu (Shared)", *(int*)(current->usm_ctx+sizeof(int)));
++	//printk(KERN_INFO "Put %lu vaddr #USMShared", *vaddr);
++	/*while(READ_ONCE(*status)==1)
++		if (current->pid-current->tgid>NR_CPUS-3)
++			cond_resched();*/
++//cycle:
++	//ts=rdtsc();
++	queue_usm_fault();
++	while(READ_ONCE(*status)==1) {
++		//if (current->pid-current->tgid>10-3)	// NR_CPUS but hyperthreading..
++#ifdef DEBUG_USM
++		if(prt++ == 100000000) {
++			printk(KERN_INFO "Spinning'S!\n");
++			prt=0;
++		}
++#endif
++		/*if(unlikely(!(*(unsigned int *)current->usm_x&((unsigned int)((unsigned int)1 << usmid))))) {
++			WRITE_ONCE(*(unsigned int *)current->usm_x, *(unsigned int *)current->usm_x|(unsigned int)((unsigned int)1 << usmid)); 	//list_add_tail(&(usm_cp->ilist),&ctx->usmmph);--
++			// spin_unlock(&ctx->usmlock);
++#ifdef DEBUG_USM		
++				printk(KERN_INFO "[INF/Stat/Emerg.] %u, %u\n", *(unsigned int *)current->usm_x, usmid);
++#endif
++		}*/
++		cond_resched();//pause();
++		/*tsl=rdtsc();
++		if(tsl-ts==100) {
++			cond_resched();
++			goto cycle;
++		}*/
++	}
++	//printk(KERN_INFO "Received PFN %lu #Shared", *paddr);
++	page=pfn_to_page(READ_ONCE(*paddr));
++	/*if (!page) {
++		WRITE_ONCE(*status, 4);
++		goto oom;
++	}*/
++	vmf->page=page;
++	if((error = shmem_usm(mm, vma, address, page)))
++		goto error;
++
++	entry = mk_pte(page, vma->vm_page_prot);
++	entry = pte_sw_mkyoung(entry);
++	/*if (vma->vm_flags & VM_WRITE)									// check FAULT_FLAG_WRITE...
++		*/entry = pte_mkwrite(pte_mkdirty(entry));
++
++	vmf->pte = pte_offset_map_lock(vma->vm_mm, vmf->pmd, address,
++			&vmf->ptl);
++	/*if (!pte_none(*vmf->pte)) {		// bruh.. yes but.. this is.. shared path... Freak's sake!
++		WRITE_ONCE(*status, 7);
++		update_mmu_cache(vma, address, vmf->pte);
++		goto unlock;
++		//return 0;
++	}*/
++
++	/*ret = test_bit(MMF_OOM_VICTIM, &(vma->vm_mm)->flags);
++	if (ret) {
++		WRITE_ONCE(*status, 5);
++		goto unlock;
++	}*/
++	//WRITE_ONCE(*status, 3);
++
++	set_pte_at(vma->vm_mm, vmf->address, vmf->pte, entry);
++
++	/* No need to invalidate - it was non-present before */
++	update_mmu_cache(vma, vmf->address, vmf->pte);
++//unlock:
++	pte_unmap_unlock(vmf->pte, vmf->ptl);
++	//*status=3;
++	fr_a=READ_ONCE(*further_alloc);
++	if(fr_a) {
++		pte_t *a_pte;
++		int offt = sizeof(int)*4+sizeof(unsigned long)*4, offt_r = sizeof(int)*4+sizeof(unsigned long)*4;
++		unsigned long extra_alloc_v=READ_ONCE(*(unsigned long *)(current->usm_ctx+offt));
++		unsigned int extra_nb=READ_ONCE(*(unsigned int *)(current->usm_ctx+offt+sizeof(unsigned long)));
++		WRITE_ONCE(*rem_size, 0);
++		while(fr_a--) {
++			//int pos = (*further_alloc)--;
++			//unsigned long eap_val = READ_ONCE(*extra_allocs_plh); 
++			address+=PAGE_SIZE;
++			page=pfn_to_page(extra_alloc_v++);
++			
++			//vmf->page=page;
++			if((error = shmem_usm(mm, vma, address, page))){
++				*rem_size++; //|= ((unsigned long)1 << pos);
++				WRITE_ONCE(*(unsigned long *)(current->usm_ctx+offt_r), extra_alloc_v-1);
++				offt_r+=(sizeof(unsigned long)+sizeof(unsigned int));		// TODO optimize, if contig..
++				goto acct; //continue;
++			}
++				
++
++			entry = mk_pte(page, vma->vm_page_prot);
++			entry = pte_sw_mkyoung(entry);
++			if (vma->vm_flags & VM_WRITE)									// check FAULT_FLAG_WRITE... hmm.. look into this again, and freaking optimize this check.. do so just ONCE.
++				entry = pte_mkwrite(pte_mkdirty(entry));
++
++			a_pte = pte_offset_map_lock(vma->vm_mm, vmf->pmd, address,
++					&vmf->ptl);
++			/*if (!pte_none(*vmf->pte)) {
++				update_mmu_cache(vma, address, vmf->pte);
++				//printk(KERN_INFO "Page %lu unconsumed (already mapped %lu)!\n", eap_val, address);
++				//return 0;		// hey, one's already allocated!.. hmm.. what to do... just keep going, or simply tag said page as not taken.... DILEMMA! For now, just tagging page as untaken.
++				*rem_size |= ((unsigned long)1 << pos);
++				pte_unmap_unlock(vmf->pte, vmf->ptl);
++				continue;
++			}*/
++
++			/*ret = test_bit(MMF_OOM_VICTIM, &(vma->vm_mm)->flags);
++			if (ret) {
++				WRITE_ONCE(*status, 5);
++				goto unlock;
++			}*/		// but man.. could it have gotten oom killed out here..?				BTW, when USM "kills" something.. we won't be needing to use freed pages' path... yeah, let's add something to tell killed process not to unmap/free/mark USM's pages!
++
++
++
++			set_pte_at(mm, address, a_pte, entry);
++
++			/* No need to invalidate - it was non-present before */
++			update_mmu_cache(vma, address, a_pte);
++			pte_unmap_unlock(a_pte, vmf->ptl);
++			//WRITE_ONCE(*extra_allocs_plh, 0);
++			//extra_allocs_plh++;
++			//printk(KERN_INFO "Page %lu consumed!\n", eap_val);
++acct:
++			if(!extra_nb--) {
++				WRITE_ONCE(*(unsigned int *)(current->usm_ctx+offt+sizeof(unsigned long)), 0);
++				offt+=sizeof(unsigned long)+sizeof(int);
++				//extra_allocs_plh=(unsigned long *)(current->usm_ctx+offt);
++				extra_alloc_v=READ_ONCE(*(unsigned long *)(current->usm_ctx+offt));
++				//extra_nb_p=(unsigned int *)(current->usm_ctx+offt+sizeof(unsigned long));
++				extra_nb=READ_ONCE(*(unsigned int *)(current->usm_ctx+offt+sizeof(unsigned long)));
++			}
++		}
++	}
++
++	WRITE_ONCE(*status, 3);
++	dequeue_usm_fault();
++	/*
++	 * ctx may go away after this if the userfault pseudo fd is
++	 * already released.
++	 */
++	//userfaultfd_ctx_put(ctx);		// so.. finally... FREAKING NO in release..
++
++out:
++	return ret;
++/*oom:
++	return VM_FAULT_OOM;*/
++error:
++	/*while((*further_alloc)) {
++		int pos = (*further_alloc)--;
++		*rem_size |= ((unsigned long)1 << pos);
++	}*/
++	WRITE_ONCE(*status, 6);
++	return error;
++}
++
++vm_fault_t handle_usm_shared_ut(struct vm_fault *vmf)		// TODO : some cond_sched...
++{
++	//struct mm_struct *mm = vmf->vma->vm_mm;
++	int *status = (int *)(current->usm_ctx+sizeof(int));
++	int *state = (int *)(current->usm_ctx+sizeof(int)*2+sizeof(unsigned long)*3);
++	unsigned long *vaddr = (unsigned long *)(current->usm_ctx+sizeof(int)*2);
++	unsigned long *paddr = (unsigned long *)(current->usm_ctx+sizeof(int)*2+sizeof(unsigned long));
++	unsigned long *flags = (unsigned long *)(current->usm_ctx+sizeof(int)*2+sizeof(unsigned long)*2);
++	unsigned long *rem_size = (unsigned long *)(current->usm_ctx+sizeof(int)*3+sizeof(unsigned long)*3);
++	unsigned int *ut_bitfield = (unsigned int *)(current->usm_ctx+4096-sizeof(unsigned int)*2);
++	unsigned int uuid = *(unsigned int *)(current->usm_ctx+4096-sizeof(unsigned int)*3);
++	vm_fault_t ret = 0;
++
++	if (unlikely(uuid == 100 /* MAX_IUTHREADS.. */)) {
++#ifdef DEBUG_USM
++		printk(KERN_INFO "[Shared] Ye boi.. oof\t%u\t%d", uuid, *(int *)current->usm_ctx);
++#endif
++		return handle_usm_shared(vmf);
++	}
++	
++	if (unlikely(/*atomic_read(&mm->mm_users)==0 ||*/READ_ONCE(*state)==10)) { // current->mm->vm_userfaultfd_ctu.ctx==NULL + make be NULL at exit should work too... #One&
++		printk(KERN_INFO "Attempted murder! #BF_UT\n");
++		ret = VM_FAULT_NOPAGE;
++		//vma->vm_flags &= ~VM_USM;
++		goto out;
++	}
++
++
++	while(READ_ONCE(*status)!=0)
++		cond_resched();
++
++	WRITE_ONCE(*vaddr, vmf->address);
++	WRITE_ONCE(*paddr, vmf->orig_pte.pte);
++	if(vmf->flags & FAULT_FLAG_WRITE)
++		WRITE_ONCE(*flags, *flags | UFFD_PAGEFAULT_FLAG_WRITE);
++	WRITE_ONCE(*flags, *flags | UFFD_PAGEFAULT_FLAG_SHARED);
++	WRITE_ONCE(*rem_size, ((vmf->vma->vm_end-vmf->address)/PAGE_SIZE)-1);
++
++	WRITE_ONCE(*status, 1);
++	queue_usm_fault();
++	WRITE_ONCE(*ut_bitfield, *ut_bitfield|(unsigned int)((unsigned int)1 << uuid));
++#ifdef DEBUG_USM
++		printk(KERN_INFO "[Shared_ut] %u! %u'ID!\n", *ut_bitfield, uuid);
++#endif
++#ifdef CONFIG_X86_USER_INTERRUPTS
++	if (!is_uintr_receiver(current))
++		send_sig(SIGUSR1, current, 0);
++	else {
++		struct uintr_upid *upid = current->thread.upid_ctx->upid;
++		WRITE_ONCE(upid->nc.status, upid->nc.status|(1 << 0));
++		WRITE_ONCE(upid->puir, upid->puir|(1 << 0));
++		apic->send_IPI_self(UINTR_NOTIFICATION_VECTOR);
++	}
++#else
++	send_sig(SIGUSR1, current, 0);
++#endif
++	while(READ_ONCE(*status)==1)
++		cond_resched();
++
++#ifdef DEBUG_USM
++		printk(KERN_INFO "[Shared_ut] One out in the wild!\t%u!\n", *ut_bitfield);		// this'll never change from here -_-'
++#endif
++	
++	/* Find a way to save dis vm_fault... for subsequent ioctl boost.. */
+ 
+ out:
+ 	return ret;
+@@ -690,10 +1787,64 @@ int dup_userfaultfd(struct vm_area_struct *vma, struct list_head *fcs)
+ 		list_add_tail(&fctx->list, fcs);
+ 	}
+ 
++	if(octx->mm->def_flags & VM_USM /*VM_UFFD_MISSING*/) {
++		if(unlikely((ctx->mm->def_flags & VM_USM /*VM_UFFD_MISSING*/) == 0)) {
++			ctx->mm->def_flags|= VM_USM | VM_UFFD_MISSING | VM_UFFD_SWAPPING;
++		}
++		ctx->mm->vm_userfaultfd_ctu.ctx=ctx;
++		ctx->uctx=octx->uctx;
++		//if (dup_usm(current))
++			//return -ENOMEM;
++		// mmgrab(ctx->mm);
++	}
++
+ 	vma->vm_userfaultfd_ctx.ctx = ctx;
+ 	return 0;
+ }
+ 
++int dup_usm(struct task_struct *tsk)
++{
++	struct page *usmpage;
++	if(tsk->mm)
++		if (tsk->mm->def_flags & VM_USM) {		// tsk->mm->vm_userfaultfd_ctu!=NULL
++			int manChannel;
++			struct userfaultfd_ctx *ctx = tsk->mm->vm_userfaultfd_ctu.ctx;
++			// spinlock_t *ux_lock;		TODO : use
++			//printk(KERN_INFO "dup_usm...\n");
++			usmpage=alloc_page(GFP_KERNEL);
++			get_page(usmpage);
++			if(unlikely(!usmpage)) {			// no need if nofail..
++				printk(KERN_INFO ".. no mem...");
++				return -ENOMEM;
++			}
++			WRITE_ONCE(tsk->usm_ctx, page_address(usmpage)); // tsk->usm_ctx = page_address(usmpage);	//kmem_cache_alloc(usm_mmap_cachep, GFP_KERNEL);
++			if(tsk->mm->def_flags & VM_USM_UT)			// hence moving* it to other treaters in USM just became a bit more complicated 	TODO
++				WRITE_ONCE(*((unsigned int *)(tsk->usm_ctx+4096-sizeof(unsigned int)*3)), 100);
++			// WRITE_ONCE(tsk->real_parent->usm_ctx, page_address(usmpage));	// testing..	// dummy..
++			/*if (unlikely(!tsk->usm_ctx)) {
++				printk(KERN_INFO ".. no mem '...");
++				return -ENOMEM;
++			}*/
++			spin_lock(&ctx->uctx->usmAccountingLock);		// here.. usmid.. spin_lock's address and content from usm_x..
++			manChannel=atomic_read(&ctx->uctx->usm_default_channel);	// lock shouldn't be needed..
++			spin_unlock(&ctx->uctx->usmAccountingLock);
++			// WRITE_ONCE(*((unsigned int *)(usmmem+4096-sizeof(unsigned int))), usmid);
++			// printk(KERN_INFO "[queue_usmmph] One USM counter at %u by %u!\n", usmid, manChannel);
++			/* Just get a copy of workers' number here and act accordingly.. and check on another bit field their "occupation" by managed tasks!*/
++			/* Though, main limitation be them 64 bits of long long.. we could use whole page but copying it up to calculate would be heavy... anyway, fixable! */
++			WRITE_ONCE(tsk->usm_x, ctx->uctx->uthread[manChannel /*usmid/64*/]);						// of i/default_worker.. then dynamically modifiable through ioctl or other...	| man, better be ready to correctly take care of these id.s... fire up another worker if read in UPace value not compliant?.. temporary, and freaking make macros.
++			WRITE_ONCE(*(int *)(((uintptr_t)tsk->usm_ctx)+4000), manChannel);
++			/*  ux_lock, spinlock, bitmap, take, switch, unlock, basta.. but the failure can't happen here but in mmap.. u h h h h ..*/
++#ifdef DEBUG_USM
++			printk(KERN_INFO "[queue_usmmph(TODO)] One USM task at %u channel..!\n", manChannel);
++#endif
++			return queue_usmmph(ctx, tsk->usm_ctx);
++			//printk(KERN_INFO "Tagged one out! #USM\n");			// TODO rem.
++		}
++
++	return 0;
++}
++
+ static void dup_fctx(struct userfaultfd_fork_ctx *fctx)
+ {
+ 	struct userfaultfd_ctx *ctx = fctx->orig;
+@@ -858,7 +2009,15 @@ static int userfaultfd_release(struct inode *inode, struct file *file)
+ 	struct userfaultfd_wake_range range = { .len = 0, };
+ 	unsigned long new_flags;
+ 
+-	WRITE_ONCE(ctx->released, true);
++	if (!(mm->def_flags & VM_UFFD_MISSING)) 	// some goto to skip the vmas merging in the opposite case... TODO
++		WRITE_ONCE(ctx->released, true);
++
++	/*if (mm->def_flags & VM_UFFD_MISSING) {
++		printk("G. Ciaossu #USM\n");
++		mmput(mm); //__mmput(mm);							// no need to test..?
++		userfaultfd_ctx_put(ctx);
++		return 0;
++	}*/
+ 
+ 	if (!mmget_not_zero(mm))
+ 		goto wakeup;
+@@ -872,6 +2031,7 @@ static int userfaultfd_release(struct inode *inode, struct file *file)
+ 	 * taking the mmap_lock for writing.
+ 	 */
+ 	mmap_write_lock(mm);
++	// mm->def_flags &= ~VM_UFFD_MISSING;	up.
+ 	prev = NULL;
+ 	for (vma = mm->mmap; vma; vma = vma->vm_next) {
+ 		cond_resched();
+@@ -896,6 +2056,7 @@ static int userfaultfd_release(struct inode *inode, struct file *file)
+ 	}
+ 	mmap_write_unlock(mm);
+ 	mmput(mm);
++	// TODO maybe another one..
+ wakeup:
+ 	/*
+ 	 * After no new page faults can wait on this fault_*wqh, flush
+@@ -911,7 +2072,81 @@ static int userfaultfd_release(struct inode *inode, struct file *file)
+ 	wake_up_all(&ctx->event_wqh);
+ 
+ 	wake_up_poll(&ctx->fd_wqh, EPOLLHUP);
+-	userfaultfd_ctx_put(ctx);
++	// userfaultfd_ctx_put(ctx);			Might.. go... handle_uf... so no.. FIXME
++
++	/* ***
++	if (ctx->usm)
++		...up there bruh...
++	*/
++	if(!(ctx->mm->def_flags & VM_USM)) {
++		int freed = 0;
++		int it = 0;
++		if (ctx->uctx) {
++#ifdef DEBUG_USM
++			printk(KERN_INFO "[Info/USM] Instance leaving!\n");
++#endif
++			while(it<MAX_UTHREADS) {
++				if(ctx->uctx->uthread[it]) {
++					freed++;
++					WRITE_ONCE(*(int *)((uintptr_t)(ctx->uctx->uthread[it])+3000), 2);
++					// __free_page(PFN_DOWN(virt_to_phys(usm_list->uthread[it])));
++				}
++				it++;
++			}
++			if (freed) {
++				unmap_sleepers = 1;
++				wake_up_poll(&usm_wait, EPOLLPRI);
++			}
++#ifdef DEBUG_USM
++			printk(KERN_INFO "[Info/USM] %d page(s) freed (lost atm..nsmn)! Obliterating corresponding instance!\n", freed);
++#endif
++			it = 0;
++			spin_lock(&usm_list_lock);
++			if(ctx->uctx == usm_list) {
++#ifdef DEBUG_USM
++				printk(KERN_INFO "[Info/USM] Only one instance up!\n");
++#endif
++				usm_list = usm_list->next;
++			}
++			else {
++				struct usm_ctx *sailor = usm_list;
++#ifdef DEBUG_USM
++				printk(KERN_INFO "[Info/USM] Searching for corresponding prev. instance!\n");
++#endif
++				if (!sailor) {
++#ifdef DEBUG_USM
++					printk(KERN_INFO "[Info/USM] What the bloody..\n");
++#endif
++					;
++				}
++				else {
++					while(sailor->next && sailor->next!=ctx->uctx) {
++						sailor = sailor->next;
++						it++;
++					}
++					if (sailor->next!=ctx->uctx)
++						printk(KERN_INFO "[Info/USM/Mayday] Bug, instance not found after %d sailings!\n", it);
++					else
++						sailor->next = sailor->next->next;
++				}
++			}
++			spin_unlock(&usm_list_lock);
++			//kfree(ctx->uctx);
++			printk(KERN_INFO "[Info/USM] Instance %d obliterated! (kfree bugging.. temp.)\n", it);
++		}
++	}
++	else {
++		// unsigned int* u_bitfield=(unsigned int *)current->usm_x;
++		/* nah man.. he could'a gave off many boi.s.. this is the main... and he could'a distributed this' threads' managements to different USM vCPUs.. necessity to keep up a track record..*/
++		/*unsigned int* u_bitfield_holder=(unsigned int *)ctx->uctx->usm_ids_bitmap[];
++		unsigned int usmid = *(unsigned int *)(current->usm_ctx+4096-sizeof(unsigned int));
++		printk("Ciaossu! #preUSM%d\n", usmid);*/     /* TODO : marking of our pages... possible spot (provided some conditions) */
++#ifdef DEBUG_USM
++		printk("Ciaossu! #preLastUSM\n");	// ain't at such level anyway ^
++#else
++		;
++#endif
++	}
+ 	return 0;
+ }
+ 
+@@ -946,13 +2181,70 @@ static inline struct userfaultfd_wait_queue *find_userfault_evt(
+ 	return find_userfault_in(&ctx->event_wqh);
+ }
+ 
+-static __poll_t userfaultfd_poll(struct file *file, poll_table *wait)
++static __poll_t userfaultfd_poll(struct file *file, poll_table *wait)				// TODO different fops functions by UFFD_USM
+ {
+ 	struct userfaultfd_ctx *ctx = file->private_data;
+ 	__poll_t ret;
+ 
++	/*while(unlikely(!ctx->uctx)) {
++		printk(KERN_INFO "[USM/Mayday] Arming ctx->uctx..\n");
++		if(!current->usm_x) {
++			printk(KERN_INFO "[USM/Mayday/Mayday] Even usm_x NULL..\n");
++			if(!current->real_parent->usm_x)
++				printk(KERN_INFO "[USM/Mayday/Mayday/MAYDAY] Yup, nope..\n");
++			WRITE_ONCE(current->usm_x, current->real_parent->usm_x);
++		}
++		WRITE_ONCE(ctx->uctx, (struct usm_ctx *) current->usm_x);
++	}*/
++
+ 	poll_wait(file, &ctx->fd_wqh, wait);
+ 
++	// if(unlikely(ctx->mm->vm_userfaultfd_ctu.ctx==NULL)) { //&& (ctx->mm->def_flags & VM_UFFD_MISSING))){			/*Make it a negative pointer... should be NULL for other non USM instances...*/
++		/* struct fdtable *fdt = rcu_dereference_raw(current->files->fdt);
++		int fd = 0;			// start from max..
++		while (fdt->fd[fd]!=file)
++			fd++;
++		printk(KERN_INFO "Found : %d!\n", fd);
++		spin_lock(&current->files->file_lock);
++		rcu_assign_pointer(fdt->fd[fd], NULL);
++		//__clear_open_fd(fd,fdt);
++		__clear_bit(fd, fdt->open_fds);
++		__clear_bit(fd / BITS_PER_LONG, fdt->full_fds_bits);
++		if (fd<current->files->next_fd)
++			current->files->next_fd=fd;
++		spin_unlock(&current->files->file_lock);
++		filp_close(file,current->files);//fput(file);//close_fd(file);//filp_close(file,..);//fput(file);
++		printk(KERN_INFO "Gud! #Poll\n");
++		return EPOLLERR;//EPOLLHUP;
++	}*/
++	if(unlikely(atomic_read(&(ctx->mm)->mm_users)==0 && (ctx->mm->def_flags & VM_USM))) {	// && (*(int *)(current->usm_ctx+sizeof(int)*2+sizeof(unsigned long)*3)==10)
++		struct fdtable *fdt = rcu_dereference_raw(current->files->fdt);
++		int fd = 0;			// start from max..
++		WRITE_ONCE(ctx->released, true);
++		while (fdt->fd[fd]!=file)
++			fd++;
++		//printk(KERN_INFO "Found : %d!\n", fd);
++		spin_lock(&current->files->file_lock);
++		rcu_assign_pointer(fdt->fd[fd], NULL);
++		//__clear_open_fd(fd,fdt);
++		__clear_bit(fd, fdt->open_fds);
++		__clear_bit(fd / BITS_PER_LONG, fdt->full_fds_bits);
++		if (fd<current->files->next_fd)
++			current->files->next_fd=fd;
++		spin_unlock(&current->files->file_lock);
++		filp_close(file,current->files);
++		ctx->mm->def_flags &= ~VM_UFFD_MISSING;
++		ctx->mm->def_flags &= ~VM_USM;		// and the freaking others... ohhh f r e a k ' s s a k e !  VM_USM | VM_UFFD_MISSING | VM_UFFD_SWAPPING/* | VM_PFNMAP*/;
++		ctx->mm->def_flags &= ~VM_UFFD_SWAPPING;
++		// take a walk_ops and freak out all the vmas.. but bug linked to this to be confirmed.
++		return EPOLLERR;
++	}
++
++	if (unlikely(!list_empty(&ctx->usmmph))){		// we could still kinda exploit ctx's scope.. using out usmid.. (?)
++		//printk(KERN_INFO "Found something to map! | EPOLLHUP, EPOLLNVAL : %d\t%d | %d\t%d\t\t\t %d| %d | %d\n", EPOLLHUP, EPOLLNVAL, POLLHUP, POLLERR, EPOLLIN, EPOLLMSG, EPOLLERR);			//.. loop... freak's sake! Another value -_-'
++		return EPOLLPRI;								// test it out.. TODO
++	}
++
+ 	if (!userfaultfd_is_initialized(ctx))
+ 		return EPOLLERR;
+ 
+@@ -960,8 +2252,8 @@ static __poll_t userfaultfd_poll(struct file *file, poll_table *wait)
+ 	 * poll() never guarantees that read won't block.
+ 	 * userfaults can be waken before they're read().
+ 	 */
+-	if (unlikely(!(file->f_flags & O_NONBLOCK)))
+-		return EPOLLERR;
++	/*if (unlikely(!(file->f_flags & O_NONBLOCK)))
++		return EPOLLERR;*/
+ 	/*
+ 	 * lockless access to see if there are pending faults
+ 	 * __pollwait last action is the add_wait_queue but
+@@ -982,7 +2274,7 @@ static __poll_t userfaultfd_poll(struct file *file, poll_table *wait)
+ 	return ret;
+ }
+ 
+-static const struct file_operations userfaultfd_fops;
++static const struct file_operations userfaultfd_fops;								/* Simply change the poll func. definition, to get rid of that &&... TODO maybe */
+ 
+ static int resolve_userfault_fork(struct userfaultfd_ctx *new,
+ 				  struct inode *inode,
+@@ -1738,6 +3030,84 @@ static int userfaultfd_copy(struct userfaultfd_ctx *ctx,
+ 	return ret;
+ }
+ 
++static int userfaultfd_palloc(struct userfaultfd_ctx *ctx,
++			    unsigned long arg)
++{	
++	struct uffdio_palloc uffdio_palloc;
++	struct userfaultfd_wake_range range;
++	
++	struct uffdio_palloc __user *user_uffdio_palloc;
++
++	user_uffdio_palloc = (struct uffdio_palloc __user *) arg;
++
++	if (copy_from_user(&uffdio_palloc, user_uffdio_palloc,
++			   sizeof(uffdio_palloc)))
++		goto out;
++		
++	if (unlikely(ctx->released)) {		// unneeded check TODO rid...
++#ifdef DEBUG_USM
++		printk(KERN_INFO "[PAlloc] So...\n");
++#endif
++		if(uffdio_palloc.opt == 5)
++			return 1;
++		goto out;
++	}
++
++	if (unlikely(/*!uffdio_palloc.addr || */!ctx->mm)) {		// TODO further inv.
++		ctx->released=true;
++		if(uffdio_palloc.opt == 5)
++			return 1;
++		goto out;
++	}
++
++	if (unlikely(atomic_read(&(ctx->mm)->mm_users)<1)) {
++		ctx->released=true;
++		if(uffdio_palloc.opt == 5)
++			return 1;
++		return -ESRCH;					/* TODO toExpand */
++	}
++	
++	switch(uffdio_palloc.opt) {
++	case 1:
++		return uffd_eChk(ctx->mm, uffdio_palloc.addr);
++	case 2:
++		return uffd_eClr(ctx->mm, uffdio_palloc.addr);
++	case 3:
++		{
++			unsigned long ret = uffd_eVal(ctx->mm, uffdio_palloc.addr, uffdio_palloc.arg.uaddr);
++			if (ret != 0) {
++				uffdio_palloc.arg.uaddr=ret;
++				ret=1;
++				if (copy_to_user(user_uffdio_palloc, &uffdio_palloc, sizeof(uffdio_palloc)))
++					ret=-EAGAIN;
++			}
++			return ret;
++		}
++	case 4: {
++			int ret = uffd_eMod(ctx->mm, uffdio_palloc.addr, uffdio_palloc.arg.uaddr);
++			if (likely(ret == 1)) {
++				range.len = 4096;						/* This'll need to be changed when we'll do multiple pages at once.. TODO make it just 0?*/
++				range.start = uffdio_palloc.addr;		/* Plus, there'll be occasions in which there won't be any need to wake up anything.. */
++				__wake_userfault(ctx, &range);
++			}
++			return ret;
++		}
++	case 5 :
++			return uffd_eClrSet(ctx->mm, uffdio_palloc.addr, uffdio_palloc.arg.uaddr);		// ret bas. not needed..
++	case 6 :
++			return uffd_eClrr(ctx->mm, uffdio_palloc.addr, uffdio_palloc.arg.len);
++	/*
++	 * *** case 7...rmaps, all them pages reset
++	 */
++	case 8:
++			return uffd_eModStraight(ctx->mm, uffdio_palloc.addr, uffdio_palloc.arg.uaddr);		// some if (!VM_USM) on the other one maybe..
++	case 9:
++			return uffd_eModJS(ctx->mm, uffdio_palloc.addr, uffdio_palloc.arg.uaddr);
++	}
++out:
++	return -EINVAL;
++}
++
+ static int userfaultfd_zeropage(struct userfaultfd_ctx *ctx,
+ 				unsigned long arg)
+ {
+@@ -1750,7 +3120,7 @@ static int userfaultfd_zeropage(struct userfaultfd_ctx *ctx,
+ 
+ 	ret = -EAGAIN;
+ 	if (atomic_read(&ctx->mmap_changing))
+-		goto out;
++		goto out;							/* FIXME : described in mm */
+ 
+ 	ret = -EFAULT;
+ 	if (copy_from_user(&uffdio_zeropage, user_uffdio_zeropage,
+@@ -1903,6 +3273,41 @@ static int userfaultfd_continue(struct userfaultfd_ctx *ctx, unsigned long arg)
+ 	return ret;
+ }
+ 
++static int userfaultfd_tag(struct userfaultfd_ctx *ctx, unsigned long arg)
++{	
++	struct uffdio_palloc uffdio_palloc;
++	struct uffdio_palloc __user *user_uffdio_palloc;
++
++	user_uffdio_palloc = (struct uffdio_palloc __user *) arg;
++
++	if (copy_from_user(&uffdio_palloc, user_uffdio_palloc,
++			   sizeof(uffdio_palloc)))
++		goto out;
++		
++		
++	if (uffdio_palloc.arg.uaddr == 1) {
++		/* ctx->mm->def_flags |= VM_PFNMAP; | IFPIA VM_IO; | NOPE VM_DONTDUMP;
++		printk(KERN_INFO "\tG u d\n"); */
++		return 0;
++	}
++	if(ctx->mm->def_flags & VM_UFFD_MISSING)
++		printk("AGud #TAG\n");
++	else {
++		ctx->mm->def_flags |= VM_UFFD_MISSING;
++		ctx->mm->vm_userfaultfd_ctu.ctx=ctx;
++		ctx->features = UFFD_FEATURE_INITIALIZED | UFFD_FEATURE_EVENT_UNMAP | UFFD_FEATURE_EVENT_REMOVE | UFFD_FEATURE_EVENT_REMAP | UFFD_FEATURE_EVENT_FORK;
++	}
++	if (ctx->mm->vm_userfaultfd_ctu.ctx == NULL) {
++		printk("Though.. #Tag\n");
++		return -EAGAIN;
++	}
++	//ctx->features = UFFD_FEATURE_INITIALIZED | UFFD_FEATURE_EVENT_UNMAP | UFFD_FEATURE_EVENT_REMOVE | UFFD_FEATURE_EVENT_REMAP | UFFD_FEATURE_EVENT_FORK;
++	return 0;
++	
++out:
++	return -EINVAL;
++}
++
+ static inline unsigned int uffd_ctx_features(__u64 user_features)
+ {
+ 	/*
+@@ -1973,7 +3378,7 @@ static long userfaultfd_ioctl(struct file *file, unsigned cmd,
+ 	int ret = -EINVAL;
+ 	struct userfaultfd_ctx *ctx = file->private_data;
+ 
+-	if (cmd != UFFDIO_API && !userfaultfd_is_initialized(ctx))
++	if (cmd != UFFDIO_API && !userfaultfd_is_initialized(ctx) && cmd != UFFDIO_TAG)
+ 		return -EINVAL;
+ 
+ 	switch(cmd) {
+@@ -1992,6 +3397,9 @@ static long userfaultfd_ioctl(struct file *file, unsigned cmd,
+ 	case UFFDIO_COPY:
+ 		ret = userfaultfd_copy(ctx, arg);
+ 		break;
++	case UFFDIO_PALLOC:
++		ret = userfaultfd_palloc(ctx, arg);
++		break;
+ 	case UFFDIO_ZEROPAGE:
+ 		ret = userfaultfd_zeropage(ctx, arg);
+ 		break;
+@@ -2001,10 +3409,282 @@ static long userfaultfd_ioctl(struct file *file, unsigned cmd,
+ 	case UFFDIO_CONTINUE:
+ 		ret = userfaultfd_continue(ctx, arg);
+ 		break;
++	case UFFDIO_TAG:
++		ret = userfaultfd_tag(ctx, arg);
++		break;
+ 	}
+ 	return ret;
+ }
+ 
++void usm_mem_close(struct vm_area_struct *vma) {
++	struct page *usmpage = virt_to_page(vma->vm_start);
++	if(!usmpage){
++		printk(KERN_INFO "Page not found.. #USM");
++		return;
++	}
++	put_page(usmpage);
++	printk(KERN_INFO "Com. page cleared #USM");
++}
++
++/*static struct vm_operations_struct usm_ops = {
++	.close = usm_mem_close
++};*/
++
++static int usm_mmap(struct file *filp, struct vm_area_struct *vma)
++{
++	struct userfaultfd_ctx *ctx = filp->private_data;
++	struct page *page = NULL;
++	struct usm_ctx_p *usmcx; 	// = list_first_entry(&ctx->usmmph, struct usm_ctx_p, ilist);
++	int usmid;	// , manChannel;
++	// spinlock_t *ux_lock;		// TODO : use. Simple next part after u_bitfield_infos...
++	//WRITE_ONCE(*(int *)(usmcx->uctx), ctx->usmid);
++	//printk(KERN_INFO "Wrote %u on mem. #USM\n", ctx->usmid);
++	if(unlikely(!(ctx->mm->def_flags/*ctx->flags*//*current->mm->def_flags*/ & VM_USM))) {		// yes, yes.. ioctl&Co., but temporary.
++		int i = 0;
++		if(!current->usm_ctx) {
++			struct usm_ctx_p *usm_sl_cp;
++#ifdef DEBUG_USM
++			printk(KERN_INFO "reg'ing USM's worker...\n");
++#endif
++			if(unlikely(!current->real_parent->usm_x)) {	// why bother copying it up.... even if it's only an address.. o_o' | sure but for now.. that boss' the global placeholder..
++				struct usm_ctx *ucx_p;
++#ifdef DEBUG_USM
++				printk(KERN_INFO "Wo'p! Alloc'ing mandat.!...\n");
++#endif
++				ucx_p = kmalloc(sizeof(struct usm_ctx), GFP_KERNEL);
++				if(unlikely(!ucx_p)) {
++					printk(KERN_INFO "[USM] Problemo!\t|\tuctx NULL alloc'ed!\n");
++					return -1;
++				}
++				// atomic_set(&ucx_p->usmids_counter, 0);	// legacy.. already...
++				atomic_set(&ucx_p->usm_default_channel, 0);
++				spin_lock_init(&ucx_p->usmAccountingLock);
++				spin_lock_init(&ucx_p->cxDescLock);
++				spin_lock_init(&ucx_p->faultsLock);
++				init_waitqueue_head(&ucx_p->usm_wait);
++				init_waitqueue_head(&ucx_p->usm_pagesWait);
++				spin_lock_init(&ucx_p->usmPagesLock);
++				INIT_LIST_HEAD(&ucx_p->usmPagesList);
++				ucx_p->usmPagesCount=0;
++				ucx_p->listCount=0;
++				ucx_p->next=NULL;
++				INIT_LIST_HEAD(&ucx_p->cxDescList);
++				WRITE_ONCE(current->real_parent->usm_x, ((char *)ucx_p)); // current->real_parent->usm_x=(char *)ucx_p;
++				spin_lock(&usm_list_lock);
++				if(!usm_list) {
++					usm_list=ucx_p;
++				}
++				else {
++					struct usm_ctx *sailor = usm_list;
++					while (sailor->next)
++						sailor=sailor->next;
++					sailor->next=ucx_p;
++				}
++				spin_unlock(&usm_list_lock);
++			}
++			if(unlikely(!ctx->uctx)) {
++#ifdef DEBUG_USM
++				printk(KERN_INFO "[USM] Linking uctx!\n");
++				if(!current->real_parent->usm_x)
++					printk(KERN_INFO "[USM] Caution! current->real_parent->usm_x NULL!\n");
++#endif
++				WRITE_ONCE(ctx->uctx, (struct usm_ctx *)current->real_parent->usm_x); // ctx->uctx=(struct usm_ctx *)current->real_parent->usm_x;
++				WRITE_ONCE(current->usm_x, (char *)ctx->uctx); // current->usm_x=(char *)ctx->uctx;	// is this even ever used..
++			}
++			page=alloc_page(GFP_KERNEL);					
++			if(unlikely(!page)) {			// no need if nofail..
++				printk(KERN_INFO ".. no mem... [workersReg.]");
++				return -ENOMEM;
++			}
++			get_page(page);
++			if (remap_pfn_range(vma, vma->vm_start, page_to_pfn(page), PAGE_SIZE,
++							vma->vm_page_prot)) {
++				printk(KERN_INFO "[mayday/usm_mmap] remap_.. failed.. #workersMmap\n");
++				put_page(page);																			// to put* too at the end.
++				return -1;
++			}
++			WRITE_ONCE(current->usm_ctx,page_address(page));	// shouldn't be necessary, but we'll see.
++			// put u_bitfield_holder to full 1s
++			WRITE_ONCE(*(unsigned int *)((uintptr_t)(current->usm_ctx)+sizeof(unsigned int)), ~((unsigned int)0));
++			spin_lock(&ctx->usmlock);
++			while(ctx->uctx->uthread[i]) {
++				i++;
++			}
++			/*if(i==100) { 
++				i=0;
++				return nope; // USM up max 100.. meh.
++			}*/
++			ctx->uctx->uthread[i]=current->usm_ctx;
++			spin_unlock(&ctx->usmlock);
++			// usm_sleepers_map_list
++
++			WRITE_ONCE(*(int *)((uintptr_t)(ctx->uctx->uthread[i])+3000+sizeof(int)), i);
++
++			usm_sl_cp=kmalloc(sizeof(struct usm_ctx_p), GFP_KERNEL);
++			if(unlikely(!usm_sl_cp)) {
++				printk(KERN_INFO "[usm_mmap/SleepersLogic] Yup.. kmalloc failed!\n");
++				return -ENOMEM;
++			}
++			WRITE_ONCE(usm_sl_cp->uctx,current->usm_ctx);
++			INIT_LIST_HEAD(&(usm_sl_cp->ilist));
++			spin_lock(&usm_sleepers_map_list_lock);
++			list_add_tail(&(usm_sl_cp->ilist),&usm_sleepers_map_list);
++			spin_unlock(&usm_sleepers_map_list_lock);
++			wake_up_poll(&usm_wait, EPOLLIN);
++
++
++
++
++			spin_lock(&ctx->uctx->usmAccountingLock);
++			atomic_set(&ctx->uctx->usm_default_channel, i);
++			spin_unlock(&ctx->uctx->usmAccountingLock);
++#ifdef DEBUG_USM
++			printk(KERN_INFO "reg'ed USM's worker %d!\n", i);
++#endif
++		}
++		else {
++			printk(KERN_INFO "[mayday/usm_mmap] Already reg'ed!\n");
++			return -1;
++		}
++		/* This, ma man, to retrieve up there before memWorker creation.. to keep up with accounting which is rudimentary for now (next->next->..) TODO/doSeriously*/
++		WRITE_ONCE(*(int *)current->usm_ctx, i);		// nec.? But just to ver.! | add up there some if 100 to 0.. like.. that other one.. should even be.. per worker.. man. Add some logic here instead of 64-0'ing? Like.. id%wID? Yeee
++		return 0;		// 0 but let's see.. better to be as straightforward as possible. Or just write it up at the first place.. in given mem... | and structs to create, eventually..
++		// for them work stealing/LB'ing... just do some ioctls? Like.. we already be copying thingies anyway....
++		// and hence.. by default, for now (or just by default), let's make worker 0 the receiver.. and then make ioctls to push them newcomers up.. or change dynamically the default receiver..!
++		
++		// In freaking fact.. we're just cabling things actually... this somehow was work to be done (apart the CPU wastage part) by the policy dev.,... but meh, good thing now. (remark after uthreads' ditching realization)
++	}
++	spin_lock(&ctx->usmlock);				// could hamper perf.s if multiple threads come up "simultaneously".. TODO lookItUp
++	usmcx = list_first_entry(&ctx->usmmph, struct usm_ctx_p, ilist);
++	list_del(&usmcx->ilist);
++	spin_unlock(&ctx->usmlock);
++
++	spin_lock(&ctx->uctx->usmAccountingLock); // ux_lock here TODO ... (preciser lock (per USM "vCPU"))
++	// usmid = __ffs(ctx->uctx->usm_ids_bitmap[ctx->uctx->usm_default_channel]);
++	usmid = __ffs(*(unsigned int *)((uintptr_t)(usmcx->ucx)+sizeof(unsigned int)));
++	/* dude, instead of going around and sneaking through every available USM vCPU and see which's up.. let's just get the wanted one by parameter then tell him "Nope*" if none available.. hence userspace USM chills about it, and not here'us.. but by parameter.. let's see whether they don't just scale up to PAG_SIZE multiple first..*/
++	/* so yeah, instead of ifs and scurries, let's assume last created (usm_default_channel) as to be used for now, and maybe even create some ioctl or similar to play with usm_default_channel.. that's a way, prol'ly temporary. */
++	if(usmid==-1 || usmid >= MAX_UTHREADS) {
++		int manChannel = 0;
++		printk(KERN_INFO "[mayday/usm_mmap] No place* up in current default_usm_channel! Trying to move!\n");
++		while ((usmid==-1 || usmid>=MAX_UTHREADS) && manChannel < MAX_USM_vCPUs) {
++			if (ctx->uctx->uthread[manChannel]) 
++				usmid = __ffs(*(unsigned int *)((uintptr_t)(ctx->uctx->uthread[manChannel])+sizeof(unsigned int)));
++			manChannel++;
++		}
++		manChannel--;
++		if (usmid==-1 || usmid >= MAX_UTHREADS) {
++			spin_unlock(&ctx->uctx->usmAccountingLock);
++			spin_lock(&ctx->usmlock);				
++			list_add(&usmcx->ilist, &ctx->usmmph);
++			spin_unlock(&ctx->usmlock);
++			printk(KERN_INFO "[mayday/usm_mmap] No place* up in all channels! (TODO go do your other module syscall* and move this to some other one.. (nah now just another one (firing another worker/vCPU) then bim, redo.. might even get some place in between..)))\n");		// Ye; TODO, but we could also scan a bit.. but still we ain't got that reference to the task.. we could add it.. ye, let's add it, then use it here.. scan, find, use, tell him to add a boi if needed, here. Perfect*		*those linging parts can hence just be fused here, TODO later		| O'ow.. this usm_mmap's not the ctx we want.. ye, just let that guy up manage this for now..	| Nah, changes nuthin'.. usable through same global context's usm_ctx, yish.
++			return -ENOMEM; 	// 	some answer specialization..
++		}
++		atomic_set(&ctx->uctx->usm_default_channel, manChannel);
++		/* write it up back.. and continue normally.. */
++		// __atomic_fetch_and((unsigned int *)((uintptr_t)(ctx->uctx->uthread[manChannel])+sizeof(unsigned int)), (unsigned int)(~((unsigned int)1 << usmid)), __ATOMIC_RELAXED);
++		__WRITE_ONCE(*(unsigned int *)((uintptr_t)(ctx->uctx->uthread[manChannel])+sizeof(unsigned int)), *(unsigned int *)((uintptr_t)(ctx->uctx->uthread[manChannel])+sizeof(unsigned int))&(~((unsigned int)1 << usmid)));
++		spin_unlock(&ctx->uctx->usmAccountingLock);
++		__WRITE_ONCE(usmcx->tsk->usm_x, ctx->uctx->uthread[manChannel]);
++		WRITE_ONCE(*(int *)(((uintptr_t)usmcx->tsk->usm_ctx)+4000), manChannel);
++		if (*(int *)(usmcx->tsk->usm_ctx+sizeof(int)))
++			// __atomic_fetch_or((unsigned int *)usmcx->tsk->usm_x, (unsigned int)(((unsigned int)1 << usmid)), __ATOMIC_RELAXED);
++			WRITE_ONCE(*(unsigned int *)usmcx->tsk->usm_x, *(unsigned int *)usmcx->tsk->usm_x|(unsigned int)((unsigned int)1 << usmid));
++		/* TODO inner uthreads' case! */
++	}
++	else {
++		__WRITE_ONCE(*(unsigned int *)((uintptr_t)(usmcx->ucx)+sizeof(unsigned int)), *(unsigned int *)((uintptr_t)(usmcx->ucx)+sizeof(unsigned int))&(~((unsigned int)1 << usmid)));	// yeesh, gun it out at each task's do_exit.	TODO
++		// __atomic_fetch_and((unsigned int *)((uintptr_t)(usmcx->ucx)+sizeof(unsigned int)), (unsigned int)(~((unsigned int)1 << usmid)), __ATOMIC_RELAXED);
++		spin_unlock(&ctx->uctx->usmAccountingLock);
++	}
++
++	/* quite perfect.. so now where's it put back.. thread thingy? userfaultfd_poll? ID's still there at last boi's part? */	// done at do_exit boiz!
++
++	/*usmid=atomic_read(&ctx->uctx->usmids_counter);
++	atomic_inc(&ctx->uctx->usmids_counter);*/
++	// spin_unlock(&ctx->uctx->usmAccountingLock);
++
++	WRITE_ONCE(*((unsigned int *)(usmcx->uctx+4096-sizeof(unsigned int))), usmid);
++#ifdef DEBUG_USM
++	printk(KERN_INFO "[queue_usmmph/mmap] One USM counter at %u previous channel..!\n", usmid);
++#endif
++	
++	if(ctx->mm->def_flags & VM_USM_UT) {
++		WRITE_ONCE(*((unsigned int *)(usmcx->uctx+4096-sizeof(unsigned int)*3)), 100);		// This'll be duplicate.. and waaay too late! o_o'!
++		WRITE_ONCE(*((unsigned int *)(usmcx->uctx+4096-sizeof(unsigned int)*2)), 0);		// bit field resetting..
++#ifdef DEBUG_USM
++		printk(KERN_INFO "[queue_usmmph/mmap/special] To be treated by special routine! %u, PFN : %lu\n", *((unsigned int *)(usmcx->uctx+4096-sizeof(unsigned int)*3)), virt_to_page((unsigned long)usmcx->uctx));
++#endif
++	}
++	/* Just get a copy of workers' number here and act accordingly.. and check on another bit field their "occupation" by managed tasks!*/
++	/* Though, main limitation be them 64 bits of long long.. we could use whole page but copying it up to calculate would be heavy... anyway, fixable! */
++	//WRITE_ONCE(current->usm_x, ctx->uctx->uthread[manChannel /*usmid/64*/]);						// of i/default_worker.. then dynamically modifiable through ioctl or other...	| man, better be ready to correctly take care of these id.s... fire up another worker if read in UPace value not compliant?.. temporary, and freaking make macros.
++	
++
++
++
++	//printk(KERN_INFO "New thread mapping! #USM%d\n", -1/*ctx->usmid*/);
++	//printk(KERN_INFO "pgoff | shifed #USM : %lu %lu\n", vma->vm_pgoff, vma->vm_pgoff<<PAGE_SHIFT);
++
++	// State.. just zero the whole page.. if necessary... | duplicate of userspace code..
++	WRITE_ONCE(*(int *)(usmcx->uctx+sizeof(int)*2+sizeof(unsigned long)*3), 0);
++
++    page = virt_to_page((unsigned long)(usmcx->uctx)); //+(vma->vm_pgoff<<PAGE_SHIFT));
++	if (!page) {
++		printk(KERN_INFO "Wut in the... #USM\n");
++		return -1;
++	}
++	get_page(page);
++	atomic_set(&(page)->_mapcount,2);	// should be unnecessary..
++    if (remap_pfn_range(vma, vma->vm_start, page_to_pfn(page), PAGE_SIZE,
++                        vma->vm_page_prot)) {
++        printk(KERN_INFO "[mayday/usm_mmap] remap_.. failed.. #faultsMmap\n");
++		spin_lock(&ctx->usmlock);
++		list_add(&usmcx->ilist, &ctx->usmmph);
++		spin_unlock(&ctx->usmlock);
++        return -1;
++    }
++	 // *(int *)(usmcx->uctx)=ctx->usmid;
++	kfree(usmcx);
++	//vma->vm_ops=&usm_ops;		// TODO further investigate
++    return 0;
++}
++
++/*int usm_mt_mmap(struct file *filp, struct vm_area_struct *vma)
++{
++	struct page *page = NULL;
++	struct usm_ctx_p *usmcx = list_first_entry(&usmmph, struct usm_ctx_p, ilist);
++	//WRITE_ONCE(*(int *)(usmcx->uctx), usmcx->usmid);
++	printk(KERN_INFO ".. u on mem. #USM\n");   //, usmcx->usmid);
++	// spin_lock(&ctx->usmlock);				// could hamper perf.s if multiple threads come up "simultaneously".. TODO lookItUp        | now in userspace.. but fork and pthread_create at the same time on different threads.. hmm.. TODO, INV.
++	list_del(&usmcx->ilist);
++	// spin_unlock(&ctx->usmlock);
++
++	printk(KERN_INFO "New thread mapping! #USMdAD\n");//, usmcx->usmid);
++	//printk(KERN_INFO "pgoff | shifed #USM : %lu %lu\n", vma->vm_pgoff, vma->vm_pgoff<<PAGE_SHIFT);
++
++    page = virt_to_page((unsigned long)(usmcx->uctx)); //+(vma->vm_pgoff<<PAGE_SHIFT));
++	if (!page) {
++		printk(KERN_INFO "Wut in the... #USMAD\n");
++		return -1;
++	}
++	get_page(page);
++    if (remap_pfn_range(vma, vma->vm_start, page_to_pfn(page), PAGE_SIZE,
++                        vma->vm_page_prot)) {
++        printk(KERN_INFO "[mayday/usm_mmap] remap_.. failed.. #faultsMmapAD\n");
++		// spin_lock(&ctx->usmlock);          still userspacey..
++		list_add(&usmcx->ilist, &usmmph);
++		// spin_unlock(&ctx->usmlock);
++        return -1;
++    }
++	 // *(int *)(usmcx->uctx)=ctx->usmid;
++	kfree(usmcx);
++    //vma->vm_ops=&usm_ops;		// TODO further investigate
++    return 0;
++}
++EXPORT_SYMBOL(usm_mt_mmap);*/
++
+ #ifdef CONFIG_PROC_FS
+ static void userfaultfd_show_fdinfo(struct seq_file *m, struct file *f)
+ {
+@@ -2043,6 +3723,7 @@ static const struct file_operations userfaultfd_fops = {
+ 	.unlocked_ioctl = userfaultfd_ioctl,
+ 	.compat_ioctl	= compat_ptr_ioctl,
+ 	.llseek		= noop_llseek,
++	.mmap		= usm_mmap,
+ };
+ 
+ static void init_once_userfaultfd_ctx(void *mem)
+@@ -2054,12 +3735,26 @@ static void init_once_userfaultfd_ctx(void *mem)
+ 	init_waitqueue_head(&ctx->event_wqh);
+ 	init_waitqueue_head(&ctx->fd_wqh);
+ 	seqcount_spinlock_init(&ctx->refile_seq, &ctx->fault_pending_wqh.lock);
++
++	spin_lock_init(&ctx->usmlock);
++	INIT_LIST_HEAD(&ctx->usmmph);
+ }
++/*static void init_once_usm_nfp(void *mem)
++{
++	struct usmPage * usmp = (struct usmPage *) mem;
++	INIT_LIST_HEAD(&(usmp->usmlist));
++	usmp->fcache=usm_nfp_cachep;
++}*/
++
+ 
+ SYSCALL_DEFINE1(userfaultfd, int, flags)
+ {
+ 	struct userfaultfd_ctx *ctx;
+ 	int fd;
++	int usm = 0;
++	struct cxDescStruct* ctxl;
++	struct page *usmpage;
++	struct usm_ctx *usm_context;
+ 
+ 	if (!sysctl_unprivileged_userfaultfd &&
+ 	    (flags & UFFD_USER_MODE_ONLY) == 0 &&
+@@ -2071,13 +3766,17 @@ SYSCALL_DEFINE1(userfaultfd, int, flags)
+ 	}
+ 
+ 	BUG_ON(!current->mm);
++	/*if(current->mm->vm_userfaultfd_ctu.ctx != NULL) {
++		printk("\tFreaking clone case!\n");                      Completely out of his mind... sorry. #Legacy
++		return 0;
++	}*/
+ 
+ 	/* Check the UFFD_* constants for consistency.  */
+ 	BUILD_BUG_ON(UFFD_USER_MODE_ONLY & UFFD_SHARED_FCNTL_FLAGS);
+ 	BUILD_BUG_ON(UFFD_CLOEXEC != O_CLOEXEC);
+ 	BUILD_BUG_ON(UFFD_NONBLOCK != O_NONBLOCK);
+ 
+-	if (flags & ~(UFFD_SHARED_FCNTL_FLAGS | UFFD_USER_MODE_ONLY))
++	if (flags & ~(UFFD_SHARED_FCNTL_FLAGS | UFFD_USER_MODE_ONLY | UFFD_USM))
+ 		return -EINVAL;
+ 
+ 	ctx = kmem_cache_alloc(userfaultfd_ctx_cachep, GFP_KERNEL);
+@@ -2085,23 +3784,222 @@ SYSCALL_DEFINE1(userfaultfd, int, flags)
+ 		return -ENOMEM;
+ 
+ 	refcount_set(&ctx->refcount, 1);
++
++	if ((flags & UFFD_USM) !=0) {
++		int manChannel;
++		usm_context = (struct usm_ctx *)current->usm_x;
++		set_current_state(TASK_UNINTERRUPTIBLE);
++		usmpage=alloc_page(GFP_KERNEL);
++		get_page(usmpage);
++		if(unlikely(!usmpage)) {			// if ((curr->page = alloc_page(GFP_KERNEL)) == NULL) {
++			printk(KERN_INFO "No memory for USM available.\n");
++			return -ENOMEM;
++		}
++		WRITE_ONCE(current->usm_ctx, page_address(usmpage)); // current->usm_ctx = page_address(usmpage);//kmem_cache_alloc(usm_mmap_cachep, GFP_KERNEL);
++		if(current->mm->def_flags & VM_USM_UT)
++			WRITE_ONCE(*((unsigned int *)(current->usm_ctx+4096-sizeof(unsigned int)*3)), 100);
++		// WRITE_ONCE(current->real_parent->usm_ctx, page_address(usmpage));	// testing **		real dummy..
++		// WRITE_ONCE(ctx->uctx, (struct usm_ctx *) usm_context); // done in module..
++		ctx->uctx = usm_context;
++		spin_lock(&ctx->uctx->usmAccountingLock);
++		manChannel=atomic_read(&ctx->uctx->usm_default_channel);	// lock shouldn't be needed..
++		spin_unlock(&ctx->uctx->usmAccountingLock);
++		WRITE_ONCE(current->usm_x, ctx->uctx->uthread[manChannel /*usmid/64*/]);
++		WRITE_ONCE(*(int *)(((uintptr_t)current->usm_ctx)+4000), manChannel);
++#ifdef DEBUG_USM
++		printk(KERN_INFO "[queue_usmmph] One (primal) USM task at %u channel..!\n", manChannel);
++#endif
++		if (queue_usmmph(ctx, current->usm_ctx))
++			return -ENOMEM;
++		//printk(KERN_INFO "Created and queued.. first one's always TBD like this\n");
++
++		current->mm->vm_userfaultfd_ctu.ctx=ctx;
++		current->mm->def_flags |= VM_USM | VM_UFFD_MISSING | VM_UFFD_SWAPPING/* | VM_PFNMAP*/; /* | VM_IO;  | VM_LOCKED | VM_IO;		  | No MINOR man meh*/		// VM_USM sufficient..
++		flags&=~UFFD_USM;
++		flags&=~O_NONBLOCK;		// just what the pure hell... this got switched nowhere visible by me.. |nOpE..
++		ctxl = kmalloc(sizeof(*ctxl), GFP_KERNEL);
++		ctxl->ctx=ctx;
++		ctxl->toWake=current;
++		spin_lock(&usm_context->cxDescLock);
++		INIT_LIST_HEAD(&(ctxl->cxlist));
++		list_add(&(ctxl->cxlist),&usm_context->cxDescList);
++		// atomic_set(&ctx->usmids_counter, 0);
++
++		usm_context->listCount++;
++		spin_unlock(&usm_context->cxDescLock);
++		usm++;
++	}
+ 	ctx->flags = flags;
+ 	ctx->features = 0;
+ 	ctx->released = false;
+ 	atomic_set(&ctx->mmap_changing, 0);
+ 	ctx->mm = current->mm;
+ 	/* prevent the mm struct to be freed */
+-	mmgrab(ctx->mm);
++	mmgrab(ctx->mm); //..lol
++
++	if (usm!=0) {
++		// int manChannel;
++		fd = 0;
++		/* Send that wake signal to read it on the other side... yeah whatever/however ya want it. #OneLessPoll */
++		//mmgrab(ctx->mm);		// further checks but meh.
++		wake_up_poll(&usm_context->usm_wait, EPOLLIN);	// get this out..? Like with those guys.. and mostly with the global waker..? H u m . . . don't really think so... TODO inv.
++		schedule();
++		/*spin_lock(&ctx->uctx->usmAccountingLock);
++		manChannel=atomic_read(&ctx->uctx->usm_default_channel);	// lock shouldn't be needed..
++		spin_unlock(&ctx->uctx->usmAccountingLock);*/
++		// WRITE_ONCE(*((unsigned int *)(usmmem+4096-sizeof(unsigned int))), usmid);
++		// printk(KERN_INFO "[queue_usmmph] One USM counter at %u by %u!\n", usmid, manChannel);
++		/* Just get a copy of workers' number here and act accordingly.. and check on another bit field their "occupation" by managed tasks!*/
++		/* Though, main limitation be them 64 bits of long long.. we could use whole page but copying it up to calculate would be heavy... anyway, fixable! *//*
++		WRITE_ONCE(current->usm_x, ctx->uctx->uthread[manChannel /*usmid/64*//*]);						// of i/default_worker.. then dynamically modifiable through ioctl or other...	| man, better be ready to correctly take care of these id.s... fire up another worker if read in UPace value not compliant?.. temporary, and freaking make macros.
++		printk(KERN_INFO "[queue_usmmph] One (primal) USM task at %u channel..!\n", manChannel);*/
++	}
++	else {
++		//mmgrab(ctx->mm);
++		fd = anon_inode_getfd_secure("[userfaultfd]", &userfaultfd_fops, ctx,
++				O_RDONLY | (flags & UFFD_SHARED_FCNTL_FLAGS), NULL);
++		if (fd < 0) {
++			mmdrop(ctx->mm);
++			kmem_cache_free(userfaultfd_ctx_cachep, ctx);
++		}
++	}
++	return fd;
++}
+ 
+-	fd = anon_inode_getfd_secure("[userfaultfd]", &userfaultfd_fops, ctx,
+-			O_RDONLY | (flags & UFFD_SHARED_FCNTL_FLAGS), NULL);
+-	if (fd < 0) {
+-		mmdrop(ctx->mm);
+-		kmem_cache_free(userfaultfd_ctx_cachep, ctx);
++__poll_t usm_poll_ufd(struct file *file, poll_table *wait)
++{
++	struct usm_ctx *usm_context = file->private_data;
++	 __poll_t ret = 0;
++     poll_wait(file, &usm_context->usm_wait, wait);
++     //spin_lock(&cxDescLock);
++     if (usm_context->listCount>0)
++		 ret=POLLIN;
++     //spin_unlock(&cxDescLock);
++     return ret;
++}
++
++EXPORT_SYMBOL(usm_poll_ufd);
++
++__poll_t sleepers_block_poll(struct file *file, poll_table *wait)
++{
++	// struct usm_ctx *usm_context = file->private_data;
++    struct usm_ctx *sailor = usm_list;
++    int tempCount = 1;      // mapped_sleepers;
++    poll_wait(file, &usm_wait, wait);
++    // usm_list = NULL;
++    if (unlikely(!usm_list)) {
++        printk(KERN_INFO "[Waker man.] NULL..!\n");
++        return EPOLLERR;
++    }
++    
++    /* Temp. management code */
++    while(sailor->next) {
++        sailor=sailor->next;
++        tempCount++;
++    }
++#ifdef DEBUG_USM
++    printk(KERN_INFO "[Waker man.] tempCount.. pre. : %d\n", tempCount);
++#endif
++    if(tempCount==1) {
++        printk(KERN_INFO "[Waker man.] No one up..\n");
++        return EPOLLERR;
++    }
++#ifdef DEBUG_USM
++    printk(KERN_INFO "[Waker man.] tempCount.. : %d\n", tempCount);
++#endif
++    /*if(tempCount!=mapped_sleepers+1) {		// supplementary checks basically..
++        if(tempCount>mapped_sleepers+1)
++            printk(KERN_INFO "[Waker man.] Multiple up to map! Next poll in some..\n");
++        else {
++            printk(KERN_INFO "[Waker man.] Either bug.. or...\n");
++            if(tempCount<mapped_sleepers)
++                printk(KERN_INFO "[Waker man.] Yup, one down... we gotta be able to POLLERR...\n");     // get a list to check up? With a munmap to do.. and a read/write to get the "ID" for waker to use.. yesh.
++            return EPOLLERR;
++        }
++    }
++    else {
++        printk(KERN_INFO "[Waker man.] .. delivering guds.. %d\n", tempCount);
++    }*/
++
++    return EPOLLIN;
++}
++
++EXPORT_SYMBOL(sleepers_block_poll);
++
++int handle_usm(struct task_struct ** toWake)
++{
++	struct usm_ctx *usm_context = (struct usm_ctx *)current->usm_x;
++	struct cxDescStruct * cxDesc;
++	int fd;
++	// we still got usm_x containing our locks and usm_ctx until now (dude, u in USM's instance context.. nope'yup. (obv.)).. (!) (no need to add to handle_usm's arg.s)
++	spin_lock(&usm_context->cxDescLock);
++	if (usm_context->listCount <= 0) {
++		printk(KERN_INFO "\tBug #userfaultfd\n");
++		spin_unlock(&usm_context->cxDescLock);
++		return -EFAULT;
+ 	}
++	usm_context->listCount--;
++	cxDesc = list_first_entry(&usm_context->cxDescList, struct cxDescStruct, cxlist);
++	__list_del(&usm_context->cxDescList, (&usm_context->cxDescList)->next->next);
++	spin_unlock(&usm_context->cxDescLock);
++	fd = anon_inode_getfd_secure("[userfaultfd]", &userfaultfd_fops, cxDesc->ctx, O_RDWR | (cxDesc->ctx->flags & UFFD_SHARED_FCNTL_FLAGS), NULL);
++	cxDesc->ctx->features = UFFD_FEATURE_INITIALIZED /*| UFFD_FEATURE_EVENT_REMOVE | UFFD_FEATURE_EVENT_REMAP*/ | UFFD_FEATURE_EVENT_FORK;
++	// this all.. pure* duplicate AND FREAKING NOT THEIR PLACE..			*: not so much.. as the current of USM can only get *gotten here.. -_-..
++	/*if(!current->usm_x)
++		printk(KERN_INFO "[usm/debug] current->usm_x NULL (normal)\n");
++	if(!current->real_parent->usm_x)
++		printk(KERN_INFO "[usm/debug] current->usm_x NULL (mayday)\n");*/
++	/* But.. this is already.. done by.. module.... -_-. YESH, confirming ur sayings!**/
++	// WRITE_ONCE(cxDesc->ctx->uctx, (struct usm_ctx *) current->real_parent->usm_x); // cxDesc->ctx->uctx = (struct usm_ctx *) current->usm_x;
++	*toWake = cxDesc->toWake;
++	//mmgrab(cxDesc->ctx->mm);
++	kfree(cxDesc);
++	/*fget(fd);		 *TODO* properly handle this.. release... */
+ 	return fd;
+ }
+ 
++EXPORT_SYMBOL(handle_usm);
++
++void usm_note_page(struct page * page)
++{
++	//struct usmPage * usmp = kmem_cache_alloc(usm_nfp_cachep, GFP_NOWAIT);
++	/*struct usm_ctx *uctx = ((struct userfaultfd_ctx *)(current->mm->vm_userfaultfd_ctu.ctx))->uctx;
++	struct usmPage * usmp = kmalloc(sizeof(*usmp), GFP_KERNEL);	// h u m , w e i r d combi. right?
++	if (unlikely(!usmp)) {
++		trace_printk(KERN_INFO "Problem, one loss #USM_UFFD\n");
++		return;
++	}
++	INIT_LIST_HEAD(&(usmp->usmlist));
++	spin_lock(&uctx->usmPagesLock);
++	usmp->pfn=page_to_pfn(page);
++	list_add(&usmp->usmlist,&uctx->usmPagesList);
++	uctx->usmPagesCount++;
++	spin_unlock(&uctx->usmPagesLock);*/
++}
++
++unsigned long handle_page(void) {
++    struct usmPage * uPage;
++    unsigned long pfn;
++	struct usm_ctx *uctx = (struct usm_ctx *) current->real_parent->usm_x;
++
++    spin_lock(&uctx->usmPagesLock);
++    if (uctx->usmPagesCount <= 0) {
++        printk(KERN_INFO "\tBug #userfaultfd\n");
++        spin_unlock(&uctx->usmPagesLock);
++        return -EFAULT;
++    }
++    uctx->usmPagesCount--;
++    uPage = list_first_entry(&uctx->usmPagesList, struct usmPage, usmlist);
++    pfn=uPage->pfn;
++    __list_del(&uctx->usmPagesList, (&uctx->usmPagesList)->next->next);
++    //kmem_cache_free(uPage->fcache, uPage);
++	kfree(uPage);
++    spin_unlock(&uctx->usmPagesLock);
++    return pfn;
++}
++
++EXPORT_SYMBOL(handle_page);
++
+ static int __init userfaultfd_init(void)
+ {
+ 	userfaultfd_ctx_cachep = kmem_cache_create("userfaultfd_ctx_cache",
+@@ -2109,6 +4007,13 @@ static int __init userfaultfd_init(void)
+ 						0,
+ 						SLAB_HWCACHE_ALIGN|SLAB_PANIC,
+ 						init_once_userfaultfd_ctx);
++	/*usm_nfp_cachep = kmem_cache_create("usm_nfp_cache",
++						sizeof(struct usmPage),
++						0,
++						0,
++						init_once_usm_nfp);*/
++	/*atomic_set(&usmids_counter, 0);	// legacy.. already...
++	atomic_set(&usm_default_channel, 0);*/
+ 	return 0;
+ }
+ __initcall(userfaultfd_init);
+diff --git a/include/linux/mm.h b/include/linux/mm.h
+index 4ff52127a6b8..25b664633f82 100644
+--- a/include/linux/mm.h
++++ b/include/linux/mm.h
+@@ -277,6 +277,7 @@ extern unsigned int kobjsize(const void *objp);
+ #define VM_GROWSDOWN	0x00000100	/* general info on the segment */
+ #define VM_UFFD_MISSING	0x00000200	/* missing pages tracking */
+ #define VM_PFNMAP	0x00000400	/* Page-ranges managed without "struct page", just pure PFN */
++#define VM_UFFD_SWAPPING	0x00000800	/* swapped out pages tracking */
+ #define VM_UFFD_WP	0x00001000	/* wrprotect pages tracking */
+ 
+ #define VM_LOCKED	0x00002000
+@@ -371,6 +372,11 @@ extern unsigned int kobjsize(const void *objp);
+ # define VM_UFFD_MINOR		VM_NONE
+ #endif /* CONFIG_HAVE_ARCH_USERFAULTFD_MINOR */
+ 
++
++#define VM_USM_BIT 38
++#define VM_USM BIT(VM_USM_BIT) /* USM managed vmas */
++#define VM_USM_UT_BIT 39
++#define VM_USM_UT BIT(VM_USM_UT_BIT)
+ /* Bits set in the VMA until the stack is in its final location */
+ #define VM_STACK_INCOMPLETE_SETUP	(VM_RAND_READ | VM_SEQ_READ)
+ 
+@@ -3407,4 +3413,15 @@ madvise_set_anon_name(struct mm_struct *mm, unsigned long start,
+ }
+ #endif
+ 
++struct usmPage {
++       unsigned long pfn;
++       //struct kmem_cache *fcache;
++       struct list_head usmlist;
++};
++// extern struct list_head usmPagesList;
++// extern spinlock_t usmPagesLock;
++// extern unsigned long usmPagesCount;
++extern struct usm_ctx *usm_list;
++extern void usm_note_page(struct page * page);
++
+ #endif /* _LINUX_MM_H */
+diff --git a/include/linux/mm_types.h b/include/linux/mm_types.h
+index cf97f3884fda..e156201a9f6e 100644
+--- a/include/linux/mm_types.h
++++ b/include/linux/mm_types.h
+@@ -602,6 +602,8 @@ struct mm_struct {
+ 
+ 		unsigned long flags; /* Must use atomic bitops to access */
+ 
++		struct vm_userfaultfd_ctx vm_userfaultfd_ctu;
++
+ #ifdef CONFIG_AIO
+ 		spinlock_t			ioctx_lock;
+ 		struct kioctx_table __rcu	*ioctx_table;
+diff --git a/include/linux/page-flags.h b/include/linux/page-flags.h
+index 465ff35a8c00..fa1443dc6b09 100644
+--- a/include/linux/page-flags.h
++++ b/include/linux/page-flags.h
+@@ -119,6 +119,7 @@ enum pageflags {
+ 	PG_reclaim,		/* To be reclaimed asap */
+ 	PG_swapbacked,		/* Page is backed by RAM/swap */
+ 	PG_unevictable,		/* Page is "unevictable"  */
++	PG_usm,
+ #ifdef CONFIG_MMU
+ 	PG_mlocked,		/* Page is vma mlocked */
+ #endif
+@@ -1068,8 +1069,9 @@ static __always_inline void __ClearPageAnonExclusive(struct page *page)
+  * __PG_HWPOISON is exceptional because it needs to be kept beyond page's
+  * alloc-free cycle to prevent from reusing the page.
+  */
++#define __PG_USM (1UL << PG_usm)
+ #define PAGE_FLAGS_CHECK_AT_PREP	\
+-	(PAGEFLAGS_MASK & ~__PG_HWPOISON)
++	(PAGEFLAGS_MASK & (~__PG_HWPOISON | ~__PG_USM))
+ 
+ #define PAGE_FLAGS_PRIVATE				\
+ 	(1UL << PG_private | 1UL << PG_private_2)
+diff --git a/include/linux/sched.h b/include/linux/sched.h
+index e7e05374fd73..7a72e6568fb4 100644
+--- a/include/linux/sched.h
++++ b/include/linux/sched.h
+@@ -1504,6 +1504,10 @@ struct task_struct {
+ 	struct callback_head		l1d_flush_kill;
+ #endif
+ 
++	char    *usm_ctx;
++	unsigned int usmid;		// TODO move 'em up in CONIFG_UFFD.. | and man.. this usmid... in this view, is it necessary..?
++	char *usm_x;		// smarter way to find..? Like, the table idea's basic and doable.. but man, latency sensitive path of faults : nope.. find something else!
++
+ #ifdef CONFIG_RV
+ 	/*
+ 	 * Per-task RV monitor. Nowadays fixed in RV_PER_TASK_MONITORS.
+diff --git a/include/linux/shmem_fs.h b/include/linux/shmem_fs.h
+index ff0b990de83d..32b951c95509 100644
+--- a/include/linux/shmem_fs.h
++++ b/include/linux/shmem_fs.h
+@@ -153,6 +153,14 @@ extern int shmem_mfill_atomic_pte(struct mm_struct *dst_mm, pmd_t *dst_pmd,
+ 				  unsigned long src_addr,
+ 				  bool zeropage, bool wp_copy,
+ 				  struct page **pagep);
++extern int shmem_usm(struct mm_struct *dst_mm,
++                                 struct vm_area_struct *dst_vma,
++                                 unsigned long dst_addr,
++                                 struct page *page);
++extern int shmem_usm_f(struct mm_struct *dst_mm,
++                                 struct vm_area_struct *dst_vma,
++                                 unsigned long dst_addr,
++                                 struct page *page);
+ #else /* !CONFIG_SHMEM */
+ #define shmem_mfill_atomic_pte(dst_mm, dst_pmd, dst_vma, dst_addr, \
+ 			       src_addr, zeropage, wp_copy, pagep) ({ BUG(); 0; })
+diff --git a/include/linux/userfaultfd_k.h b/include/linux/userfaultfd_k.h
+index 31d86b8c0634..430ecc358197 100644
+--- a/include/linux/userfaultfd_k.h
++++ b/include/linux/userfaultfd_k.h
+@@ -19,6 +19,7 @@
+ #include <linux/swapops.h>
+ #include <asm-generic/pgtable_uffd.h>
+ #include <linux/hugetlb_inline.h>
++#include <linux/poll.h>
+ 
+ /* The set of all possible UFFD-related VM flags. */
+ #define __VM_UFFD_FLAGS (VM_UFFD_MISSING | VM_UFFD_WP | VM_UFFD_MINOR)
+@@ -33,12 +34,99 @@
+ #define UFFD_CLOEXEC O_CLOEXEC
+ #define UFFD_NONBLOCK O_NONBLOCK
+ 
+-#define UFFD_SHARED_FCNTL_FLAGS (O_CLOEXEC | O_NONBLOCK)
++#define UFFD_SHARED_FCNTL_FLAGS (O_CLOEXEC /*| O_NONBLOCK*/)
+ #define UFFD_FLAGS_SET (EFD_SHARED_FCNTL_FLAGS)
+ 
+ extern int sysctl_unprivileged_userfaultfd;
+ 
+ extern vm_fault_t handle_userfault(struct vm_fault *vmf, unsigned long reason);
++extern vm_fault_t handle_usm_fault(struct vm_fault *vmf);
++extern vm_fault_t handle_usm_fault_ut(struct vm_fault *vmf);
++extern vm_fault_t handle_usm_swap(struct vm_fault *vmf);
++extern vm_fault_t handle_usm_swap_ut(struct vm_fault *vmf);
++extern vm_fault_t handle_usm_shared(struct vm_fault *vmf);
++extern vm_fault_t handle_usm_shared_ut(struct vm_fault *vmf);
++
++extern void dequeue_usm_fault(void);
++/* o_o' */
++
++// #define DEBUG_USM 1
++
++#define MAX_USM_vCPUs 100		// #Renaud
++#define MAX_UTHREADS sizeof(unsigned int)*__CHAR_BIT__			// unsignedIntToBeChanged..
++
++
++struct usm_ctx {
++	// atomic_t usmids_counter;		// soooe, this lil' guy's being replaced byyy.. *drums* :	| he even was to be friggin' reset per full booming.. with that default_man_channel slop'py thingy.. smh*.
++	unsigned int usm_ids_bitmap [MAX_USM_vCPUs];		// to be put to 1 at each corresponding vCPU* creation*, then put off every time used and back at every destruction/troyal..
++	atomic_t usm_default_channel;
++	char *uthread [MAX_UTHREADS];		// not to be called uthreads anymore..
++	// char *iuthread [100];		// prob. not necessary.. guy just writes in said special zone, then userspace (USM) sees it then simply copies* to corresponding uthread.. so no kernel counterpart necessarily necessary. | TODO rid
++	spinlock_t usmAccountingLock;
++	spinlock_t cxDescLock;
++	spinlock_t usmPagesLock;
++
++	spinlock_t faultsLock;		// temp. ... TODO
++
++	unsigned long usmPagesCount;
++	struct list_head usmPagesList;
++	struct list_head cxDescList;
++	int listCount;
++	struct task_struct *toWake;
++	wait_queue_head_t usm_wait;
++	wait_queue_head_t usm_pagesWait;
++	struct usm_ctx *next;
++};
++
++struct userfaultfd_ctx {
++	/* waitqueue head for the pending (i.e. not read) userfaults */
++	wait_queue_head_t fault_pending_wqh;
++	/* waitqueue head for the userfaults */
++	wait_queue_head_t fault_wqh;
++	/* waitqueue head for the pseudo fd to wakeup poll/read */
++	wait_queue_head_t fd_wqh;
++	/* waitqueue head for events */
++	wait_queue_head_t event_wqh;
++	/* a refile sequence protected by fault_pending_wqh lock */
++	seqcount_spinlock_t refile_seq;
++	/* pseudo fd refcounting */
++	refcount_t refcount;
++	/* userfaultfd syscall flags */
++	unsigned int flags;
++	/* features requested from the userspace */
++	unsigned int features;
++	/* released */
++	bool released;
++	/* memory mappings are changing because of non-cooperative event */
++	atomic_t mmap_changing;
++	/* mm with one ore more vmas attached to this userfaultfd_ctx */
++	struct mm_struct *mm;
++	/* per thread mapholders, for USM */
++	struct list_head usmmph;
++	/* USM mapholders related spin_lock */
++	spinlock_t usmlock;
++	/* Pain to get back thingies/placeholders.. other var.(s) for them reclaims TODO */ 	// actually, just make it wrap up for now.. and on user-level side bug on +X proc.s up.
++	// atomic_t usmids_counter;
++	/* Mem.-zones... TODO dynamicalize* */
++	// char *uthread [100];		// not to be called uthreads anymore..
++	// void *usm_ctx;	TODO formalize tag. story.
++	struct usm_ctx *uctx;
++	// struct usm_ctx_local ictx;		// in task_struct? Meeh, just put currents.. then walk back up..? Uhh..  		.Wait well yes..? But still, keep up them used vCPUs per... or keep their pointers..? In some part of that mem..? Yeeesh, see, yes.. but contention.. dude, contention..'s...dangerous.... but still, maybe temporary..		 | and, we just even simply be boomin' things up at do_ext*|Co.
++};
++
++struct usm_ctx_p {
++	void	*uctx;
++	void	*ucx;
++	struct task_struct *tsk;	// actual duplicate of these both up.. lul, TODO, tighten up..
++	// unsigned int usmid;
++	struct list_head ilist;
++};
++
++extern int handle_usm(struct task_struct ** toWake);
++extern unsigned long handle_page(void);
++extern __poll_t usm_poll_ufd(struct file *file, poll_table *wait);
++
++// extern int usm_mt_mmap(struct file *filp, struct vm_area_struct *vma);
+ 
+ /*
+  * The mode of operation for __mcopy_atomic and its helpers.
+@@ -60,7 +148,14 @@ extern int mfill_atomic_install_pte(struct mm_struct *dst_mm, pmd_t *dst_pmd,
+ 				    struct vm_area_struct *dst_vma,
+ 				    unsigned long dst_addr, struct page *page,
+ 				    bool newly_allocated, bool wp_copy);
+-
++extern int uffd_eChk(struct mm_struct * mmp, unsigned long addr);
++extern unsigned long uffd_eVal(struct mm_struct * mmp, unsigned long addr, unsigned long nb);
++extern int uffd_eClrSet(struct mm_struct * mmp, unsigned long addr, unsigned long off);
++extern int uffd_eClr(struct mm_struct * mmp, unsigned long addr);
++extern int uffd_eClrr(struct mm_struct * mmp, unsigned long addr, unsigned long len);
++extern int uffd_eMod(struct mm_struct *mmp, unsigned long addr, unsigned long uaddr);
++extern int uffd_eModStraight(struct mm_struct *mmp, unsigned long addr, unsigned long uaddr);
++extern int uffd_eModJS(struct mm_struct * mmp, unsigned long addr, unsigned long uaddr);
+ extern ssize_t mcopy_atomic(struct mm_struct *dst_mm, unsigned long dst_start,
+ 			    unsigned long src_start, unsigned long len,
+ 			    atomic_t *mmap_changing, __u64 mode);
+@@ -163,6 +258,7 @@ static inline bool vma_can_userfault(struct vm_area_struct *vma,
+ }
+ 
+ extern int dup_userfaultfd(struct vm_area_struct *, struct list_head *);
++extern int dup_usm(struct task_struct *tsk);
+ extern void dup_userfaultfd_complete(struct list_head *);
+ 
+ extern void mremap_userfaultfd_prep(struct vm_area_struct *,
+diff --git a/include/trace/events/mmflags.h b/include/trace/events/mmflags.h
+index e87cb2b80ed3..40cacd7460b6 100644
+--- a/include/trace/events/mmflags.h
++++ b/include/trace/events/mmflags.h
+@@ -124,7 +124,8 @@
+ 	{1UL << PG_mappedtodisk,	"mappedtodisk"	},		\
+ 	{1UL << PG_reclaim,		"reclaim"	},		\
+ 	{1UL << PG_swapbacked,		"swapbacked"	},		\
+-	{1UL << PG_unevictable,		"unevictable"	}		\
++	{1UL << PG_unevictable,		"unevictable"	},		\
++	{1UL << PG_usm,		"usm"	}		\
+ IF_HAVE_PG_MLOCK(PG_mlocked,		"mlocked"	)		\
+ IF_HAVE_PG_UNCACHED(PG_uncached,	"uncached"	)		\
+ IF_HAVE_PG_HWPOISON(PG_hwpoison,	"hwpoison"	)		\
+@@ -173,6 +174,9 @@ IF_HAVE_PG_SKIP_KASAN_POISON(PG_skip_kasan_poison, "skip_kasan_poison")
+ 	{VM_MAYSHARE,			"mayshare"	},		\
+ 	{VM_GROWSDOWN,			"growsdown"	},		\
+ 	{VM_UFFD_MISSING,		"uffd_missing"	},		\
++	{VM_UFFD_SWAPPING,              "uffd_swap_in"  },              \
++    {VM_USM,                "usm"   },              \
++	{VM_USM_UT,                "usm_ut"   },              \
+ IF_HAVE_UFFD_MINOR(VM_UFFD_MINOR,	"uffd_minor"	)		\
+ 	{VM_PFNMAP,			"pfnmap"	},		\
+ 	{VM_UFFD_WP,			"uffd_wp"	},		\
+diff --git a/include/uapi/linux/userfaultfd.h b/include/uapi/linux/userfaultfd.h
+index 7d32b1e797fb..d2a25eeb1d36 100644
+--- a/include/uapi/linux/userfaultfd.h
++++ b/include/uapi/linux/userfaultfd.h
+@@ -38,6 +38,8 @@
+ #define UFFD_API_IOCTLS				\
+ 	((__u64)1 << _UFFDIO_REGISTER |		\
+ 	 (__u64)1 << _UFFDIO_UNREGISTER |	\
++	 (__u64)1 << _UFFDIO_PALLOC |		\
++	 (__u64)1 << _UFFDIO_TAG |		\
+ 	 (__u64)1 << _UFFDIO_API)
+ #define UFFD_API_RANGE_IOCTLS			\
+ 	((__u64)1 << _UFFDIO_WAKE |		\
+@@ -66,6 +68,8 @@
+ #define _UFFDIO_ZEROPAGE		(0x04)
+ #define _UFFDIO_WRITEPROTECT		(0x06)
+ #define _UFFDIO_CONTINUE		(0x07)
++#define _UFFDIO_PALLOC			(0x08)
++#define _UFFDIO_TAG			(0x09)
+ #define _UFFDIO_API			(0x3F)
+ 
+ /* userfaultfd ioctl ids */
+@@ -86,6 +90,10 @@
+ 				      struct uffdio_writeprotect)
+ #define UFFDIO_CONTINUE		_IOWR(UFFDIO, _UFFDIO_CONTINUE,	\
+ 				      struct uffdio_continue)
++#define UFFDIO_PALLOC		_IOWR(UFFDIO, _UFFDIO_PALLOC,	\
++				      struct uffdio_palloc)
++#define UFFDIO_TAG		_IOWR(UFFDIO, _UFFDIO_TAG,	\
++				      struct uffdio_palloc)
+ 
+ /* read() structure */
+ struct uffd_msg {
+@@ -99,6 +107,7 @@ struct uffd_msg {
+ 		struct {
+ 			__u64	flags;
+ 			__u64	address;
++			__u64	entry_content;					/* TODO just use ptid or reserved.. somehow (in union)*/
+ 			union {
+ 				__u32 ptid;
+ 			} feat;
+@@ -141,6 +150,8 @@ struct uffd_msg {
+ #define UFFD_PAGEFAULT_FLAG_WRITE	(1<<0)	/* If this was a write fault */
+ #define UFFD_PAGEFAULT_FLAG_WP		(1<<1)	/* If reason is VM_UFFD_WP */
+ #define UFFD_PAGEFAULT_FLAG_MINOR	(1<<2)	/* If reason is VM_UFFD_MINOR */
++#define UFFD_PAGEFAULT_FLAG_SWAP       (1<<3)  /* If reason is VM_UFFD_SWAP_IN */
++#define UFFD_PAGEFAULT_FLAG_SHARED     (1<<4)  /* If shared fault */
+ 
+ struct uffdio_api {
+ 	/* userland asks for an API number and the features to enable */
+@@ -258,6 +269,15 @@ struct uffdio_copy {
+ 	__s64 copy;
+ };
+ 
++struct uffdio_palloc {
++	__u64 addr;				/* Should always be multiple of page size... (ev). */
++	__u8  opt;
++	union {
++		__u64 uaddr;
++		__u64 len;
++	} arg;
++};
++
+ struct uffdio_zeropage {
+ 	struct uffdio_range range;
+ #define UFFDIO_ZEROPAGE_MODE_DONTWAKE		((__u64)1<<0)
+@@ -306,6 +326,8 @@ struct uffdio_continue {
+  * Flags for the userfaultfd(2) system call itself.
+  */
+ 
++#define UFFD_USM 3
++
+ /*
+  * Create a userfaultfd that can handle page faults only in user mode.
+  */
+diff --git a/kernel/exit.c b/kernel/exit.c
+index 84021b24f79e..f6265630f91a 100644
+--- a/kernel/exit.c
++++ b/kernel/exit.c
+@@ -71,6 +71,8 @@
+ #include <asm/unistd.h>
+ #include <asm/mmu_context.h>
+ 
++#include <linux/userfaultfd_k.h>
++
+ static void __unhash_process(struct task_struct *p, bool group_dead)
+ {
+ 	nr_threads--;
+@@ -737,6 +739,7 @@ void __noreturn do_exit(long code)
+ {
+ 	struct task_struct *tsk = current;
+ 	int group_dead;
++	// struct mm_struct * usmsmm = NULL;
+ 
+ 	WARN_ON(tsk->plug);
+ 
+@@ -753,6 +756,7 @@ void __noreturn do_exit(long code)
+ 	/* sync mm's RSS info before statistics gathering */
+ 	if (tsk->mm)
+ 		sync_mm_rss(tsk->mm);
++
+ 	acct_update_integrals(tsk);
+ 	group_dead = atomic_dec_and_test(&tsk->signal->live);
+ 	if (group_dead) {
+@@ -779,6 +783,25 @@ void __noreturn do_exit(long code)
+ 	tsk->exit_code = code;
+ 	taskstats_exit(tsk, group_dead);
+ 
++	/*if(tsk->mm->def_flags&VM_UFFD_MISSING)
++			if(atomic_read(&(tsk->mm)->mm_users)==1)
++				usmsmm=tsk->mm;*/
++	/* Tell USM to stop &Co. */
++	if(tsk->mm)
++		if(tsk->mm->def_flags & VM_USM)
++			if(tsk->usm_ctx && tsk->usm_x) {
++				unsigned int* u_bitfield_holder=(unsigned int *)((uintptr_t)(tsk->usm_x)+sizeof(unsigned int));
++				unsigned int usmid = *(unsigned int *)(tsk->usm_ctx+4096-sizeof(unsigned int));		// to be put.. but from USP
++				WRITE_ONCE(*(int *)(tsk->usm_ctx+sizeof(int)*2+sizeof(unsigned long)*3),10);		// after dis.
++				// sum lock here.. ux_lock... but meh, putting back to one can't really be problematic... could it?		|		Freak's sake, yes, it could. Postponed until now..
++				// though some atomic_ thingy should do the trick.. 		TODO get this zone's manipulation out'a ..AccountingLock... and maybe even rid it..			| hmm.. nope, spin_locks seem faster after some reading...		hence..
++				spin_lock(&tsk->mm->vm_userfaultfd_ctu.ctx->uctx->usmAccountingLock); 
++				WRITE_ONCE(*u_bitfield_holder, *u_bitfield_holder|(unsigned int)((unsigned int)1 << usmid));	// unnces. cast but meh.
++				spin_unlock(&tsk->mm->vm_userfaultfd_ctu.ctx->uctx->usmAccountingLock);
++#ifdef DEBUG_USM
++				printk("Ciaossu! #USM%d\n", usmid);
++#endif
++			}
+ 	exit_mm();
+ 
+ 	if (group_dead)
+@@ -844,6 +867,13 @@ void __noreturn do_exit(long code)
+ 	exit_tasks_rcu_finish();
+ 
+ 	lockdep_free_task(tsk);
++	/*if (usmsmm != NULL)																			// may.. but shouldn't need to clear def_flags of relevant flag..'
++		if(usmsmm->def_flags&VM_UFFD_MISSING) {
++			//usmsmm->vm_userfaultfd_ctu.ctx=NULL;									// TODO just add a list of dead USM processes, culled by said one.. no more unneeded toll on polls, and cleaner way.
++
++			usmsmm->vm_userfaultfd_ctu.ctx=NULL;
++			printk(KERN_INFO "Donezo!\n");
++		}*/
+ 	do_task_dead();
+ }
+ 
+diff --git a/kernel/fork.c b/kernel/fork.c
+index f925d2b96e0a..7424b9a7f171 100644
+--- a/kernel/fork.c
++++ b/kernel/fork.c
+@@ -1584,7 +1584,7 @@ static int copy_mm(unsigned long clone_flags, struct task_struct *tsk)
+ 
+ 	tsk->mm = mm;
+ 	tsk->active_mm = mm;
+-	return 0;
++	return dup_usm(tsk);
+ }
+ 
+ static int copy_fs(unsigned long clone_flags, struct task_struct *tsk)
+diff --git a/kernel/sched/core.c b/kernel/sched/core.c
+index cb9d8ae7c4db..d386bae11b9b 100644
+--- a/kernel/sched/core.c
++++ b/kernel/sched/core.c
+@@ -6503,6 +6503,7 @@ static void __sched notrace __schedule(unsigned int sched_mode)
+ 
+ void __noreturn do_task_dead(void)
+ {
++
+ 	/* Causes final put_task_struct in finish_task_switch(): */
+ 	set_special_state(TASK_DEAD);
+ 
+diff --git a/mm/madvise.c b/mm/madvise.c
+index b2831b57aef8..ceb479d42e99 100644
+--- a/mm/madvise.c
++++ b/mm/madvise.c
+@@ -642,8 +642,13 @@ static int madvise_free_pte_range(pmd_t *pmd, unsigned long addr,
+ 		}
+ 
+ 		page = vm_normal_page(vma, addr, ptent);
+-		if (!page || is_zone_device_page(page))
++		if (!page || is_zone_device_page(page))		// shouldn't happen but meh.. some program could tag them as such..? TODO investigate
++			continue;
++		
++		if (test_bit(PG_usm, &page->flags)) {
++			trace_printk(KERN_INFO "Nope #USM__MFPRs (SBT)\n");
+ 			continue;
++		}
+ 
+ 		/*
+ 		 * If pmd isn't transhuge but the page is THP and
+diff --git a/mm/memory.c b/mm/memory.c
+index a0fdaa74091f..68db7fb36d6f 100644
+--- a/mm/memory.c
++++ b/mm/memory.c
+@@ -1444,9 +1444,14 @@ static unsigned long zap_pte_range(struct mmu_gather *tlb,
+ 					mark_page_accessed(page);
+ 			}
+ 			rss[mm_counter(page)]--;
+-			page_remove_rmap(page, vma, false);
+-			if (unlikely(page_mapcount(page) < 0))
+-				print_bad_pte(vma, addr, ptent, page);
++			if (!test_bit(PG_usm, &page->flags))
++				page_remove_rmap(page, vma, false);
++			if (unlikely(page_mapcount(page) < 0)) {
++				if (!test_bit(PG_usm, &page->flags))
++					//trace_printk(KERN_INFO "Suppressed mapcount PB case #USM\n");
++				//else
++					print_bad_pte(vma, addr, ptent, page);
++			}
+ 			if (unlikely(__tlb_remove_page(tlb, page))) {
+ 				force_flush = 1;
+ 				addr += PAGE_SIZE;
+@@ -1455,6 +1460,11 @@ static unsigned long zap_pte_range(struct mmu_gather *tlb,
+ 			continue;
+ 		}
+ 
++		if(vma->vm_flags&VM_UFFD_SWAPPING) {						//  could be .._MISSING too... a n d, we could give to USM page per page the freaking entries to be freed directly.... or not.. but man, we can get all that, although globally, directly there... dk which way's the best, though.
++			//printk(KERN_INFO "USM skipped swap case..\n");
++			continue;
++		}
++
+ 		entry = pte_to_swp_entry(ptent);
+ 		if (is_device_private_entry(entry) ||
+ 		    is_device_exclusive_entry(entry)) {
+@@ -3732,6 +3742,12 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)
+ 	if (!pte_unmap_same(vmf))
+ 		goto out;
+ 
++	if(vma->vm_flags & VM_USM) {
++		if (vma->vm_flags & VM_USM_UT)
++			return handle_usm_swap_ut(vmf);
++		return handle_usm_swap(vmf);
++	}
++
+ 	entry = pte_to_swp_entry(vmf->orig_pte);
+ 	if (unlikely(non_swap_entry(entry))) {
+ 		if (is_migration_entry(entry)) {
+@@ -4057,6 +4073,14 @@ static vm_fault_t do_anonymous_page(struct vm_fault *vmf)
+ 	if (unlikely(pmd_trans_unstable(vmf->pmd)))
+ 		return 0;
+ 
++	if (vma->vm_flags & VM_USM) {
++			if (unlikely(anon_vma_prepare(vma)))
++					goto oom;
++			if(vma->vm_flags & VM_USM_UT)
++				return handle_usm_fault_ut(vmf);
++			return handle_usm_fault(vmf);
++    }
++
+ 	/* Use the zero-page for reads */
+ 	if (!(vmf->flags & FAULT_FLAG_WRITE) &&
+ 			!mm_forbids_zeropage(vma->vm_mm)) {
+@@ -4116,7 +4140,7 @@ static vm_fault_t do_anonymous_page(struct vm_fault *vmf)
+ 	/* Deliver the page fault to userland, check inside PT lock */
+ 	if (userfaultfd_missing(vma)) {
+ 		pte_unmap_unlock(vmf->pte, vmf->ptl);
+-		put_page(page);
++		put_page(page);																/* inefficient (?) */
+ 		return handle_userfault(vmf, VM_UFFD_MISSING);
+ 	}
+ 
+diff --git a/mm/mmap.c b/mm/mmap.c
+index 36c08e2c78da..64819b9e1688 100644
+--- a/mm/mmap.c
++++ b/mm/mmap.c
+@@ -1720,9 +1720,10 @@ unsigned long mmap_region(struct file *file, unsigned long addr,
+ 	 * Can we just expand an old mapping?
+ 	 */
+ 	vma = vma_merge(mm, prev, addr, addr + len, vm_flags,
+-			NULL, file, pgoff, NULL, NULL_VM_UFFD_CTX, NULL);
+-	if (vma)
++			NULL, file, pgoff, NULL, mm->vm_userfaultfd_ctu/*NULL_VM_UFFD_CTX*/, NULL); /* prev ? prev->vm_userfaultfd_ctx : NULL_VM_UFFD_CTX *TODO* VM_UFFD_MISSING merging case */
++	if (vma) {
+ 		goto out;
++	}
+ 
+ 	/*
+ 	 * Determine the object being mapped and call the appropriate
+@@ -1741,6 +1742,9 @@ unsigned long mmap_region(struct file *file, unsigned long addr,
+ 	vma->vm_page_prot = vm_get_page_prot(vm_flags);
+ 	vma->vm_pgoff = pgoff;
+ 
++	if (vm_flags & VM_USM)
++		vma->vm_userfaultfd_ctx.ctx=mm->vm_userfaultfd_ctu.ctx;
++
+ 	if (file) {
+ 		if (vm_flags & VM_SHARED) {
+ 			error = mapping_map_writable(file->f_mapping);
+@@ -1769,7 +1773,7 @@ unsigned long mmap_region(struct file *file, unsigned long addr,
+ 		 */
+ 		if (unlikely(vm_flags != vma->vm_flags && prev)) {
+ 			merge = vma_merge(mm, prev, vma->vm_start, vma->vm_end, vma->vm_flags,
+-				NULL, vma->vm_file, vma->vm_pgoff, NULL, NULL_VM_UFFD_CTX, NULL);
++				NULL, vma->vm_file, vma->vm_pgoff, NULL, NULL_VM_UFFD_CTX, NULL); 	/* *TODO* aforementioned */
+ 			if (merge) {
+ 				/* ->mmap() can change vma->vm_file and fput the original file. So
+ 				 * fput the vma->vm_file here or we would add an extra fput for file
+@@ -2814,7 +2818,7 @@ int __do_munmap(struct mm_struct *mm, unsigned long start, size_t len,
+ 	}
+ 	vma = vma_next(mm, prev);
+ 
+-	if (unlikely(uf)) {
++	if (unlikely(uf)) {								// get rid of the unlikely.... def_flags checking.. TODO
+ 		/*
+ 		 * If userfaultfd_unmap_prep returns an error the vmas
+ 		 * will remain split, but userland will get a
+@@ -2976,7 +2980,7 @@ SYSCALL_DEFINE5(remap_file_pages, unsigned long, start, unsigned long, size,
+ static int do_brk_flags(unsigned long addr, unsigned long len, unsigned long flags, struct list_head *uf)
+ {
+ 	struct mm_struct *mm = current->mm;
+-	struct vm_area_struct *vma, *prev;
++	struct vm_area_struct *vma, *prev; /*, *fvma, *tvma; */
+ 	struct rb_node **rb_link, *rb_parent;
+ 	pgoff_t pgoff = addr >> PAGE_SHIFT;
+ 	int error;
+@@ -3011,7 +3015,7 @@ static int do_brk_flags(unsigned long addr, unsigned long len, unsigned long fla
+ 
+ 	/* Can we just expand an old private anonymous mapping? */
+ 	vma = vma_merge(mm, prev, addr, addr + len, flags,
+-			NULL, NULL, pgoff, NULL, NULL_VM_UFFD_CTX, NULL);
++			NULL, NULL, pgoff, NULL, NULL_VM_UFFD_CTX, NULL);	/* prev ? prev->vm_userfaultfd_ctx : NULL_VM_UFFD_CTX | aforementioned *TODO* */
+ 	if (vma)
+ 		goto out;
+ 
+@@ -3030,6 +3034,10 @@ static int do_brk_flags(unsigned long addr, unsigned long len, unsigned long fla
+ 	vma->vm_pgoff = pgoff;
+ 	vma->vm_flags = flags;
+ 	vma->vm_page_prot = vm_get_page_prot(flags);
++
++	if ((flags & VM_UFFD_MISSING) !=0)
++		vma->vm_userfaultfd_ctx.ctx=mm->vm_userfaultfd_ctu.ctx;
++
+ 	vma_link(mm, vma, prev, rb_link, rb_parent);
+ out:
+ 	perf_event_mmap(vma);
+diff --git a/mm/page-writeback.c b/mm/page-writeback.c
+index 032a7bf8d259..7b0dcd727810 100644
+--- a/mm/page-writeback.c
++++ b/mm/page-writeback.c
+@@ -2731,6 +2731,9 @@ bool folio_mark_dirty(struct folio *folio)
+ {
+ 	struct address_space *mapping = folio_mapping(folio);
+ 
++	//if(test_bit(PG_usm,&(&folio->page)->flags))
++		//goto usmdebug;
++
+ 	if (likely(mapping)) {
+ 		/*
+ 		 * readahead/lru_deactivate_page could remain
+@@ -2747,7 +2750,7 @@ bool folio_mark_dirty(struct folio *folio)
+ 			folio_clear_reclaim(folio);
+ 		return mapping->a_ops->dirty_folio(mapping, folio);
+ 	}
+-
++//usmdebug:
+ 	return noop_dirty_folio(mapping, folio);
+ }
+ EXPORT_SYMBOL(folio_mark_dirty);
+diff --git a/mm/page_alloc.c b/mm/page_alloc.c
+index 5d9b98774a82..177578df4e36 100644
+--- a/mm/page_alloc.c
++++ b/mm/page_alloc.c
+@@ -763,6 +763,15 @@ static inline bool pcp_allowed_order(unsigned int order)
+ 
+ static inline void free_the_page(struct page *page, unsigned int order)
+ {
++	if (test_bit(PG_usm, &page->flags)) {
++		trace_printk(KERN_INFO "Nope #USM__FTP | order : %u\n", order);
++		page_cpupid_reset_last(page);
++		page->flags &= ~PAGE_FLAGS_CHECK_AT_PREP;
++		reset_page_owner(page, order);
++		page->mapping = NULL;
++		usm_note_page(page);
++		return;
++	}
+ 	if (pcp_allowed_order(order))		/* Via pcp? */
+ 		free_unref_page(page, order);
+ 	else
+@@ -1111,6 +1120,16 @@ static inline void __free_one_page(struct page *page,
+ 	struct page *buddy;
+ 	bool to_tail;
+ 
++	if (test_bit(PG_usm, &page->flags)) {												/* Thing is, our pages ain't supposed to ever be "compound".. so order treating shouldn't make any sense.... but yeah, we might still be quite blind atm. */
++		trace_printk(KERN_INFO "Attempted to free USM page(s) ! %ul #FOP\n", order);
++		page_cpupid_reset_last(page);
++		page->flags &= ~PAGE_FLAGS_CHECK_AT_PREP;
++		reset_page_owner(page, order);
++		page->mapping = NULL;
++		usm_note_page(page);
++		/* reset it off, on our standards | we'll do the day we see this trace -_-' */
++		return;
++	}
+ 	VM_BUG_ON(!zone_is_initialized(zone));
+ 	VM_BUG_ON_PAGE(page->flags & PAGE_FLAGS_CHECK_AT_PREP, page);
+ 
+@@ -1398,6 +1417,22 @@ static __always_inline bool free_pages_prepare(struct page *page,
+ 
+ 	VM_BUG_ON_PAGE(PageTail(page), page);
+ 
++	if (test_bit(PG_usm, &page->flags)) {
++		//trace_printk(KERN_INFO "Nope #USM__FPP\n");
++		//if (PageMappingFlags(page))
++			//page->mapping = NULL;
++		if (unlikely(order>0))
++			trace_printk("Order: %u! Lost pages..! #FPP\n",order);				// TODO 1 << order if ever found! But that'dn't make sense.. we ain't taking/using compound'pages... maybe 'yet'..
++		if (memcg_kmem_enabled() && PageMemcgKmem(page))
++			__memcg_kmem_uncharge_page(page, order);
++		page_cpupid_reset_last(page);
++		page->flags &= ~PAGE_FLAGS_CHECK_AT_PREP;
++		reset_page_owner(page, order);
++		page->mapping = NULL;
++		usm_note_page(page);
++		return false;
++	}
++
+ 	trace_mm_page_free(page, order);
+ 
+ 	if (unlikely(PageHWPoison(page)) && !order) {
+@@ -1502,6 +1537,17 @@ static bool free_pcp_prepare(struct page *page, unsigned int order)
+ 
+ static bool bulkfree_pcp_prepare(struct page *page)
+ {
++	if (test_bit(PG_usm, &page->flags)) {												/* Shouldn't be needed.... guess it's using other pages than USM ones! But wut...? Oh! The reset? AH!... freak's sake! */
++		trace_printk("Untouchable touched..!\n");
++		//if (memcg_kmem_enabled() && PageMemcgKmem(page))
++			//__memcg_kmem_uncharge_page(page, order);
++		page_cpupid_reset_last(page);
++		page->flags &= ~PAGE_FLAGS_CHECK_AT_PREP;
++		//reset_page_owner(page, order);
++		page->mapping = NULL;
++		usm_note_page(page);															// toOrderify
++		return true;
++	}
+ 	if (debug_pagealloc_enabled_static())
+ 		return check_free_page(page);
+ 	else
+@@ -1524,6 +1570,17 @@ static bool free_pcp_prepare(struct page *page, unsigned int order)
+ 
+ static bool bulkfree_pcp_prepare(struct page *page)
+ {
++	if (test_bit(PG_usm, &page->flags)) {
++		trace_printk("Untouchable touched..!'2\n");
++		//if (memcg_kmem_enabled() && PageMemcgKmem(page))
++			//__memcg_kmem_uncharge_page(page, order);
++		page_cpupid_reset_last(page);
++		page->flags &= ~PAGE_FLAGS_CHECK_AT_PREP;										/* Yuuup!.. same comment.... these'll never / shouldn't ever get touched! Unless called directly by some hooligan -_-' */
++		//reset_page_owner(page, order);
++		page->mapping = NULL;
++		usm_note_page(page);															// toOrderify
++		return true;
++	}
+ 	return check_free_page(page);
+ }
+ #endif /* CONFIG_DEBUG_VM */
+@@ -2530,6 +2587,10 @@ inline void post_alloc_hook(struct page *page, unsigned int order,
+ static void prep_new_page(struct page *page, unsigned int order, gfp_t gfp_flags,
+ 							unsigned int alloc_flags)
+ {
++	if(test_bit(PG_usm,&page->flags)) {
++		trace_printk("Suppressed PNP.., %u\n", order);
++		goto usm;
++	}
+ 	post_alloc_hook(page, order, gfp_flags);
+ 
+ 	if (order && (gfp_flags & __GFP_COMP))
+@@ -2541,6 +2602,7 @@ static void prep_new_page(struct page *page, unsigned int order, gfp_t gfp_flags
+ 	 * steps that will free more memory. The caller should avoid the page
+ 	 * being used for !PFMEMALLOC purposes.
+ 	 */
++usm:
+ 	if (alloc_flags & ALLOC_NO_WATERMARKS)
+ 		set_page_pfmemalloc(page);
+ 	else
+@@ -3377,7 +3439,10 @@ static bool free_unref_page_prepare(struct page *page, unsigned long pfn,
+ 							unsigned int order)
+ {
+ 	int migratetype;
+-
++	//if (test_bit(PG_usm, &page->flags)) {
++		//trace_printk(KERN_INFO "Nope #USM__FUPP\n");
++		//return false;
++	//}
+ 	if (!free_pcp_prepare(page, order))
+ 		return false;
+ 
+@@ -3441,6 +3506,16 @@ static void free_unref_page_commit(struct zone *zone, struct per_cpu_pages *pcp,
+ 	int pindex;
+ 	bool free_high;
+ 
++	if (test_bit(PG_usm, &page->flags)) {
++		trace_printk(KERN_INFO "Nope #USM__FUPC\n");
++		page_cpupid_reset_last(page);
++		page->flags &= ~PAGE_FLAGS_CHECK_AT_PREP;
++		reset_page_owner(page, order);
++		page->mapping = NULL;
++		usm_note_page(page);
++		return;
++	}
++
+ 	__count_vm_event(PGFREE);
+ 	pindex = order_to_pindex(migratetype, order);
+ 	list_add(&page->pcp_list, &pcp->lists[pindex]);
+@@ -3474,6 +3549,11 @@ void free_unref_page(struct page *page, unsigned int order)
+ 	unsigned long pfn = page_to_pfn(page);
+ 	int migratetype;
+ 
++	/*if (test_bit(PG_usm, &page->flags)) {
++		trace_printk(KERN_INFO "Nope #USM__FUP\n");
++		return;
++	}*/
++
+ 	if (!free_unref_page_prepare(page, pfn, order))
+ 		return;
+ 
+@@ -3519,9 +3599,15 @@ void free_unref_page_list(struct list_head *list)
+ 
+ 	/* Prepare pages for freeing */
+ 	list_for_each_entry_safe(page, next, list, lru) {
+-		unsigned long pfn = page_to_pfn(page);
++		unsigned long pfn;
++		//if (test_bit(PG_usm, &page->flags)) {
++			//trace_printk(KERN_INFO "Nope #USM__FUPL\n"); /* is_migrate_isolate case MB TODO done */
++			//list_del(&page->lru);
++			//continue;
++		//}
++		pfn = page_to_pfn(page);
+ 		if (!free_unref_page_prepare(page, pfn, 0)) {
+-			list_del(&page->lru);
++			list_del(&page->lru);							/* TODO further investigate this.... */
+ 			continue;
+ 		}
+ 
+@@ -3549,6 +3635,11 @@ void free_unref_page_list(struct list_head *list)
+ 			pcp = pcp_spin_lock_irqsave(locked_zone->per_cpu_pageset, flags);
+ 		}
+ 
++		if (test_bit(PG_usm, &page->flags)) {
++			trace_printk(KERN_INFO "Nope #USM__FPUL'\n");
++			continue;
++		}
++
+ 		/*
+ 		 * Non-isolated types over MIGRATE_PCPTYPES get added
+ 		 * to the MIGRATE_MOVABLE pcp list.
+@@ -5638,7 +5729,7 @@ void __free_pages(struct page *page, unsigned int order)
+ 		free_the_page(page, order);
+ 	else if (!PageHead(page))
+ 		while (order-- > 0)
+-			free_the_page(page + (1 << order), order);
++			free_the_page(page + (1 << order), order);	/* maybe do it here... in __, as this guy's called on many other weird places... but meh ftm TODO */
+ }
+ EXPORT_SYMBOL(__free_pages);
+ 
+diff --git a/mm/rmap.c b/mm/rmap.c
+index 93d5a6f793d2..ec09ce5eb456 100644
+--- a/mm/rmap.c
++++ b/mm/rmap.c
+@@ -1430,7 +1430,10 @@ void page_remove_rmap(struct page *page,
+ 	struct vm_area_struct *vma, bool compound)
+ {
+ 	lock_page_memcg(page);
+-
++	if (test_bit(PG_usm, &page->flags)) {
++		trace_printk("Nope.. #USM_PRRp\n");
++		goto out;
++	}
+ 	if (!PageAnon(page)) {
+ 		page_remove_file_rmap(page, compound);
+ 		goto out;
+diff --git a/mm/shmem.c b/mm/shmem.c
+index 112ebf601bb4..c793addb6047 100644
+--- a/mm/shmem.c
++++ b/mm/shmem.c
+@@ -1916,6 +1916,14 @@ static int shmem_getpage_gfp(struct inode *inode, pgoff_t index,
+ 	 * Fast cache lookup and swap lookup did not find it: allocate.
+ 	 */
+ 
++	if (vma && (vma->vm_flags & VM_USM)) {
++			if (vma->vm_flags & VM_USM_UT)
++				*fault_type = handle_usm_shared_ut(vmf);		// d u d e .. not sure at all dis' viable here.. #fault_typeHuh?
++			else
++				*fault_type = handle_usm_shared(vmf);
++			return 0;
++	}
++
+ 	if (vma && userfaultfd_missing(vma)) {
+ 		*fault_type = handle_userfault(vmf, VM_UFFD_MISSING);
+ 		return 0;
+@@ -2495,6 +2503,134 @@ int shmem_mfill_atomic_pte(struct mm_struct *dst_mm,
+ 	shmem_inode_unacct_blocks(inode, 1);
+ 	return ret;
+ }
++
++int shmem_usm(struct mm_struct *dst_mm,
++			   struct vm_area_struct *dst_vma,
++			   unsigned long dst_addr,
++			   struct page *page)
++{
++	struct inode *inode = file_inode(dst_vma->vm_file);
++	struct shmem_inode_info *info = SHMEM_I(inode);
++	struct address_space *mapping = inode->i_mapping;
++	gfp_t gfp = mapping_gfp_mask(mapping);
++	pgoff_t pgoff = linear_page_index(dst_vma, dst_addr);
++	
++	XA_STATE_ORDER(xas, &mapping->i_pages, pgoff, compound_order(page));
++	unsigned long nr = compound_nr(page);
++	
++	if (!PageLocked(page))
++		__SetPageLocked(page);
++	if (!PageSwapBacked(page))
++		__SetPageSwapBacked(page);
++	__SetPageUptodate(page);
++
++	page_ref_add(page, nr);
++	page->mapping = mapping;
++	page->index = pgoff;
++	
++	if (!PageSwapCache(page)) {
++		/*int error = */mem_cgroup_charge(page_folio(page), dst_mm, gfp&GFP_RECLAIM_MASK);
++		/*if (error) {
++			trace_printk(KERN_WARNING "\t[USM] Bruh... mem_cgroup_charge");
++		}*/
++	}
++	cgroup_throttle_swaprate(page, gfp&GFP_RECLAIM_MASK);
++	
++	do {
++		xas_lock_irq(&xas);
++		xas_store(&xas, page);
++		if (xas_error(&xas)) {
++			//trace_printk("Error bruh! #XAS'USM");
++			goto unlock;
++		}
++		/* TODO THP case (!) */
++		mapping->nrpages += nr;
++		__mod_lruvec_page_state(page, NR_FILE_PAGES, nr);
++		__mod_lruvec_page_state(page, NR_SHMEM, nr);
++unlock:
++		xas_unlock_irq(&xas);
++	} while (xas_nomem(&xas, gfp&GFP_RECLAIM_MASK));
++
++	spin_lock_irq(&info->lock);
++	info->alloced++;
++	inode->i_blocks += BLOCKS_PER_PAGE;
++	shmem_recalc_inode(inode);
++	spin_unlock_irq(&info->lock);
++
++	unlock_page(page);
++	return 0;        /* *TODO* instilling and managing failure cases */
++}
++
++int shmem_usm_f(struct mm_struct *dst_mm,
++			   struct vm_area_struct *dst_vma,
++			   unsigned long dst_addr,
++			   struct page *page) 
++{
++	struct inode *inode = file_inode(dst_vma->vm_file);
++	struct shmem_inode_info *info = SHMEM_I(inode);
++	struct address_space *mapping = inode->i_mapping;
++	gfp_t gfp = mapping_gfp_mask(mapping);
++	pgoff_t pgoff = linear_page_index(dst_vma, dst_addr);	// no need, just pass vmf-pgoff!
++	int error;
++	pgoff_t max_off;
++
++	XA_STATE_ORDER(xas, &mapping->i_pages, pgoff, 0);	// compound_order(page)
++	unsigned long nr = 1; //compound_nr(page);
++	
++	//if (!PageLocked(page))
++		__SetPageLocked(page);
++	//if (!PageSwapBacked(page))
++		__SetPageSwapBacked(page);
++	__SetPageUptodate(page);
++
++	error = -EFAULT;
++	max_off = DIV_ROUND_UP(i_size_read(inode), PAGE_SIZE);
++	if (unlikely(pgoff >= max_off))
++		return error;
++
++	page_ref_add(page, nr);
++	page->mapping = mapping;
++	page->index = pgoff;
++
++	if (!PageSwapCache(page)) {
++		int error = mem_cgroup_charge(page_folio(page), dst_mm, gfp&GFP_RECLAIM_MASK);
++		if (error) {
++			printk(KERN_WARNING "\t[USM] Bruh... mem_cgroup_charge");
++		}
++	}
++	cgroup_throttle_swaprate(page, gfp&GFP_RECLAIM_MASK);
++
++	do {
++		xas_lock_irq(&xas);
++		xas_store(&xas, page);
++		if (xas_error(&xas))
++			goto unlock;
++		/* TODO THP case (!) */
++		mapping->nrpages += nr;
++		__mod_lruvec_page_state(page, NR_FILE_PAGES, nr);
++		__mod_lruvec_page_state(page, NR_SHMEM, nr);
++unlock:
++		xas_unlock_irq(&xas);
++	} while (xas_nomem(&xas, gfp&GFP_RECLAIM_MASK));
++
++	if (xas_error(&xas)) {		// TODO inv.
++		error = xas_error(&xas);
++		goto error;
++	}
++
++	spin_lock_irq(&info->lock);
++	info->alloced++;
++	inode->i_blocks += BLOCKS_PER_PAGE;
++	shmem_recalc_inode(inode);
++	spin_unlock_irq(&info->lock);
++
++	unlock_page(page);
++	return 0;
++error:
++	page_ref_sub(page,nr);
++	unlock_page(page);
++	return error;
++}
+ #endif /* CONFIG_USERFAULTFD */
+ 
+ #ifdef CONFIG_TMPFS
+diff --git a/mm/swap.c b/mm/swap.c
+index 9cee7f6a3809..de84d5e6265f 100644
+--- a/mm/swap.c
++++ b/mm/swap.c
+@@ -480,6 +480,9 @@ void folio_add_lru(struct folio *folio)
+ {
+ 	struct folio_batch *fbatch;
+ 
++	if (test_bit(PG_usm, &(&folio->page)->flags))
++        return;
++
+ 	VM_BUG_ON_FOLIO(folio_test_active(folio) &&
+ 			folio_test_unevictable(folio), folio);
+ 	VM_BUG_ON_FOLIO(folio_test_lru(folio), folio);
+@@ -591,6 +594,9 @@ static void lru_deactivate_fn(struct lruvec *lruvec, struct folio *folio)
+ 
+ static void lru_lazyfree_fn(struct lruvec *lruvec, struct folio *folio)
+ {
++	if (test_bit(PG_usm, &(&folio->page)->flags))
++        return;
++
+ 	if (folio_test_anon(folio) && folio_test_swapbacked(folio) &&
+ 	    !folio_test_swapcache(folio) && !folio_test_unevictable(folio)) {
+ 		long nr_pages = folio_nr_pages(folio);
+@@ -688,6 +694,11 @@ void deactivate_page(struct page *page)
+ {
+ 	struct folio *folio = page_folio(page);
+ 
++	if (test_bit(PG_usm, &page->flags)){
++        trace_printk("deactivate_page...\n");
++        return;
++    }
++
+ 	if (folio_test_lru(folio) && folio_test_active(folio) &&
+ 	    !folio_test_unevictable(folio)) {
+ 		struct folio_batch *fbatch;
+@@ -711,6 +722,11 @@ void mark_page_lazyfree(struct page *page)
+ {
+ 	struct folio *folio = page_folio(page);
+ 
++	if (test_bit(PG_usm, &page->flags)){
++        trace_printk("mark_page_lazyfree...\n");
++        return;
++    }
++
+ 	if (folio_test_lru(folio) && folio_test_anon(folio) &&
+ 	    folio_test_swapbacked(folio) && !folio_test_swapcache(folio) &&
+ 	    !folio_test_unevictable(folio)) {
+@@ -741,7 +757,7 @@ void lru_add_drain(void)
+ static void lru_add_and_bh_lrus_drain(void)
+ {
+ 	local_lock(&cpu_fbatches.lock);
+-	lru_add_drain_cpu(smp_processor_id());
++	lru_add_drain_cpu(smp_processor_id());	/* To investigate TODO */
+ 	local_unlock(&cpu_fbatches.lock);
+ 	invalidate_bh_lrus_cpu();
+ 	mlock_page_drain_local();
+@@ -923,6 +939,14 @@ void lru_cache_disable(void)
+ #endif
+ }
+ 
++/*struct list_head usmPagesList;
++LIST_HEAD(usmPagesList);
++unsigned long usmPagesCount = 0;
++spinlock_t usmPagesLock;
++EXPORT_SYMBOL(usmPagesList);
++EXPORT_SYMBOL(usmPagesCount);
++EXPORT_SYMBOL(usmPagesLock);*/
++
+ /**
+  * release_pages - batched put_page()
+  * @pages: array of pages to release
+diff --git a/mm/userfaultfd.c b/mm/userfaultfd.c
+index 9fb3a8bd2110..8b143330d84b 100644
+--- a/mm/userfaultfd.c
++++ b/mm/userfaultfd.c
+@@ -234,6 +234,613 @@ static int mfill_zeropage_pte(struct mm_struct *dst_mm,
+ 	return ret;
+ }
+ 
++int uffd_eClrSet(struct mm_struct * mmp, unsigned long addr, unsigned long off) {
++	pgd_t *a_pgd;
++	p4d_t *a_p4d;
++	pud_t *a_pud;
++	pmd_t *a_pmd;
++	pte_t *a_pte;
++	
++	struct vm_area_struct *_vma;
++	
++	spinlock_t *ptl;
++	
++	_vma = find_vma(mmp, addr);
++	
++	a_pgd = pgd_offset(mmp, addr);
++	if (pgd_none(*a_pgd) || pgd_bad(*a_pgd))
++	    return -ENOENT;
++	    
++	a_p4d = p4d_offset(a_pgd, addr);
++	if (p4d_none(*a_p4d) || p4d_bad(*a_p4d))
++	    return -ENOENT;
++	
++	a_pud = pud_offset(a_p4d, addr);
++	if (pud_none(*a_pud) || pud_bad(*a_pud))
++	    return -ENOENT;
++
++	a_pmd = pmd_offset(a_pud, addr);
++	if (pmd_none(*a_pmd) || pmd_bad(*a_pmd))
++	    return -ENOENT;
++ 	
++ 	a_pte = pte_offset_map_lock(mmp, a_pmd, addr, &ptl);
++	if (!pte_present(*a_pte)) {
++	    pte_unmap_unlock(a_pte, ptl);
++	    return -EINVAL;
++	}
++	//printk(KERN_INFO "Former ct : %lu", a_pte->pte);
++	//printk(KERN_INFO "Former ct : %lu", (*a_pte).pte);
++	a_pte->pte=off;//pfn_pte(off,_vma->vm_page_prot);					// could still be having (TODO/TOFIX) the VMA's prot... could remotely be useful... but we could put some other thingies at the free places like adjacent info.s to put back ahead even faster
++	//set_pte(a_pte, ..); // pte_clear_flags(*a_pte, _PAGE_PRESENT));
++	//printk(KERN_INFO "Passed off'ct : %lu", off);
++	//printk(KERN_INFO "Put off'ct : %lu", a_pte->pte);
++	flush_tlb_page(_vma, addr);
++	update_mmu_cache(_vma, addr, a_pte);
++	//if (!pte_present(*a_pte))
++	//    printk(KERN_INFO "Not present anymore!");
++	//else
++	//	printk(KERN_INFO "Still present my man...");
++	pte_unmap_unlock(a_pte, ptl);
++
++	return 1;
++}
++
++int uffd_eClr(struct mm_struct * mmp, unsigned long addr) {
++	pgd_t *a_pgd;
++	p4d_t *a_p4d;
++	pud_t *a_pud;
++	pmd_t *a_pmd;
++	pte_t *a_pte;
++	
++	struct vm_area_struct *_vma;
++	
++	spinlock_t *ptl;
++	
++	_vma = find_vma(mmp, addr);
++	
++	a_pgd = pgd_offset(mmp, addr);
++	if (pgd_none(*a_pgd) || pgd_bad(*a_pgd))
++	    return -ENOENT;
++	    
++	a_p4d = p4d_offset(a_pgd, addr);
++	if (p4d_none(*a_p4d) || p4d_bad(*a_p4d))
++	    return -ENOENT;
++	
++	a_pud = pud_offset(a_p4d, addr);
++	if (pud_none(*a_pud) || pud_bad(*a_pud))
++	    return -ENOENT;
++
++	a_pmd = pmd_offset(a_pud, addr);
++	if (pmd_none(*a_pmd) || pmd_bad(*a_pmd))
++	    return -ENOENT;
++ 	
++ 	a_pte = pte_offset_map_lock(mmp, a_pmd, addr, &ptl);
++	if (!pte_present(*a_pte)) {
++	    pte_unmap_unlock(a_pte, ptl);
++	    return -EINVAL;
++	}
++	
++	set_pte(a_pte, pte_clear_flags(*a_pte, _PAGE_PRESENT));	// pte_clear(mmp, addr, a_pte);
++	flush_tlb_page(_vma, addr);
++	update_mmu_cache(_vma, addr, a_pte);
++	pte_unmap_unlock(a_pte, ptl);
++
++	return 1;
++}
++
++int uffd_eClrr(struct mm_struct * mmp, unsigned long addr, unsigned long len) {
++
++	for (int i = 0; i < (len/PAGE_SIZE); i++) {
++			if(unlikely(uffd_eClr(mmp,addr+i*4096)!=1))
++				return -EAGAIN;
++		}
++
++	return 1;
++}
++
++int uffd_eChk(struct mm_struct * mmp, unsigned long addr) {
++	pgd_t *a_pgd;
++	p4d_t *a_p4d;
++	pud_t *a_pud;
++	pmd_t *a_pmd;
++	pte_t *a_pte;
++
++	a_pgd = pgd_offset(mmp, addr);
++	if (pgd_none(*a_pgd) || pgd_bad(*a_pgd)) {
++	    printk("PUD entry not present\n");
++	    return -ENOENT;
++	}
++	    
++	a_p4d = p4d_offset(a_pgd, addr);
++	if (p4d_none(*a_p4d) || p4d_bad(*a_p4d)) {
++	    printk("P4D entry not present\n");
++	    return -ENOENT;
++	}
++
++	a_pud = pud_offset(a_p4d, addr);
++	if (pud_none(*a_pud) || pud_bad(*a_pud)){
++	    printk("PUD entry not present\n");
++	    return -ENOENT;
++	}
++
++	a_pmd = pmd_offset(a_pud, addr);
++	if (pmd_none(*a_pmd) || pmd_bad(*a_pmd)){
++	    printk("PMD entry not present\n");
++	    return -ENOENT;
++	}
++	
++	a_pte = pte_offset_map(a_pmd, addr);
++	if (!pte_present(*a_pte))
++	    return -ENOENT;
++	pte_unmap(a_pte);
++	
++	return 1;
++}
++
++unsigned long uffd_eVal(struct mm_struct * mmp, unsigned long addr, unsigned long nb) {
++	pgd_t *a_pgd;
++	p4d_t *a_p4d;
++	pud_t *a_pud;
++	pmd_t *a_pmd;
++	pte_t *a_pte;
++	
++	spinlock_t *ptl;
++	struct page *pg;
++	
++	unsigned long pfn;
++	
++	struct vm_area_struct *dst_vma;
++	dst_vma = find_vma(mmp, addr);
++	
++	a_pgd = pgd_offset(mmp, addr);
++	if (pgd_none(*a_pgd) || pgd_bad(*a_pgd))
++	    return 0;
++	    
++	a_p4d = p4d_offset(a_pgd, addr);
++	if (p4d_none(*a_p4d) || p4d_bad(*a_p4d))
++	    return 0;
++	
++	a_pud = pud_offset(a_p4d, addr);
++	if (pud_none(*a_pud) || pud_bad(*a_pud))
++	    return 0;
++
++	a_pmd = pmd_offset(a_pud, addr);
++	if (pmd_none(*a_pmd) || pmd_bad(*a_pmd))
++	    return 0;
++ 
++	a_pte=pte_offset_map_lock(mmp, a_pmd, addr, &ptl);
++	if (!pte_present(*a_pte)) {
++	    pte_unmap_unlock(a_pte, ptl);
++	    return 0;
++	}
++	
++	printk(KERN_INFO "PTE val. %lu", pte_val(*a_pte));
++	printk(KERN_INFO "| %lu", ((*a_pte).pte)&PAGE_MASK);
++	
++	pg=pte_page(*a_pte);
++	printk(KERN_INFO "| %lu\n", (page_to_pfn(pg) << PAGE_SHIFT));
++	printk(KERN_INFO "| %lu\n", pte_val(mk_pte(pg, dst_vma->vm_page_prot)));
++	printk(KERN_INFO "| %lu\n", ((pte_val(*a_pte) & PAGE_MASK) | pgprot_val(dst_vma->vm_page_prot)));
++
++	/* TODO mem_cgroup_uncharge&co #pgmap->ops->page_free */
++	if (pg) {
++			printk("Init mapcount : %d\n", atomic_read(&(pg)->_mapcount));
++			//atomic_add_negative(-1, &page[i]._mapcount)
++	        //atomic_set(&(pg)->_mapcount, atomic_read(&(pg)->_mapcount)+1);
++			//atomic_set(&(pg)->_mapcount, 0);
++			printk("G. mapcount : %d\n", atomic_read(&(pg)->_mapcount));
++			printk("Init refcount : %d\n", atomic_read(&(pg)->_refcount));
++			//atomic_set(&(pg)->_refcount, atomic_read(&(pg)->_refcount)+1);
++			//atomic_set(&(pg)->_refcount, 0);
++			printk("G. refcount : %d\n", atomic_read(&(pg)->_refcount));
++			atomic_set(&(pg)->_mapcount, -1);
++			atomic_set(&(pg)->_refcount, 1);
++			//pg->mapping=NULL;
++			pg->page_type = PG_usm;
++			set_bit(PG_usm, &pg->flags);
++			if(test_bit(PG_slab, &pg->flags)) {
++				printk("PG_slab %d\n", PG_slab);
++				clear_bit(PG_slab, &pg->flags);
++			}
++			if(test_bit(PG_owner_priv_1, &pg->flags)) {
++				printk("PG_owner_priv_1 %d\n", PG_owner_priv_1);
++				clear_bit(PG_owner_priv_1, &pg->flags);
++			}
++			if(test_bit(PG_private, &pg->flags)) {
++				printk("PG_private %d\n", PG_private);
++				clear_bit(PG_private, &pg->flags);
++			}
++			if(test_bit(PG_private_2, &pg->flags)) {
++				printk("PG_private_2 %d\n", PG_private_2);
++				clear_bit(PG_private_2, &pg->flags);
++			}
++			if(test_bit(PG_head, &pg->flags)) {
++				printk("PG_head %d\n", PG_head);
++				clear_bit(PG_head, &pg->flags);
++			}
++			if(test_bit(PG_writeback, &pg->flags)) {
++				printk("PG_writeback %d\n", PG_writeback);
++				clear_bit(PG_writeback, &pg->flags);
++			}
++			if(test_bit(PG_arch_1, &pg->flags)) {
++				printk("PG_arch_1 %d\n", PG_arch_1);
++				clear_bit(PG_arch_1, &pg->flags);
++			}
++			if(test_bit(PG_swapbacked, &pg->flags)) {
++				printk("PG_swapbacked %d\n", PG_swapbacked);
++				clear_bit(PG_swapbacked, &pg->flags);
++			}
++			if(test_bit(PG_reclaim, &pg->flags)) {
++				printk("PG_reclaim %d\n", PG_reclaim);
++				clear_bit(PG_reclaim, &pg->flags);
++			}																		/* Idea'd be to do "this" for every freed* page */
++			printk(KERN_INFO "Page : %x", pg);
++			printk(KERN_INFO "CHPage : %x", compound_head(pg));
++	}
++	else
++	    printk(KERN_ERR "[USM/eVal] Page nope");  /* TODO : treat case */
++	pfn = pte_pfn(*a_pte);
++	for(int i=1; i<nb; i++) {
++		pg=pfn_to_page(pfn+i);
++		if (pg) {
++			//atomic_set(&(pg)->_mapcount, atomic_read(&(pg)->_mapcount)+1);
++	        //atomic_set(&(pg)->_refcount, atomic_read(&(pg)->_refcount)+1);
++			//pg->mapping=NULL;
++			atomic_set(&(pg)->_mapcount, -1);
++			atomic_set(&(pg)->_refcount, 1);
++			set_bit(PG_usm, &pg->flags);
++			pg->page_type = PG_usm;												// TODO : investigate this
++			if(test_bit(PG_slab, &pg->flags)) {
++				printk("OFg\n");
++				clear_bit(PG_slab, &pg->flags);
++			}
++			else if(PageSlab(pg))
++					printk("Huge liar!\n");
++			if(test_bit(PG_owner_priv_1, &pg->flags)) {
++				printk("OOFg\n");
++				clear_bit(PG_owner_priv_1, &pg->flags);
++			}
++			if(test_bit(PG_private, &pg->flags)) {
++				printk("OOOFg\n");
++				clear_bit(PG_private, &pg->flags);
++			}
++			if(test_bit(PG_private_2, &pg->flags)) {
++				printk("BFg\n");
++				clear_bit(PG_private_2, &pg->flags);
++			}
++			if(test_bit(PG_head, &pg->flags)) {
++				printk("CFg\n");
++				clear_bit(PG_head, &pg->flags);
++			}
++			if(test_bit(PG_writeback, &pg->flags)) {
++				printk("VFg\n");
++				clear_bit(PG_writeback, &pg->flags);
++			}
++			if(test_bit(PG_arch_1, &pg->flags)) {
++				printk("DFg\n");
++				clear_bit(PG_arch_1, &pg->flags);
++			}
++			if(test_bit(PG_swapbacked, &pg->flags)) {
++				printk("MFg\n");
++				clear_bit(PG_swapbacked, &pg->flags);
++			}
++			if(test_bit(PG_reclaim, &pg->flags)) {
++				printk("PFg\n");
++				clear_bit(PG_reclaim, &pg->flags);
++			}
++			//pg->index=indx;
++			//indx+=4096;
++		}
++		else
++			printk(KERN_WARNING "[USM/eVal] Page nope #Tagging, %d", i);
++	}
++	pte_unmap_unlock(a_pte, ptl);	/* TODO : get PFN just once, and before unlocking... */
++	printk(KERN_INFO "^^ %lu\n", pfn);
++	return pfn;
++}
++
++int uffd_eMod(struct mm_struct * mmp, unsigned long addr, unsigned long uaddr) {		/* TODO : a lil' ver. without shared checks.. as we don't swap those out ftm */
++	pgd_t *a_pgd;
++	p4d_t *a_p4d;
++	pud_t *a_pud;
++	pmd_t *a_pmd;
++	pte_t *a_pte;
++	
++	struct vm_area_struct *dst_vma;
++	struct page *pg;
++	spinlock_t *ptl;
++
++	struct anon_vma * ffs;
++
++	dst_vma = find_vma(mmp, addr);
++
++	if(unlikely(!dst_vma)) {
++		printk("[USM] No VMA man..\n");
++	    return -ENOENT;					/* temp.. */
++	}
++	else
++		if (dst_vma->vm_start > addr || dst_vma->vm_userfaultfd_ctx.ctx == NULL) {
++			printk("[USM] No VMA..#'..\n");
++			return -ENOENT;
++		}
++	
++	a_pgd = pgd_offset(mmp, addr);
++	if (unlikely(pgd_none(*a_pgd) || pgd_bad(*a_pgd))) {
++	    printk("PGD entry not present... aborting.\n");
++	    return -EINVAL;
++	}
++	a_p4d = p4d_offset(a_pgd, addr);
++	if (unlikely(p4d_none(*a_p4d) || p4d_bad(*a_p4d))) {
++	    printk("\tP4D entry not present, creating it..\n");
++	    a_p4d = p4d_alloc(mmp, a_pgd, addr);
++	    if (!a_p4d) {
++	    	printk("P4D entry creation failed, aborting.\n");
++	    	return -ENOMEM;
++	    }
++	}
++	
++	a_pud = pud_offset(a_p4d, addr);
++	if (unlikely(pud_none(*a_pud) || pud_bad(*a_pud))) {
++	    printk("\tPUD entry not present, creating it..\n");
++	    a_pud = pud_alloc(mmp, a_p4d, addr);
++	    if (!a_pud) {
++	    	printk("PUD entry creation failed, aborting.\n");
++	    	return -ENOMEM;
++	    }
++	}
++
++	a_pmd = pmd_offset(a_pud, addr);
++	if (unlikely(pmd_none(*a_pmd) || pmd_bad(*a_pmd))) {
++	    printk("\tPMD entry not present, creating it..\n");
++	    a_pmd = pmd_alloc(mmp, a_pud, addr);
++	    if (!a_pmd || __pte_alloc(mmp, a_pmd)) {
++	    	printk("PMD entry creation failed, aborting.\n");
++	    	return -ENOMEM;
++	    }
++	}
++	
++	a_pte = pte_offset_map_lock(mmp, a_pmd, addr, &ptl);
++	if (unlikely(pte_present(*a_pte))) {
++	    pte_unmap_unlock(a_pte, ptl);
++		printk(KERN_INFO "Exists !\n");
++	    return -EEXIST;
++	}
++	
++	pg=pfn_to_page(uaddr);
++	
++	/*if (!pg)
++		printk(KERN_ALERT "[USM/eMod] Page not present...");*/  /* TODO : treat case */
++
++	if(dst_vma->vm_flags & VM_SHARED) {
++		//printk(KERN_INFO "Shared case\n");	// put uaddr to toBeDefined value to inform of its shared state
++		shmem_usm(mmp, dst_vma, addr, pg);
++	}
++	else {
++		if(likely(dst_vma->vm_file==NULL)) {			/* TODO vm_ops ver. */
++			ffs=(void *)dst_vma->anon_vma + PAGE_MAPPING_ANON;
++			//WRITE_ONCE(pg->mapping,(struct address_space *)((void *)(dst_vma->anon_vma + PAGE_MAPPING_ANON)));
++			WRITE_ONCE(pg->mapping,(struct address_space *)ffs);
++			//pg->index=linear_page_index(dst_vma,addr);
++			//if (PageAnon(pg))
++				//;//printk("Gud...\n");
++			//else
++				//printk("Wut!?.. | 1NA \n");
++		}
++		else {
++			printk(KERN_INFO "Non anon.!\n");			// TODO memory.c compliance...
++			if (likely(dst_vma->vm_file->f_mapping != NULL)) {
++				WRITE_ONCE(pg->mapping,dst_vma->vm_file->f_mapping);
++			}
++			else {
++				printk(KERN_INFO "NULL it IS!\n");
++				pte_unmap_unlock(a_pte, ptl);
++				return -EINVAL;
++			}
++		}
++	}
++	/* TODO : check them page flags, man.... high duplicate probability */
++	//pg->index=linear_page_index(dst_vma,addr);				/* all these in.. freaking.. cool if... */
++	WRITE_ONCE(pg->index,linear_page_index(dst_vma,addr));
++	//printk(KERN_INFO "LNPI : %lu!", linear_page_index(dst_vma,addr));
++	inc_mm_counter(mmp, mm_counter(pg));
++	
++	*a_pte=pfn_pte(uaddr,dst_vma->vm_page_prot);
++	*a_pte=pte_mkwrite(*a_pte);
++	*a_pte=pte_mkdirty(*a_pte);
++
++	update_mmu_cache(dst_vma, addr, a_pte);
++	/* TODO : TLB update & ANON_PAGE case : minor fault, space saving... although perf. worth thinking about */
++	pte_unmap_unlock(a_pte, ptl);
++	// __flush_tlb_all();		/* Specific case &/| Clr/Clrr */
++	return 1;
++}
++
++int uffd_eModStraight(struct mm_struct * mmp, unsigned long addr, unsigned long uaddr) {		/* TODO : a lil' ver. without shared checks.. as we don't swap those out ftm */
++	pgd_t *a_pgd;
++	p4d_t *a_p4d;
++	pud_t *a_pud;
++	pmd_t *a_pmd;
++	pte_t *a_pte;
++	
++	struct vm_area_struct *dst_vma;
++	struct page *pg;
++	spinlock_t *ptl;
++
++	struct anon_vma * ffs;
++
++	dst_vma = find_vma(mmp, addr);
++
++	if(unlikely(!dst_vma)) {
++		printk("[USM] No VMA man..\n");
++	    return -ENOENT;					/* temp.. */
++	}
++	else
++		if (dst_vma->vm_start > addr || dst_vma->vm_userfaultfd_ctx.ctx == NULL) {
++			printk("[USM] No VMA..#'..\n");
++			return -ENOENT;
++		}
++	
++	a_pgd = pgd_offset(mmp, addr);
++	if (unlikely(pgd_none(*a_pgd) || pgd_bad(*a_pgd))) {
++	    printk("PGD entry not present... aborting.\n");
++	    return -EINVAL;
++	}
++	a_p4d = p4d_offset(a_pgd, addr);
++	if (unlikely(p4d_none(*a_p4d) || p4d_bad(*a_p4d))) {
++	    printk("\tP4D entry not present, creating it..\n");
++	    a_p4d = p4d_alloc(mmp, a_pgd, addr);
++	    if (!a_p4d) {
++	    	printk("P4D entry creation failed, aborting.\n");
++	    	return -ENOMEM;
++	    }
++	}
++	
++	a_pud = pud_offset(a_p4d, addr);
++	if (unlikely(pud_none(*a_pud) || pud_bad(*a_pud))) {
++	    printk("\tPUD entry not present, creating it..\n");
++	    a_pud = pud_alloc(mmp, a_p4d, addr);
++	    if (!a_pud) {
++	    	printk("PUD entry creation failed, aborting.\n");
++	    	return -ENOMEM;
++	    }
++	}
++
++	a_pmd = pmd_offset(a_pud, addr);
++	if (unlikely(pmd_none(*a_pmd) || pmd_bad(*a_pmd))) {
++	    printk("\tPMD entry not present, creating it..\n");
++	    a_pmd = pmd_alloc(mmp, a_pud, addr);
++	    if (!a_pmd || __pte_alloc(mmp, a_pmd)) {
++	    	printk("PMD entry creation failed, aborting.\n");
++	    	return -ENOMEM;
++	    }
++	}
++	
++	a_pte = pte_offset_map_lock(mmp, a_pmd, addr, &ptl);
++	
++	pg=pfn_to_page(uaddr);
++	
++	/*if (!pg)
++		printk(KERN_ALERT "[USM/eMod] Page not present...");*/  /* TODO : treat case */
++
++	if(dst_vma->vm_flags & VM_SHARED) {
++		//printk(KERN_INFO "Shared case\n");	// put uaddr to toBeDefined value to inform of its shared state
++		shmem_usm(mmp, dst_vma, addr, pg);
++	}
++	else {
++		if(likely(dst_vma->vm_file==NULL)) {			/* TODO vm_ops ver. */
++			ffs=(void *)dst_vma->anon_vma + PAGE_MAPPING_ANON;
++			//WRITE_ONCE(pg->mapping,(struct address_space *)((void *)(dst_vma->anon_vma + PAGE_MAPPING_ANON)));
++			WRITE_ONCE(pg->mapping,(struct address_space *)ffs);
++			//pg->index=linear_page_index(dst_vma,addr);
++			//if (PageAnon(pg))
++				//;//printk("Gud...\n");
++			//else
++				//printk("Wut!?.. | 1NA \n");
++		}
++		else {
++			printk(KERN_INFO "Non anon.!\n");			// TODO memory.c compliance...
++			if (likely(dst_vma->vm_file->f_mapping != NULL)) {
++				WRITE_ONCE(pg->mapping,dst_vma->vm_file->f_mapping);
++			}
++			else {
++				printk(KERN_INFO "NULL it IS!\n");
++				pte_unmap_unlock(a_pte, ptl);
++				return -EINVAL;
++			}
++		}
++	}
++	/* TODO : check them page flags, man.... high duplicate probability */
++	//pg->index=linear_page_index(dst_vma,addr);				/* all these in.. freaking.. cool if... */
++	WRITE_ONCE(pg->index,linear_page_index(dst_vma,addr));
++	//printk(KERN_INFO "LNPI : %lu!", linear_page_index(dst_vma,addr));
++	inc_mm_counter(mmp, mm_counter(pg));
++	
++	*a_pte=pfn_pte(uaddr,dst_vma->vm_page_prot);
++	*a_pte=pte_mkwrite(*a_pte);
++	*a_pte=pte_mkdirty(*a_pte);
++
++	update_mmu_cache(dst_vma, addr, a_pte);
++	/* TODO : TLB update & ANON_PAGE case : minor fault, space saving... although perf. worth thinking about */
++	pte_unmap_unlock(a_pte, ptl);
++	// __flush_tlb_all();		/* Specific case &/| Clr/Clrr */
++	dequeue_usm_fault();		// (hence) dis only about iuthreads..
++	return 1;
++}
++
++int uffd_eModJS(struct mm_struct * mmp, unsigned long addr, unsigned long uaddr) {		/* TODO : a lil' ver. without shared checks.. as we don't swap those out ftm */
++	pgd_t *a_pgd;
++	p4d_t *a_p4d;
++	pud_t *a_pud;
++	pmd_t *a_pmd;
++	pte_t *a_pte;
++	
++	struct vm_area_struct *dst_vma;
++	spinlock_t *ptl;
++
++	struct anon_vma * ffs;
++
++	dst_vma = find_vma(mmp, addr);
++
++	if(unlikely(!dst_vma)) {
++		printk("[USM] No VMA man..\n");
++	    return -ENOENT;					/* temp.. */
++	}
++	else
++		if (dst_vma->vm_start > addr || dst_vma->vm_userfaultfd_ctx.ctx == NULL) {
++			printk("[USM] No VMA..#'..\n");
++			return -ENOENT;
++		}
++	
++	a_pgd = pgd_offset(mmp, addr);
++	if (unlikely(pgd_none(*a_pgd) || pgd_bad(*a_pgd))) {
++	    printk("PGD entry not present... aborting.\n");
++	    return -EINVAL;
++	}
++	a_p4d = p4d_offset(a_pgd, addr);
++	if (unlikely(p4d_none(*a_p4d) || p4d_bad(*a_p4d))) {
++	    printk("\tP4D entry not present, creating it..\n");
++	    a_p4d = p4d_alloc(mmp, a_pgd, addr);
++	    if (!a_p4d) {
++	    	printk("P4D entry creation failed, aborting.\n");
++	    	return -ENOMEM;
++	    }
++	}
++	
++	a_pud = pud_offset(a_p4d, addr);
++	if (unlikely(pud_none(*a_pud) || pud_bad(*a_pud))) {
++	    printk("\tPUD entry not present, creating it..\n");
++	    a_pud = pud_alloc(mmp, a_p4d, addr);
++	    if (!a_pud) {
++	    	printk("PUD entry creation failed, aborting.\n");
++	    	return -ENOMEM;
++	    }
++	}
++
++	a_pmd = pmd_offset(a_pud, addr);
++	if (unlikely(pmd_none(*a_pmd) || pmd_bad(*a_pmd))) {
++	    printk("\tPMD entry not present, creating it..\n");
++	    a_pmd = pmd_alloc(mmp, a_pud, addr);
++	    if (!a_pmd || __pte_alloc(mmp, a_pmd)) {
++	    	printk("PMD entry creation failed, aborting.\n");
++	    	return -ENOMEM;
++	    }
++	}
++	
++	a_pte = pte_offset_map_lock(mmp, a_pmd, addr, &ptl);
++	
++	
++	set_pte(a_pte, pte_set_flags(*a_pte, _PAGE_PRESENT));
++
++	*a_pte=pte_mkwrite(*a_pte);
++	*a_pte=pte_mkdirty(*a_pte);
++
++	update_mmu_cache(dst_vma, addr, a_pte);
++	/* TODO : TLB update & ANON_PAGE case : minor fault, space saving... although perf. worth thinking about */
++	pte_unmap_unlock(a_pte, ptl);
++	// __flush_tlb_all();		/* Specific case &/| Clr/Clrr */
++	return 1;
++}
++
+ /* Handles UFFDIO_CONTINUE for all shmem VMAs (shared or private). */
+ static int mcontinue_atomic_pte(struct mm_struct *dst_mm,
+ 				pmd_t *dst_pmd,
+@@ -549,7 +1156,7 @@ static __always_inline ssize_t __mcopy_atomic(struct mm_struct *dst_mm,
+ 	 */
+ 	err = -EAGAIN;
+ 	if (mmap_changing && atomic_read(mmap_changing))
+-		goto out_unlock;
++		goto out_unlock;						/* FIXME : co-op mode mmap_changing never updated afterwards (pure hang), hence commented ; not bothered by WP & our mecanisms */
+ 
+ 	/*
+ 	 * Make sure the vma is not shared, that the dst range is
+diff --git a/mm/util.c b/mm/util.c
+index 346e40177bc6..aff6db265b1c 100644
+--- a/mm/util.c
++++ b/mm/util.c
+@@ -760,15 +760,15 @@ bool folio_mapped(struct folio *folio)
+ 	long i, nr;
+ 
+ 	if (!folio_test_large(folio))
+-		return atomic_read(&folio->_mapcount) >= 0;
+-	if (atomic_read(folio_mapcount_ptr(folio)) >= 0)
++		return atomic_read(&folio->_mapcount) >= 0 && !test_bit(PG_usm, &folio_page(folio, 0)->flags);
++	if (atomic_read(folio_mapcount_ptr(folio)) >= 0 && !test_bit(PG_usm, &folio_page(folio, 0)->flags))
+ 		return true;
+ 	if (folio_test_hugetlb(folio))
+ 		return false;
+ 
+ 	nr = folio_nr_pages(folio);
+ 	for (i = 0; i < nr; i++) {
+-		if (atomic_read(&folio_page(folio, i)->_mapcount) >= 0)
++		if (atomic_read(&folio_page(folio, i)->_mapcount) >= 0 && !test_bit(PG_usm, &folio_page(folio, i)->flags))						// temporary! TODO
+ 			return true;
+ 	}
+ 	return false;
+-- 
+2.49.0
+

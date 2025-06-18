@@ -283,7 +283,7 @@ static bool do_iteration(uint64_t length, int access, bool with_userfaultfd,
 
     printf("%" PRIu64, timestamp_end - timestamp_page_fault);
 
-    if (with_userfaultfd && !no_msg_received) {
+    if (!no_msg_received) {
       timestamp_msg_received_copy =
           atomic_load_explicit(&timestamp_msg_received, memory_order_relaxed);
 
@@ -313,7 +313,7 @@ static bool do_iteration(uint64_t length, int access, bool with_userfaultfd,
 
     fputc('\n', stdout);
 
-    if (with_userfaultfd && !no_msg_received)
+    if (!no_msg_received)
       atomic_store_explicit(&timestamp_msg_received, 0, memory_order_relaxed);
   }
 
@@ -413,6 +413,9 @@ int main(int argc, char **argv) {
             arg0);
     goto out;
   }
+
+  if (!with_userfaultfd)
+    no_msg_received = true;
 
   fast_tracepoints_dir_fd =
       open("/proc/sys/debug/fast-tracepoints", O_DIRECTORY | O_PATH);

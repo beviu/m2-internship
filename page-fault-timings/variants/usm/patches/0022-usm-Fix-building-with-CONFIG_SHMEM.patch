@@ -1,0 +1,25 @@
+From 15089ac106c4ae372d040726e48e807e72237b9b Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Wed, 11 Jun 2025 10:26:56 +0200
+Subject: [PATCH 22/30] usm: Fix building with CONFIG_SHMEM
+
+---
+ include/linux/shmem_fs.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/include/linux/shmem_fs.h b/include/linux/shmem_fs.h
+index 32b951c95509..c4eacf8755e3 100644
+--- a/include/linux/shmem_fs.h
++++ b/include/linux/shmem_fs.h
+@@ -164,6 +164,8 @@ extern int shmem_usm_f(struct mm_struct *dst_mm,
+ #else /* !CONFIG_SHMEM */
+ #define shmem_mfill_atomic_pte(dst_mm, dst_pmd, dst_vma, dst_addr, \
+ 			       src_addr, zeropage, wp_copy, pagep) ({ BUG(); 0; })
++#define shmem_usm(dst_mm, dst_vma, dst_addr, page) ({ BUG(); 0; })
++#define shmem_usm_f(dst_mm, dst_vma, dst_addr, page) ({ BUG(); 0; })
+ #endif /* CONFIG_SHMEM */
+ #endif /* CONFIG_USERFAULTFD */
+ 
+-- 
+2.49.0
+

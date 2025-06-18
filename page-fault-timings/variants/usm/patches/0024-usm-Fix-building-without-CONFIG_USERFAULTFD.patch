@@ -1,0 +1,65 @@
+From 333188ab7f60ed7ceec99c9f7470486c0ff1a3ba Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Sun, 15 Jun 2025 15:08:55 +0200
+Subject: [PATCH 24/30] usm: Fix building without CONFIG_USERFAULTFD
+
+---
+ include/linux/userfaultfd_k.h | 35 +++++++++++++++++++++++++++++++++++
+ 1 file changed, 35 insertions(+)
+
+diff --git a/include/linux/userfaultfd_k.h b/include/linux/userfaultfd_k.h
+index 430ecc358197..b1224f23d80c 100644
+--- a/include/linux/userfaultfd_k.h
++++ b/include/linux/userfaultfd_k.h
+@@ -286,6 +286,36 @@ static inline vm_fault_t handle_userfault(struct vm_fault *vmf,
+ 	return VM_FAULT_SIGBUS;
+ }
+ 
++static inline vm_fault_t handle_usm_fault(struct vm_fault *vmf)
++{
++	return VM_FAULT_SIGBUS;
++}
++
++static inline vm_fault_t handle_usm_fault_ut(struct vm_fault *vmf)
++{
++	return VM_FAULT_SIGBUS;
++}
++
++static inline vm_fault_t handle_usm_swap(struct vm_fault *vmf)
++{
++	return VM_FAULT_SIGBUS;
++}
++
++static inline vm_fault_t handle_usm_swap_ut(struct vm_fault *vmf)
++{
++	return VM_FAULT_SIGBUS;
++}
++
++static inline vm_fault_t handle_usm_shared(struct vm_fault *vmf)
++{
++	return VM_FAULT_SIGBUS;
++}
++
++static inline vm_fault_t handle_usm_shared_ut(struct vm_fault *vmf)
++{
++	return VM_FAULT_SIGBUS;
++}
++
+ static inline bool is_mergeable_vm_userfaultfd_ctx(struct vm_area_struct *vma,
+ 					struct vm_userfaultfd_ctx vm_ctx)
+ {
+@@ -331,6 +361,11 @@ static inline int dup_userfaultfd(struct vm_area_struct *vma,
+ 	return 0;
+ }
+ 
++static inline int dup_usm(struct task_struct *tsk)
++{
++	return 0;
++}
++
+ static inline void dup_userfaultfd_complete(struct list_head *l)
+ {
+ }
+-- 
+2.49.0
+
