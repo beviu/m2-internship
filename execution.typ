@@ -7,16 +7,13 @@
     base-color.lighten(75%).desaturate(25%)
   }
 
-  pad(
-    y: .2em,
-    rect(
-      width: 10em,
-      fill: fill,
-      stroke: black,
-      inset: (x: .4em, y: .5em),
-      align(center, body),
-    ),
-  )
+  pad(y: .2em, rect(
+    width: 10em,
+    fill: fill,
+    stroke: black,
+    inset: (x: .4em, y: .5em),
+    align(center, body),
+  ))
 }
 
 #let kernel-stmt = stmt.with(base-color: red)
@@ -66,23 +63,18 @@
             block(height: event-position.y - y, spacing: 0pt)
             y = event-position.y
           }
-          align(
-            left,
-            block(
-              place(
-                simple-arrow(
-                  start: (
-                    event-position.x - current-position.x,
-                    event-position.y - y,
-                  ),
-                  end: (0pt, 0pt),
-                  thickness: .1em,
-                ),
+          align(left, block(
+            place(simple-arrow(
+              start: (
+                event-position.x - current-position.x,
+                event-position.y - y,
               ),
-              spacing: 0pt,
-              inset: .2em,
-            ),
-          )
+              end: (0pt, 0pt),
+              thickness: .1em,
+            )),
+            spacing: 0pt,
+            inset: .2em,
+          ))
         })
       } else if (
         type(statement) == dictionary and statement.keys().contains("set-event")

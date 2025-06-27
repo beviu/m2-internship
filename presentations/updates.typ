@@ -3,27 +3,21 @@
 #import "@preview/bytefield:0.0.7": *
 #import "@preview/cetz:0.3.2"
 
-#set document(
-  description: [First presentation of what I plan to work on during my internship to the KrakOS team.],
-)
+#set document(description: [First presentation of what I plan to work on during my internship to the KrakOS team.])
 
-#show: simple-theme.with(
-  aspect-ratio: "16-9",
-  primary: purple,
-  config-info(
-    title: [Hardware assisted user-space memory management (uMM)],
-    author: [Greg Depoire-\-Ferrer],
-    date: datetime(
-      year: 2025,
-      month: 2,
-      day: 27,
-      hour: 14,
-      minute: 0,
-      second: 0,
-    ),
-    institution: [KrakOS],
+#show: simple-theme.with(aspect-ratio: "16-9", primary: purple, config-info(
+  title: [Hardware assisted user-space memory management (uMM)],
+  author: [Greg Depoire-\-Ferrer],
+  date: datetime(
+    year: 2025,
+    month: 2,
+    day: 27,
+    hour: 14,
+    minute: 0,
+    second: 0,
   ),
-)
+  institution: [KrakOS],
+))
 
 #title-slide[
   = Hardware assisted user-space memory management (uMM)
@@ -67,9 +61,10 @@
 // Touying has a bug
 // (https://forum.typst.app/t/how-do-i-add-bibliography-to-a-touying-presentation/643/7) which makes
 // this code snippet create a blank slide if it's put in the preamble, so put it later.
-#show: magic.bibliography-as-footnote.with(
-  bibliography("bibliography.yaml", title: none),
-)
+#show: magic.bibliography-as-footnote.with(bibliography(
+  "bibliography.yaml",
+  title: none,
+))
 
 A need for more *flexibility* in memory management.
 
@@ -132,85 +127,81 @@ A need for more *flexibility* in memory management.
       needs to ask the kernel before doing anything which introduces too much overhead.
     ]
 
-    #align(
-      center,
-      cetz.canvas({
-        import cetz.draw: *
+    #align(center, cetz.canvas({
+      import cetz.draw: *
 
-        let part(body) = box(
-          height: 1.5em,
-          inset: (x: .5em),
-          align(horizon, body),
-        )
+      let part(body) = box(height: 1.5em, inset: (x: .5em), align(
+        horizon,
+        body,
+      ))
 
-        content((), frame: "rect", part[uMM], name: "umm")
-        content(
-          (rel: (-1, 0), to: "umm.west"),
-          frame: "rect",
-          part[Kernel],
-          name: "kernel",
-          anchor: "east",
-        )
-        content(
-          (rel: (-1, 0), to: "kernel.west"),
-          frame: "rect",
-          part[CPU],
-          name: "cpu",
-          anchor: "east",
-        )
+      content((), frame: "rect", part[uMM], name: "umm")
+      content(
+        (rel: (-1, 0), to: "umm.west"),
+        frame: "rect",
+        part[Kernel],
+        name: "kernel",
+        anchor: "east",
+      )
+      content(
+        (rel: (-1, 0), to: "kernel.west"),
+        frame: "rect",
+        part[CPU],
+        name: "cpu",
+        anchor: "east",
+      )
 
-        content(
-          (rel: (0, -1), to: "umm.south"),
-          frame: "rect",
-          part[Bento],
-          name: "bento",
-          anchor: "north",
-        )
-        content(
-          (rel: (0, -1), to: "cpu.south"),
-          frame: "rect",
-          part[IO],
-          name: "io",
-          anchor: "north",
-        )
+      content(
+        (rel: (0, -1), to: "umm.south"),
+        frame: "rect",
+        part[Bento],
+        name: "bento",
+        anchor: "north",
+      )
+      content(
+        (rel: (0, -1), to: "cpu.south"),
+        frame: "rect",
+        part[IO],
+        name: "io",
+        anchor: "north",
+      )
 
-        line(
-          (
-            rel: (0, .5),
-            to: ("umm.north-west", .5, "kernel.north-east"),
-          ),
-          (
-            horizontal: (),
-            vertical: (rel: (0, -.5), to: "bento.south-west"),
-          ),
-          stroke: (dash: "dashed", paint: gray),
-        )
+      line(
+        (
+          rel: (0, .5),
+          to: ("umm.north-west", .5, "kernel.north-east"),
+        ),
+        (
+          horizontal: (),
+          vertical: (rel: (0, -.5), to: "bento.south-west"),
+        ),
+        stroke: (dash: "dashed", paint: gray),
+      )
 
-        line(
-          (
-            rel: (0, .5),
-            to: ("cpu.north-east", .5, "kernel.north-west"),
-          ),
-          (
-            horizontal: (),
-            vertical: (rel: (0, -.5), to: "io.south-east"),
-          ),
-          stroke: (dash: "dashed", paint: gray),
-        )
+      line(
+        (
+          rel: (0, .5),
+          to: ("cpu.north-east", .5, "kernel.north-west"),
+        ),
+        (
+          horizontal: (),
+          vertical: (rel: (0, -.5), to: "io.south-east"),
+        ),
+        stroke: (dash: "dashed", paint: gray),
+      )
 
-        line("umm", "kernel", mark: (symbol: ">"))
-        line("kernel", "cpu", mark: (symbol: ">"))
-        bezier(
-          "umm.south",
-          "cpu.south",
-          (rel: (0, -1.5), to: ("umm.south", 50%, "cpu.south")),
-          stroke: red + 2pt,
-          mark: (symbol: ">"),
-        )
+      line("umm", "kernel", mark: (symbol: ">"))
+      line("kernel", "cpu", mark: (symbol: ">"))
+      bezier(
+        "umm.south",
+        "cpu.south",
+        (rel: (0, -1.5), to: ("umm.south", 50%, "cpu.south")),
+        stroke: red + 2pt,
+        mark: (symbol: ">"),
+      )
 
-        line("bento", "io", mark: (symbol: ">"))
-      }),
-    )
+      line("bento", "io", mark: (symbol: ">"))
+    }))
   ],
 )
 
@@ -256,12 +247,10 @@ A need for more *flexibility* in memory management.
     color.lighten(75%).desaturate(25%)
   }
 
-  box(
-    fill: fill,
-    inset: (x: .4em, y: .5em),
-    radius: .5em,
-    text(color.darken(50%), body),
-  )
+  box(fill: fill, inset: (x: .4em, y: .5em), radius: .5em, text(
+    color.darken(50%),
+    body,
+  ))
 }
 
 #let kernel-space-statement = statement.with(color: red)
@@ -284,16 +273,13 @@ A need for more *flexibility* in memory management.
     .zip(..thread-statements.slice(1), exact: true)
     .flatten()
 
-  text(
-    .4em,
-    grid(
-      columns: threads.pos().map(_thread => auto),
-      column-gutter: 1em,
-      row-gutter: .25em,
-      ..headers,
-      ..statements,
-    ),
-  )
+  text(.4em, grid(
+    columns: threads.pos().map(_thread => auto),
+    column-gutter: 1em,
+    row-gutter: .25em,
+    ..headers,
+    ..statements,
+  ))
 }
 
 #let linux-page-fault-handling(
@@ -313,23 +299,19 @@ A need for more *flexibility* in memory management.
   ),
 ))
 
-#columns(
-  2,
-  [
-    #alternatives(
-      linux-page-fault-handling(),
-      linux-page-fault-handling(find-physical-page-bold: true),
-    )
+#columns(2, [
+  #alternatives(linux-page-fault-handling(), linux-page-fault-handling(
+    find-physical-page-bold: true,
+  ))
 
-    ==== Legend
+  ==== Legend
 
-    #kernel-space-statement[Kernel space]
-    #user-space-statement[User space]
-    #internal-statement[CPU internals]
+  #kernel-space-statement[Kernel space]
+  #user-space-statement[User space]
+  #internal-statement[CPU internals]
 
-    #only(2)[Policy is hard to change.]
-  ],
-)
+  #only(2)[Policy is hard to change.]
+])
 
 #speaker-note[
   Present the legend. List the parts, one by one.
@@ -374,33 +356,30 @@ A need for more *flexibility* in memory management.
   ),
 )
 
-#columns(
-  2,
-  [
-    #userfaultfd-page-fault-handling
+#columns(2, [
+  #userfaultfd-page-fault-handling
 
-    #let direct-latency-costs = [
-      === Latency costs
+  #let direct-latency-costs = [
+    === Latency costs
 
-      - 2 context switches
-      - 1 transition from kernel space to user space
-      - 1 system call
-    ]
+    - 2 context switches
+    - 1 transition from kernel space to user space
+    - 1 system call
+  ]
 
-    #alternatives(
-      [
-        === Linux memory management
+  #alternatives(
+    [
+      === Linux memory management
 
-        #linux-page-fault-handling(references: false)
-      ],
-      direct-latency-costs,
-      [
-        #direct-latency-costs
-        - #link(<indirect-costs>)[*Indirect costs*]
-      ],
-    )
-  ],
-)
+      #linux-page-fault-handling(references: false)
+    ],
+    direct-latency-costs,
+    [
+      #direct-latency-costs
+      - #link(<indirect-costs>)[*Indirect costs*]
+    ],
+  )
+])
 
 == Indirect costs <indirect-costs>
 
@@ -450,142 +429,127 @@ Harder to measure.
   ),
 ))
 
-#columns(
-  2,
-  [
-    #user-interrupt-synchronous-page-fault-handling
+#columns(2, [
+  #user-interrupt-synchronous-page-fault-handling
 
-    #colbreak()
+  #colbreak()
 
-    #alternatives(
-      [
-        === `userfaultfd` PF handling
+  #alternatives(
+    [
+      === `userfaultfd` PF handling
 
-        #text(.9em, userfaultfd-page-fault-handling)
-      ],
-      [
-        === Latency costs
+      #text(.9em, userfaultfd-page-fault-handling)
+    ],
+    [
+      === Latency costs
 
-        - #strike[2 context switches]
-        - #strike[1 transition from kernel space to user space]
-        - 1 system call
-        - Unknown hardware costs
-      ],
-    )
-  ],
-)
+      - #strike[2 context switches]
+      - #strike[1 transition from kernel space to user space]
+      - 1 system call
+      - Unknown hardware costs
+    ],
+  )
+])
 
 == `io_uring`-based user-interrupt memory management
 
-#slide(
-  repeat: 4,
-  columns(
-    2,
+#slide(repeat: 4, columns(2, [
+  #execution(
+    (
+      name: [App thread],
+      statements: (
+        statement-sequence(
+          user-space-statement[Faulting instruction],
+          {
+            only((until: 3), internal-statement[User page fault check])
+            only(4, internal-statement(bold: true)[User page fault check])
+          },
+          internal-statement[Post & deliver user interrupt],
+          user-space-statement[Save state],
+          user-space-statement[Find physical page],
+          alternatives(
+            user-space-statement(bold: true)[Start async. PTE update],
+            user-space-statement[Start async. PTE update],
+            repeat-last: true,
+          ),
+        ),
+        alternatives(
+          user-space-statement(
+            bold: true,
+          )[Do work on a different coroutine],
+          user-space-statement[Do work on a different coroutine],
+          repeat-last: true,
+        ),
+        user-space-statement[Restore state],
+      ),
+    ),
+    (
+      name: [`io_uring` kthread],
+      statements: (
+        [],
+        kernel-space-statement[Update PTE],
+        [],
+      ),
+    ),
+  )
+
+  #colbreak()
+
+  #let latency-costs = [
+    === Latency costs
+
+    - #text(gray, strike[2 context switches])
+    - #text(gray, strike[1 transition from kernel space to user space])
+    - #strike[1 system call]
+    - Unknown hardware costs
+  ]
+
+  #alternatives(
     [
-      #execution(
-        (
-          name: [App thread],
-          statements: (
-            statement-sequence(
-              user-space-statement[Faulting instruction],
-              {
-                only((until: 3), internal-statement[User page fault check])
-                only(4, internal-statement(bold: true)[User page fault check])
-              },
-              internal-statement[Post & deliver user interrupt],
-              user-space-statement[Save state],
-              user-space-statement[Find physical page],
-              alternatives(
-                user-space-statement(bold: true)[Start async. PTE update],
-                user-space-statement[Start async. PTE update],
-                repeat-last: true,
-              ),
-            ),
-            alternatives(
-              user-space-statement(
-                bold: true,
-              )[Do work on a different coroutine],
-              user-space-statement[Do work on a different coroutine],
-              repeat-last: true,
-            ),
-            user-space-statement[Restore state],
-          ),
-        ),
-        (
-          name: [`io_uring` kthread],
-          statements: (
-            [],
-            kernel-space-statement[Update PTE],
-            [],
-          ),
-        ),
-      )
+      === Without `io_uring`
 
-      #colbreak()
-
-      #let latency-costs = [
-        === Latency costs
-
-        - #text(gray, strike[2 context switches])
-        - #text(gray, strike[1 transition from kernel space to user space])
-        - #strike[1 system call]
-        - Unknown hardware costs
-      ]
-
-      #alternatives(
-        [
-          === Without `io_uring`
-
-          #user-interrupt-synchronous-page-fault-handling
-        ],
-        latency-costs,
-        [
-          #latency-costs
-
-          === Costs not on the critical path
-
-          - New `io_uring` kthread.
-        ],
-      )
+      #user-interrupt-synchronous-page-fault-handling
     ],
-  ),
-)
+    latency-costs,
+    [
+      #latency-costs
+
+      === Costs not on the critical path
+
+      - New `io_uring` kthread.
+    ],
+  )
+]))
 
 = User page fault check
 
 == User-interrupt PTEs
 
-#text(
-  12pt,
-  bytefield(
-    msb: left,
-    bitheader("bounds"),
-    flag("XD"),
-    bits(4, "PK"),
-    bits(7, "free", fill: yellow.lighten(50%)),
-    bits(40, "physical address"),
-    bits(3, "free", fill: yellow.lighten(50%)),
-    flag("G"),
-    flag("PAT"),
-    flag("D"),
-    flag("A"),
-    flag("PCD"),
-    flag("PWT"),
-    flag("U/S"),
-    flag("R/W"),
-    flag("1"),
-  ),
-)
+#text(12pt, bytefield(
+  msb: left,
+  bitheader("bounds"),
+  flag("XD"),
+  bits(4, "PK"),
+  bits(7, "free", fill: yellow.lighten(50%)),
+  bits(40, "physical address"),
+  bits(3, "free", fill: yellow.lighten(50%)),
+  flag("G"),
+  flag("PAT"),
+  flag("D"),
+  flag("A"),
+  flag("PCD"),
+  flag("PWT"),
+  flag("U/S"),
+  flag("R/W"),
+  flag("1"),
+))
 
-#text(
-  12pt,
-  bytefield(
-    msb: left,
-    bitheader("offsets"),
-    bits(63, "free", fill: yellow.lighten(50%)),
-    flag("0"),
-  ),
-)
+#text(12pt, bytefield(
+  msb: left,
+  bitheader("offsets"),
+  bits(63, "free", fill: yellow.lighten(50%)),
+  flag("0"),
+))
 
 Modify PTE format to store whether CPU must send a user interrupt whenever an access is made or not.
 

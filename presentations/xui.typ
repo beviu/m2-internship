@@ -89,9 +89,7 @@ User-space notification mechanisms
 == Intel's user interrupts
 
 #text(23pt)[
-  *Cheaper*: #quote(
-    attribution: [The paper],
-  )[Receiving a notification with UIPI is roughly 3x-5x cheaper than signals—2800
+  *Cheaper*: #quote(attribution: [The paper])[Receiving a notification with UIPI is roughly 3x-5x cheaper than signals—2800
     cycles vs. 600-900 cycles.]
 
   But still a pipeline flush on the receiver side #math.arrow.r growing overhead
@@ -100,11 +98,7 @@ User-space notification mechanisms
   #table(
     columns: 5,
     table.header(
-      [E2E Latency],
-      [Receiver Cost],
-      [`SENDUIPI`],
-      [`CLUI`],
-      [`STUI`],
+      [E2E Latency], [Receiver Cost], [`SENDUIPI`], [`CLUI`], [`STUI`]
     ),
 
     [1360 cycles], [720 cycles], [383 cycles], [2 cycles], [32 cycles],
@@ -127,9 +121,7 @@ User-space notification mechanisms
 
 *Inefficient* when waiting for notifications.
 
-*Unscalable*: #quote(
-  attribution: [The paper],
-)[Polling also scales poorly as overheads increase linearly with the number of
+*Unscalable*: #quote(attribution: [The paper])[Polling also scales poorly as overheads increase linearly with the number of
   queues being polled, and each one burns a cache line.]
 
 *Unpredictable*: requires the programmer to know when it's a good idea to poll.

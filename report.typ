@@ -16,68 +16,48 @@ _M2 internship report_ #h(1fr) Greg #smallcaps[Depoire-\-Ferrer]
 
 #v(1fr)
 
-#let title(body) = align(
-  center,
-  block(
-    width: 80%,
-    align(
-      center,
-      [
-        #line(length: 50%)
-        #text(size: 20pt, weight: "bold", body)
-        #line(length: 50%)
-      ],
-    ),
-  ),
-)
+#let title(body) = align(center, block(width: 80%, align(center, [
+  #line(length: 50%)
+  #text(size: 20pt, weight: "bold", body)
+  #line(length: 50%)
+])))
 
 #title[Hardware-assisted user-space page fault handling]
 
-#pad(
-  y: 1.5cm,
-  align(
-    center,
-    block(
-      width: 90%,
-      grid(
-        columns: (1fr, 1fr),
-        column-gutter: 2em,
-        align: horizon,
-        [
-          _Location_
+#pad(y: 1.5cm, align(center, block(width: 90%, grid(
+  columns: (1fr, 1fr),
+  column-gutter: 2em,
+  align: horizon,
+  [
+    _Location_
 
-          #v(.5em)
+    #v(.5em)
 
-          #link("https://lig-krakos.imag.fr/")[KrakOS team], \
-          #link("https://www.liglab.fr/")[Laboratoire d'Informatique de Grenoble~(LIG)]
-        ],
-        [
-          _Supervisors_
+    #link("https://lig-krakos.imag.fr/")[KrakOS team], \
+    #link(
+      "https://www.liglab.fr/",
+    )[Laboratoire d'Informatique de Grenoble~(LIG)]
+  ],
+  [
+    _Supervisors_
 
-          #v(.5em)
+    #v(.5em)
 
-          Alain #smallcaps[Tchana] \
-          #link("mailto:alain.tchana@grenoble-inp.fr")
+    Alain #smallcaps[Tchana] \
+    #link("mailto:alain.tchana@grenoble-inp.fr")
 
-          #v(.25em)
+    #v(.25em)
 
-          Renaud #smallcaps[Lachaize] \
-          #link("mailto:renaud.lachaize@univ-grenoble-alpes.fr")
-        ],
-      ),
-    ),
-  ),
-)
+    Renaud #smallcaps[Lachaize] \
+    #link("mailto:renaud.lachaize@univ-grenoble-alpes.fr")
+  ],
+))))
 
-#let part(body) = block(
-  above: 2.5em,
-  below: 1.125em,
-  text(
-    size: 13.2pt,
-    weight: "bold",
-    body,
-  ),
-)
+#let part(body) = block(above: 2.5em, below: 1.125em, text(
+  size: 13.2pt,
+  weight: "bold",
+  body,
+))
 
 #part[Abstract]
 
@@ -94,13 +74,11 @@ user-space page fault handling in Linux.
   show outline.entry.where(level: 1): set block(above: 1.2em)
   show outline.entry.where(level: 1): set text(weight: "bold")
 
-  show outline.entry: set outline.entry(
-    fill: pad(
-      left: .5em,
-      right: 1em,
-      repeat([.], gap: 0.5em),
-    ),
-  )
+  show outline.entry: set outline.entry(fill: pad(
+    left: .5em,
+    right: 1em,
+    repeat([.], gap: 0.5em),
+  ))
   show outline.entry.where(level: 1): set outline.entry(fill: none)
 
   outline()
@@ -304,15 +282,11 @@ Measurements in \@userfaultfd-page-fault-breakdown show that `userfaultfd`-based
 page fault handling is significantly slower than the native page fault handling.
 
 // This is not a heading so that it does not appear in the outline.
-#text(
-  size: 15.4pt,
-  weight: "bold",
-  block(
-    above: 1.29em,
-    below: .54em,
-    [Bibliography],
-  ),
-)
+#text(size: 15.4pt, weight: "bold", block(
+  above: 1.29em,
+  below: .54em,
+  [Bibliography],
+))
 
 #bibliography("bibliography.yaml", title: none)
 
