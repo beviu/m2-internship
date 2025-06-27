@@ -1,4 +1,4 @@
-From b6a8efc3b4068b0b6fdc88ad481265f71c08f9b5 Mon Sep 17 00:00:00 2001
+From 4f61bed90ad9d21fa351dba8e725ccfe4cdf6ed7 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Tue, 13 May 2025 17:21:19 +0200
 Subject: [PATCH 29/30] mm: add fast_tracepoints to handle_usm_fault
@@ -11,7 +11,7 @@ Subject: [PATCH 29/30] mm: add fast_tracepoints to handle_usm_fault
  4 files changed, 16 insertions(+), 4 deletions(-)
 
 diff --git a/fs/userfaultfd.c b/fs/userfaultfd.c
-index e2037b6c2155..0c672b0249b7 100644
+index fa67dff69134..93767afa4afe 100644
 --- a/fs/userfaultfd.c
 +++ b/fs/userfaultfd.c
 @@ -766,7 +766,7 @@ void dequeue_usm_fault(void)	//..but, nah, just take some address and boom one u

@@ -1,4 +1,4 @@
-From c0a5c9b23f370547c624d4bb6df7760c2c1a2823 Mon Sep 17 00:00:00 2001
+From 9017cb101a0c209b37d5edecf1bbc9b0471442a9 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Mon, 12 May 2025 19:08:52 +0200
 Subject: [PATCH 26/30] kernel/trace: add fast_tracepoints

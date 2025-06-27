@@ -239,6 +239,12 @@ static bool do_iteration(uint64_t length, int access, bool with_userfaultfd,
     return false;
   }
 
+  if (madvise(memory, length, MADV_NOHUGEPAGE) == -1) {
+    perror("madvise(MADV_NOHUGEPAGE)");
+    munmap(memory, length);
+    return false;
+  }
+
   if (with_userfaultfd) {
     register_args.range.start = (uint64_t)memory;
     register_args.range.len = length;

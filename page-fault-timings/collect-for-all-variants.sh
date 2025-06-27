@@ -139,21 +139,26 @@ collect_page_fault_timings_usm() {
   local access
   run_as_user make -C variants/usm/module
   run_as_user make -C variants/usm/daemon \
-    CFLAGS="-I $root/linux/usm/usr/include -Wno-incompatible-pointer-types"
+    CFLAGS="-I $root/linux/usm/usr/include -Wno-incompatible-pointer-types" \
+    nosleepnodebug
   run_as_user gcc variants/usm/usmTagger.c \
     -o variants/usm/usmTagger.so \
     -I "$root/linux/usm/usr/include" \
     -pthread -shared
   compile_collection_helper
-  for access in read write rw; do
+  for access in read write; do
     insmod variants/usm/module/usm_lkmRM.ko
-    variants/usm/daemon/project-2 \
-      variants/usm/daemon/examples/project-2/cfg/alloc_policy_assignment_strategy.cfg &
+    # For some reason, wrapping the deamon with sh makes it work the second
+    # time. I don't understand why.
+    sh -c 'variants/usm/daemon/project-2 \
+      variants/usm/daemon/examples/project-2/cfg/alloc_policy_assignment_strategy.cfg' &
+    # Wait for the daemon to be listening.
+    sleep 1
     LD_PRELOAD=variants/usm/usmTagger.so run_collection_helper "$access" | \
       run_as_user sh -c "cat > results/usm-$access-timeline.csv"
     run_as_user sh -c "./convert-timeline-to-stacked-area-chart.py results/usm-$access-timeline.csv > results/usm-$access-stacked.csv"
-    kill %1
-    wait %1
+    pkill -INT project-2
+    wait || true
     rmmod usm_lkmRM
   done
 }

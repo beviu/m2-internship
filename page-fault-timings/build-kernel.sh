@@ -41,6 +41,7 @@ else
   yes '' | make localmodconfig
 
   scripts/config --set-str CONFIG_LOCALVERSION "-$variant"
+  scripts/config --enable CONFIG_TRACE_PF
   scripts/config --enable CONFIG_FAST_TRACEPOINTS
 
   if [ "$variant" = usm ]; then

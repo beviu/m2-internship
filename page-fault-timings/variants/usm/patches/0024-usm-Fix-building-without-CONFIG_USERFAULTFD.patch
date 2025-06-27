@@ -1,4 +1,4 @@
-From 333188ab7f60ed7ceec99c9f7470486c0ff1a3ba Mon Sep 17 00:00:00 2001
+From 6388cb21b394fcfe95cad7fa6c5b07a50833198d Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Sun, 15 Jun 2025 15:08:55 +0200
 Subject: [PATCH 24/30] usm: Fix building without CONFIG_USERFAULTFD

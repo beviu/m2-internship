@@ -1,4 +1,4 @@
-From 4345509fd932e5a9bb0fc9dbfbc553a12e4e220f Mon Sep 17 00:00:00 2001
+From f3311b69ba322c656b1de7eb8358428d6f0740a2 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Tue, 13 May 2025 17:03:41 +0200
 Subject: [PATCH 21/30] usm: apply changes
@@ -165,7 +165,7 @@ index ecef63974f68..9aeadc8c2f0e 100644
  {
  	if (IS_ENABLED(CONFIG_X86_UINTR_BLOCKING) &&
 diff --git a/fs/userfaultfd.c b/fs/userfaultfd.c
-index 0c1d33c4f74c..f41eaa4e344d 100644
+index 0c1d33c4f74c..c3d7d3c657a1 100644
 --- a/fs/userfaultfd.c
 +++ b/fs/userfaultfd.c
 @@ -30,10 +30,54 @@
@@ -2268,7 +2268,7 @@ index 0c1d33c4f74c..f41eaa4e344d 100644
 +	else {
 +		//mmgrab(ctx->mm);
 +		fd = anon_inode_getfd_secure("[userfaultfd]", &userfaultfd_fops, ctx,
-+				O_RDONLY | (flags & UFFD_SHARED_FCNTL_FLAGS), NULL);
++				O_RDWR | (flags & UFFD_SHARED_FCNTL_FLAGS), NULL);
 +		if (fd < 0) {
 +			mmdrop(ctx->mm);
 +			kmem_cache_free(userfaultfd_ctx_cachep, ctx);
