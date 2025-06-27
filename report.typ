@@ -225,66 +225,7 @@ The treatement of a page fault can be broken down into the following operations:
   the page fault with the IRET (Interrupt RETurn) instruction.
 
 The measurement methodology is described in @execution-time-measurement-method.
-The results are shown in @linux-page-fault-breakdown.
-
-#let array-differences(array) = ((0,) + array).zip(array).map(((a, b)) => b - a)
-
-#let timings-csv(source) = {
-  let rows = csv(source)
-  let keys = rows.at(0).map(key => key.trim().replace("_", "-"))
-  let minimums = (:)
-  for row in rows.slice(1) {
-    let durations = array-differences(row.map(value => int(value.trim())))
-    // Because of multi-threading, the timings in rows may not be in the same
-    // order as the columns sometimes. For simplification, ignore those rows. We
-    // have enough rows that are the expected order.
-    if durations.any(duration => duration < 0) {
-      continue
-    }
-    for (key, duration) in keys.zip(durations) {
-      if minimums.keys().contains(key) {
-        minimums.at(key) = calc.min(minimums.at(key), duration)
-      } else {
-        minimums.insert(key, duration)
-      }
-    }
-  }
-  minimums
-}
-
-#let linux-page-fault-timings = timings-csv("page-fault-timings/results-linux.txt")
-
-#let linux-page-fault-breakdown-table(timings) = {
-  let total = (
-    timings.save-state-start
-      + timings.save-state-end
-      + timings.read-lock-vma-end
-      + timings.walk-page-table-end
-      + timings.handle-mm-fault-end
-      + timings.cleanup-end
-      + timings.iret
-      + timings.end
-  )
-  let m(number) = math.equation(str(number))
-  table(
-    columns: (auto, auto),
-    table.header([Operation], [Minimum (cycles)]),
-    [Exception], m(timings.save-state-start),
-    [Save state], m(timings.save-state-end),
-    [Read-lock VMA], m(timings.read-lock-vma-end),
-    [Walk page table], m(timings.walk-page-table-end),
-    [Return from \ `handle_mm_fault`], m(timings.handle-mm-fault-end),
-    [Cleanup], m(timings.cleanup-end),
-    [Restore state], m(timings.iret),
-    [IRET], m(timings.end),
-    [Total], m(total),
-  )
-}
-
-#figure(
-  caption: [Linux page fault execution time breakdown],
-  linux-page-fault-breakdown-table(linux-page-fault-timings),
-) <linux-page-fault-breakdown>
+The results are shown in \@linux-page-fault-breakdown.
 
 #inline-note[
   Rerun the experiments on the test machine and update the environment in the
@@ -359,85 +300,8 @@ verifies that the VMA is still associated with the `userfaultfd` context, and
 walks the page table a second time. I do not understand the third occurence,
 however.
 
-Measurements in @userfaultfd-page-fault-breakdown show that `userfaultfd`-based
+Measurements in \@userfaultfd-page-fault-breakdown show that `userfaultfd`-based
 page fault handling is significantly slower than the native page fault handling.
-
-#figure(
-  caption: [`userfaultfd` page fault execution time breakdown],
-  {
-    let timings = timings-csv("page-fault-timings/results-userfaultfd.txt")
-    let timings-two-cpus = timings-csv("page-fault-timings/results-userfaultfd-two-cpus.txt")
-    let total(timings) = (
-      timings.save-state-start
-        + timings.save-state-end
-        + timings.read-lock-vma-end
-        + timings.walk-page-table-end
-        + timings.wake-up-userfaultfd-end
-        + timings.msg-received
-        + timings.handle-mm-fault-end
-        + timings.retry-read-lock-vma-end
-        + timings.retry-walk-page-table-end
-        + timings.retry-handle-mm-fault-end
-        + timings.cleanup-end
-        + timings.iret
-        + timings.end
-    )
-    let m(number) = math.equation(str(number))
-    table(
-      columns: (auto, auto, auto),
-      table.header(
-        [Operation],
-        [Minimum on the \ same CPU (cycles)],
-        [Minimum on different \ CPUs (cycles)],
-      ),
-
-      [Exception],
-      m(timings.save-state-start),
-      m(timings-two-cpus.save-state-start),
-
-      [Save state],
-      m(timings.save-state-end),
-      m(timings-two-cpus.save-state-end),
-
-      [Read-lock VMA],
-      m(timings.read-lock-vma-end),
-      m(timings-two-cpus.read-lock-vma-end),
-
-      [Walk page table],
-      m(timings.walk-page-table-end),
-      m(timings-two-cpus.walk-page-table-end),
-
-      [Wake up \ `userfaultfd` thread],
-      m(timings.wake-up-userfaultfd-end),
-      m(timings-two-cpus.wake-up-userfaultfd-end),
-
-      [Return from `read`],
-      m(timings.msg-received),
-      m(timings-two-cpus.msg-received),
-
-      [Treat fault and \ return from \ `handle_mm_fault`],
-      m(timings.handle-mm-fault-end),
-      m(timings-two-cpus.handle-mm-fault-end),
-
-      [Read-lock VMA],
-      m(timings.retry-read-lock-vma-end),
-      m(timings-two-cpus.retry-read-lock-vma-end),
-
-      [Walk page table],
-      m(timings.retry-walk-page-table-end),
-      m(timings-two-cpus.retry-walk-page-table-end),
-
-      [Return from \ `handle_mm_fault`],
-      m(timings.retry-handle-mm-fault-end),
-      m(timings-two-cpus.retry-handle-mm-fault-end),
-
-      [Cleanup], m(timings.cleanup-end), m(timings-two-cpus.cleanup-end),
-      [Restore state], m(timings.iret), m(timings-two-cpus.iret),
-      [IRET], m(timings.end), m(timings-two-cpus.end),
-      [Total], m(total(timings)), m(total(timings-two-cpus)),
-    )
-  },
-) <userfaultfd-page-fault-breakdown>
 
 // This is not a heading so that it does not appear in the outline.
 #text(
@@ -479,15 +343,8 @@ instruction as suggested by the manual.
 
 These fences slightly increase the execution time of the operations
 that we measure but make the results easier to interpret. For example,
-@linux-page-fault-no-fence-breakdown shows the execution time of the same
-operation as measured in @linux-page-fault-breakdown, but without the fences.
-
-#figure(
-  caption: [Linux page fault execution time breakdown (without fences)],
-  linux-page-fault-breakdown-table(
-    timings-csv("page-fault-timings/results-linux-no-fence.txt"),
-  ),
-) <linux-page-fault-no-fence-breakdown>
+\@linux-page-fault-no-fence-breakdown shows the execution time of the same
+operation as measured in \@linux-page-fault-breakdown, but without the fences.
 
 == Minor page fault
 
@@ -522,119 +379,6 @@ using `printk` (similar to `printf` in userspace). The execution time of the
   }
   result
 }
-
-#figure(
-  cetz.canvas({
-    import cetz.draw: *
-
-    let width = 11
-    let padding = 1
-
-    line((0, 0), (width + 2 * padding, 0), mark: (end: ">"))
-
-    let absolute-x(relative) = padding + relative * width
-
-    let cumulative-timings = cumulative-sum(linux-page-fault-timings.values())
-    let total = cumulative-timings.last()
-
-    let timing-x(time) = absolute-x(time / total)
-
-    let printk-line(start, end) = line(
-      (timing-x(start), 0),
-      (timing-x(end), 0),
-      stroke: red + 2pt,
-    )
-
-    printk-line(cumulative-timings.at(1), cumulative-timings.at(2))
-    printk-line(cumulative-timings.at(3), cumulative-timings.at(4))
-    printk-line(cumulative-timings.at(5), cumulative-timings.at(6))
-    printk-line(cumulative-timings.at(7), cumulative-timings.at(8))
-    printk-line(cumulative-timings.at(9), cumulative-timings.at(10))
-
-    let mark(time, body, color: black, bottom: false) = {
-      let x = timing-x(time)
-
-      line((x, -.2), (x, .2), stroke: color)
-
-      let body = text(size: .75em, fill: color, body)
-      if bottom {
-        content((rel: (0, -.5em), to: (x, -.2)), body, anchor: "north")
-      } else {
-        content((rel: (0, .5em), to: (x, .2)), body, anchor: "south")
-      }
-    }
-
-    mark(0, [PF], color: orange.darken(50%))
-    mark(
-      cumulative-timings.at(0),
-      math.accent(math.text[Save], math.arrow),
-      color: teal.darken(50%),
-    )
-    mark(
-      cumulative-timings.at(1),
-      math.accent(math.text[Save], math.arrow.l),
-      color: teal.darken(50%),
-      bottom: true,
-    )
-    mark(
-      cumulative-timings.at(2),
-      math.accent(math.text[VMA], math.arrow),
-      color: fuchsia.darken(50%),
-    )
-    mark(
-      cumulative-timings.at(3),
-      math.accent(math.text[VMA], math.arrow.l),
-      color: fuchsia.darken(50%),
-      bottom: true,
-    )
-    mark(
-      cumulative-timings.at(4),
-      math.accent(math.text[Walk PT], math.arrow),
-      color: navy,
-    )
-    mark(
-      cumulative-timings.at(5),
-      math.accent(math.text[Walk PT], math.arrow.l),
-      color: navy,
-      bottom: true,
-    )
-    mark(
-      cumulative-timings.at(6),
-      math.accent(math.text[Return], math.arrow),
-      color: purple.darken(50%),
-    )
-    mark(
-      cumulative-timings.at(7),
-      math.accent(math.text[Return], math.arrow.l),
-      color: purple.darken(50%),
-      bottom: true,
-    )
-    mark(
-      cumulative-timings.at(8),
-      math.accent(math.text[Cleanup], math.arrow),
-      color: aqua.darken(50%),
-    )
-    mark(
-      cumulative-timings.at(9),
-      math.accent(math.text[Cleanup], math.arrow.l),
-      color: aqua.darken(50%),
-      bottom: true,
-    )
-    mark(
-      cumulative-timings.at(10),
-      pad(right: .5cm, math.accent(math.text[Restore], math.arrow.r)),
-      color: maroon.darken(50%),
-    )
-    mark(
-      cumulative-timings.at(11),
-      [`iret`],
-      color: yellow.darken(50%),
-      bottom: true,
-    )
-    mark(total, pad(left: .5cm)[End], color: lime.darken(50%))
-  }),
-  caption: [Positions of RDTSC instructions with `printk` calls in red],
-)
 
 The code for measuring the execution time of the operations that happen during
 a minor page fault can be found in the `page-fault-breakdown` directory of the
