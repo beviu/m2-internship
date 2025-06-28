@@ -86,6 +86,15 @@ user-space page fault handling in Linux.
 
 = Introduction
 
+- Memory is a critical resource in data centers.
+- The MM logic of the OS has impact on performance, memory waste and high carbon emisison.
+- Linux has a general-purpose MM which can be suboptimal for some workloads.
+- Some applications need to catch page faults: CRIU, VMs checkpoint, debuggers (?).
+- Extensibility in the memory management: eBPF, USM, ExtMem (userfaultfd).
+- The trend of kernel bypass and the fact that it needs special hardware support.
+
+= Background
+
 == Page faults
 
 _Virtual memory_ is a technique to control the memory visible and usable
