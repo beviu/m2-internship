@@ -13,7 +13,7 @@ fred-spec:
   organization: Intel
   serial-number: 346446-004US
   url: https://www.intel.com/content/www/us/en/content-details/779982/flexible-return-and-event-delivery-fred-specification.html
-userfaultfd-doc:
+userfaultfd:
   type: web
   title: Userfaultfd
   url: https://docs.kernel.org/admin-guide/mm/userfaultfd.html
@@ -191,3 +191,68 @@ snap:
     parent:
       type: proceedings
       title: SOSP '19
+checkpoint-and-restart:
+  type: article
+  title: Instant OS updates via userspace checkpoint-and-restart
+  author:
+    - Kashyap, Sanidhya
+    - Min, Changwoo
+    - Lee, Byoungyoung
+    - Kim, Taesoo
+    - Emelyanov, Pavel
+  date: 2016
+  page-range: 605-619
+  serial-number:
+    isbn: '9781931971300'
+  abstract: In recent years, operating systems have become increasingly complex and thus more prone to security and performance issues. Accordingly, system updates to address these issues have become more frequently available and increasingly important. To complete such updates, users must reboot their systems, resulting in unavoidable downtime and further loss of the states of running applications.We present KUP, a practical OS update mechanism that employs a userspace checkpoint-and-restart mechanism, which uses an optimized data structure for checkpointing on disk as well as a memory persistence mechanism across the update, coupled with a fast in-place kernel switch. This allows for instant kernel updates spanning across major kernel versions without any kernel modifications.Our evaluation shows that KUP can support any type of real kernel patches (e.g., security, minor or even major releases) with large-scale applications that include memcached, mysql, or in the middle of the Linux kernel compilation, unlike well-known dynamic hot-patching techniques (e.g., ksplice). Not only that, KUP can update a running Linux kernel in 3 seconds (overall downtime) without losing 32 GB of memcached data from kernel version v3.17-rc7 to v4.1.
+  parent:
+    type: proceedings
+    title: Proceedings of the 2016 USENIX Conference on Usenix Annual Technical Conference
+    publisher:
+      name: USENIX Association
+      location: Denver, CO, USA
+    parent:
+      type: proceedings
+      title: USENIX ATC '16
+live-migration-of-vms:
+  type: article
+  title: Live migration of virtual machines
+  author:
+    - Clark, Christopher
+    - Fraser, Keir
+    - Hand, Steven
+    - Hansen, Jacob Gorm
+    - Jul, Eric
+    - Limpach, Christian
+    - Pratt, Ian
+    - Warfield, Andrew
+  date: 2005
+  page-range: 273-286
+  abstract: 'Migrating operating system instances across distinct physical hosts is a useful tool for administrators of data centers and clusters: It allows a clean separation between hard-ware and software, and facilitates fault management, load balancing, and low-level system maintenance.By carrying out the majority of migration while OSes continue to run, we achieve impressive performance with minimal service downtimes; we demonstrate the migration of entire OS instances on a commodity cluster, recording service downtimes as low as 60ms. We show that that our performance is sufficient to make live migration a practical tool even for servers running interactive loads.In this paper we consider the design options for migrating OSes running services with liveness constraints, focusing on data center and cluster environments. We introduce and analyze the concept of writable working set, and present the design, implementation and evaluation of high-performance OS migration built on top of the Xen VMM.'
+  parent:
+    type: proceedings
+    title: Proceedings of the 2nd Conference on Symposium on Networked Systems Design & Implementation - Volume 2
+    publisher:
+      name: USENIX Association
+      location: USA
+    parent:
+      type: proceedings
+      title: NSDI'05
+fbmm:
+  type: article
+  title: '{FBMM}: Making Memory Management Extensible With Filesystems'
+  author:
+    - Tabatabai, Bijan
+    - Sorenson, James
+    - Swift, Michael M.
+  date: 2024-07
+  page-range: 785-798
+  url: https://www.usenix.org/conference/atc24/presentation/tabatabai
+  serial-number:
+    isbn: 978-1-939133-41-0
+  parent:
+    type: proceedings
+    title: 2024 USENIX Annual Technical Conference (USENIX ATC 24)
+    publisher:
+      name: USENIX Association
+      location: Santa Clara, CA
