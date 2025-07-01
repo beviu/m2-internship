@@ -84,14 +84,85 @@ user-space page fault handling in Linux.
   outline()
 }
 
-= Introduction
+= Problem statement
+
+== Why optimize user space delegation of page faults
+
+=== Optimize the migration of VMs and applications
+
+- Some applications need to catch page faults: CRIU, VMs checkpoint, debuggers (?).
+- They currently rely on userfaultfd which takes many detours, but we could make them faster with a new mechanism.
+
+=== Optimize those who optimize
 
 - Memory is a critical resource in data centers.
-- The MM logic of the OS has impact on performance, memory waste and high carbon emisison.
+- The memory management logic of the OS has impact on performance, memory waste and high carbon emisison.
 - Linux has a general-purpose MM which can be suboptimal for some workloads.
-- Some applications need to catch page faults: CRIU, VMs checkpoint, debuggers (?).
+- There are papers that explore modifying the Linux MM to make it more efficient for
+  a specific workload.
 - Extensibility in the memory management: eBPF, USM, ExtMem (userfaultfd).
-- The trend of kernel bypass and the fact that it needs special hardware support.
+- The solutions are not optimal for two reasons:
+  - Some propose to change Linux's MM code. It's too hard to do right.
+  - Others propose to delegate the MM to user space, but they make many detours so we believe they could be made
+    faster.
+
+(I had already worked with USM in the L3 internship, and the PhD student working on
+USM is in the LIG lab.)
+
+== Methodology
+
+Through the use of benchmark and intuition, we identify the ineffeciencies and later
+try to optimize them with hardware and (bonus: software) modifications.
+
+= Preliminaries
+
++ Page faults
++ Linux
+  + page fault handling
++ existing solution to benchmark
+  + ExtMem
+  + USM
+  + userfaultfd
++ User interrupts
+
+= Benchmark
+
+(One of the PhD students was working on publishing a paper for USM and I wanted
+to help him to get finer-grained benchmarks)
+
+== Methodology
+
+I analyzed the page fault code in Linux (and in the various papers) which
+gave me the impression that some could be (1) avoided or (2) optimized.
+
+=== Part identification
+
++ I thought that we could remove the ISR entry part and ISR exit part by skipping the
+  kernel.
++ Skip IRET.
++ Time from ISR exit back to user space, and time from user space to ISR entry.
++ When a page fault occurs, Linux finds the VMA associated with the virtual address.
+  This takes time. Additionally, Linux needs to acquire locks to prevent concurrent
+  access to the VMA list structure.
++ USM changes the page allocation policy so I thought it would be interesting to
+  time page allocation in the papers/variants. It was also useful for the USM paper.
++ I also wanted to measure the USM communication paths because I didn't understand
+  why USM would be faster.
+
+==
+
+Validating the initial hypothesis: we gain performance by doing a hardware modification
+
+= Hardware modification proposal
+
+There is an existing trend of kernel bypass (examples of papers) which served us
+as a source of inspiration.
+
+Kernel bypass needs special hardware support, so we sought to propose new hardware modifications.
+
+#pagebreak()
+
+= Introduction
 
 = Background
 
