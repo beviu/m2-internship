@@ -14,5 +14,7 @@
       # Keep the original formatting for third party code.
       "page-fault-timings/variants/*"
     ];
+
+    formatter.typstyle.options = [ "--wrap-text" ];
   };
 }

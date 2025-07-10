@@ -3,7 +3,8 @@
 #import "@preview/bytefield:0.0.7": *
 #import "@preview/cetz:0.3.2"
 
-#set document(description: [First presentation of what I plan to work on during my internship to the KrakOS team.])
+#set document(description: [First presentation of what I plan to work on during
+  my internship to the KrakOS team.])
 
 #show: simple-theme.with(aspect-ratio: "16-9", primary: purple, config-info(
   title: [Hardware assisted user-space memory management (uMM)],
@@ -69,8 +70,9 @@
 A need for more *flexibility* in memory management.
 
 #speaker-note[
-  There is no *one size fits all* policy for memory management. There is recent work to move a part
-  of memory management to user space so that it can be modified more easily.
+  There is no *one size fits all* policy for memory management. There is recent
+  work to move a part of memory management to user space so that it can be
+  modified more easily.
 
   `userfaultfd` is a Linux functionality to let user space process page faults.
 ]
@@ -90,12 +92,13 @@ A need for more *flexibility* in memory management.
 - etc.
 
 #speaker-note[
-  Delegating services to user-space is not a new idea. It is commonly done for devices and IO like
-  networking devices, disks and filesystems. It has also been done for scheduling with ghOSt.
+  Delegating services to user-space is not a new idea. It is commonly done for
+  devices and IO like networking devices, disks and filesystems. It has also
+  been done for scheduling with ghOSt.
 
-  The goal is to improve application performance by using policies specifically tuned for the
-  application. The overhead introduced by delegating the service to user-space therefore has to be
-  minimal.
+  The goal is to improve application performance by using policies specifically
+  tuned for the application. The overhead introduced by delegating the service
+  to user-space therefore has to be minimal.
 ]
 
 == Current limitations
@@ -112,7 +115,8 @@ A need for more *flexibility* in memory management.
     - USM (PhD Assane~Fall, KrakOS)
 
     #speaker-note[
-      Back to the case of memory management, the current implementations suffer from a limitation.
+      Back to the case of memory management, the current implementations suffer
+      from a limitation.
     ]
 
     #pause
@@ -120,11 +124,13 @@ A need for more *flexibility* in memory management.
   [
     === Hardware limitations
 
-    Unlike networking and disk IO, *kernel bypass* is not possible #math.arrow.r new hardware features needed.
+    Unlike networking and disk IO, *kernel bypass* is not possible #math.arrow.r
+    new hardware features needed.
 
     #speaker-note[
-      Kernel bypass is a technique used to make user-space delegation usable. Without it, the service
-      needs to ask the kernel before doing anything which introduces too much overhead.
+      Kernel bypass is a technique used to make user-space delegation usable.
+      Without it, the service needs to ask the kernel before doing anything
+      which introduces too much overhead.
     ]
 
     #align(center, cetz.canvas({
@@ -209,14 +215,16 @@ A need for more *flexibility* in memory management.
 
 == Plan of the internship
 
-+ *Motivation*: evaluate the cost of existing approaches and approximate the cost of the proposed approaches using a model.
++ *Motivation*: evaluate the cost of existing approaches and approximate the
+  cost of the proposed approaches using a model.
 + *Implementation* and *evaluation*.
 
 = Memory management costs
 
 #speaker-note[
-  The rest of the slides focus on the cost of page fault handling, which can be significant cost in
-  memory-intensive applications and is what we want to improve.
+  The rest of the slides focus on the cost of page fault handling, which can be
+  significant cost in memory-intensive applications and is what we want to
+  improve.
 ]
 
 == Minor page fault
@@ -295,7 +303,9 @@ A need for more *flexibility* in memory management.
     kernel-space-statement(bold: find-physical-page-bold)[Find physical page],
     kernel-space-statement[Update PTE],
     kernel-space-statement[Restore state],
-    kernel-space-statement[`iret`#if references { ref(<torvalds-page-fault-cost>) }],
+    kernel-space-statement[`iret`#if references {
+        ref(<torvalds-page-fault-cost>)
+      }],
   ),
 ))
 
@@ -386,16 +396,13 @@ A need for more *flexibility* in memory management.
 + CPU cache pollution@flexsc
 + Speculative execution barrier
 
-  #text(
-    gray,
-    .75em,
-    quote(attribution: <intel-manual>)[
-      *Instruction ordering.* Instructions following a SYSCALL may be fetched from memory before earlier instructions
-      complete execution, but they will not execute (even speculatively) until all instructions prior to the SYSCALL have
-      completed execution (the later instructions may execute before data stored by the earlier instructions have
-      become globally visible).
-    ],
-  )
+  #text(gray, .75em, quote(attribution: <intel-manual>)[
+    *Instruction ordering.* Instructions following a SYSCALL may be fetched from
+    memory before earlier instructions complete execution, but they will not
+    execute (even speculatively) until all instructions prior to the SYSCALL
+    have completed execution (the later instructions may execute before data
+    stored by the earlier instructions have become globally visible).
+  ])
 
 Harder to measure.
 
@@ -551,7 +558,8 @@ Harder to measure.
   flag("0"),
 ))
 
-Modify PTE format to store whether CPU must send a user interrupt whenever an access is made or not.
+Modify PTE format to store whether CPU must send a user interrupt whenever an
+access is made or not.
 
 == User interrupt fault range
 
@@ -559,9 +567,10 @@ Modify PTE format to store whether CPU must send a user interrupt whenever an ac
   columns: (1fr, auto),
   column-gutter: 1em,
   [
-    - New MSRs that define a range of memory for which every page fault results in a user interrupt.
-    - Handler won't know if the faulting address is inside a valid VMA (it might or might not keep a
-      record of the valid VMAs).
+    - New MSRs that define a range of memory for which every page fault results
+      in a user interrupt.
+    - Handler won't know if the faulting address is inside a valid VMA (it might
+      or might not keep a record of the valid VMAs).
   ],
   grid(
     inset: .5em,
@@ -582,7 +591,8 @@ Modify PTE format to store whether CPU must send a user interrupt whenever an ac
   Any questions?
 
   #speaker-note[
-    eBPF is not flexible enough: for example, you cannot implement complex data structures with eBPF.
+    eBPF is not flexible enough: for example, you cannot implement complex data
+    structures with eBPF.
   ]
 ]
 
@@ -591,9 +601,9 @@ Modify PTE format to store whether CPU must send a user interrupt whenever an ac
 
   #quote(attribution: <fred-spec>)[
     The FRED architecture was designed with the following goals:
-    - Improve overall performance and response time by *replacing event delivery*
-      through the interrupt descriptor table (IDT event delivery) and *event return* by
-      the IRET instruction with lower latency transitions.
+    - Improve overall performance and response time by *replacing event
+      delivery* through the interrupt descriptor table (IDT event delivery) and
+      *event return* by the IRET instruction with lower latency transitions.
   ]
 
   But no supporting hardware yet!

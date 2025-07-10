@@ -107,9 +107,8 @@ fault.
 
 Allocating pages is an operation that requires special permissions which
 applications do not have. Applications run in _user space_ as opposed to the
-operating system which runs in _kernel space_. When the processor detects a
-page fault, it switches to kernel space and gives control to the operating
-system.
+operating system which runs in _kernel space_. When the processor detects a page
+fault, it switches to kernel space and gives control to the operating system.
 
 The goal of this internship is to optimize the process by which certain page
 faults are handled not by the operating system, but by user-space applications.
@@ -117,15 +116,15 @@ faults are handled not by the operating system, but by user-space applications.
 == Why delegate page faults to user space?
 
 Delegating page fault handling to user space enables the live migration of
-virtual machines and container and the optimization of workload-specific
-memory management.
+virtual machines and container and the optimization of workload-specific memory
+management.
 
 === Live migration
 
 Cloud providers are incentivized to reduce their downtime as much as possible,
-but servers frequently need maintenance. Live migration allows them to
-relocate the clients' virtual machines and containers to a different server
-without stopping them before the maintenance is started.
+but servers frequently need maintenance. Live migration allows them to relocate
+the clients' virtual machines and containers to a different server without
+stopping them before the maintenance is started.
 
 Additionally, to make better use of their hardware, cloud providers often
 overallocate resources. When the load on a single server exceeds the server's
@@ -136,17 +135,17 @@ Live migration of virtual machines and processes is implemented by lazily
 copying the memory from a server to another by hooking into page fault handling
 @live-migration-of-vms@checkpoint-and-restart. Unfortunately, popular operating
 system are built to be general purpose and often don't implement live migration.
-Therefore in practice, live migration is implemented in user space by having
-the operating system delegate the handling of some page faults to the migration
+Therefore in practice, live migration is implemented in user space by having the
+operating system delegate the handling of some page faults to the migration
 application (running in user space).
 
 === Optimizing workload-specific memory management
 
 Memory is a critical resource in data centers so the memory management logic of
 an operating system has impact on performance, memory waste and high carbon
-emisison. Linux has a general-purpose memory manager which can be suboptimal
-for some workloads so some papers have explored optimizing it---often to the
-benefit of some workloads but the detriment of others.
+emisison. Linux has a general-purpose memory manager which can be suboptimal for
+some workloads so some papers have explored optimizing it---often to the benefit
+of some workloads but the detriment of others.
 
 #inline-note[Which papers?]
 
@@ -155,8 +154,8 @@ Papa Assane Fall, a PhD student working on USM which makes the Linux memory
 manager more flexible by delegating parts of it to user space with the intent of
 making it easier to tune it to specific workloads. ExtMem@extmem and FBMM@fbmm
 are different implementation of this idea. Compared to USM, ExtMem uses an
-existing but less efficient mechanism in Linux called userfaultfd@userfaultfd
-to catch page faults, and FBMM proposes to expose the extensibility of the Linux
+existing but less efficient mechanism in Linux called userfaultfd@userfaultfd to
+catch page faults, and FBMM proposes to expose the extensibility of the Linux
 memory manager through the _Virtual FileSystem_ (VFS) interface.
 
 #inline-note[Add LKML discussion about introducing eBPF in the MM.]
@@ -188,19 +187,19 @@ would reduce the latency of receiving a page fault in user space.
 
 == Page faults
 
-_Virtual memory_ is a technique to control the memory visible and usable
-by a program. With virtual memory, a program accesses memory using _virtual
+_Virtual memory_ is a technique to control the memory visible and usable by a
+program. With virtual memory, a program accesses memory using _virtual
 addresses_ that the _Memory Management Unit_ (MMU) maps to _physical addresses_.
 
-_Paging_ is an implementation of virtual memory that splits memory into
-_pages_, with a _page table_ that maps virtual pages to physical pages. It is
-the most common implementation of virtual memory and the one that we focus on
-in this report.
+_Paging_ is an implementation of virtual memory that splits memory into _pages_,
+with a _page table_ that maps virtual pages to physical pages. It is the most
+common implementation of virtual memory and the one that we focus on in this
+report.
 
 When the processor access memory and paging is enabled, the MMU converts the
-virtual address into a virtual page number and offset within that page. Then
-it reads the _Page Table Entry_ (PTE) associated with the virtual page number
-to find the associated _Physical Page Number_ (PPN). Finally, it converts the
+virtual address into a virtual page number and offset within that page. Then it
+reads the _Page Table Entry_ (PTE) associated with the virtual page number to
+find the associated _Physical Page Number_ (PPN). Finally, it converts the
 physical page number and offset back into a physical address. In a system with
 pages of size $N$, virtual address $v$ is mapped to physical address $p$ using
 the formula
@@ -226,10 +225,10 @@ On Linux, when a program allocates virtual memory using the `mmap` system
 call#footnote[Without `MAP_POPULATE` and with memory overcommitment enabled (the
   default).], the kernel creates a new _Virtual Memory Area_ (VMA) but does not
 allocate physical memory or modify the page table yet. Later, when the program
-writes to that memory for the first time, the MMU sees that the PTE is absent,
-a page fault is generated, and Linux takes over. Linux allocates a physical
-page, writes its number into the PTE and resumes the execution of the program.
-In a similar manner, paging is used to implement _swapping_ where secondary
+writes to that memory for the first time, the MMU sees that the PTE is absent, a
+page fault is generated, and Linux takes over. Linux allocates a physical page,
+writes its number into the PTE and resumes the execution of the program. In a
+similar manner, paging is used to implement _swapping_ where secondary
 storage---storage that is slower than RAM (e.g. disk)---is used as additional
 memory when the operating system runs out of physical memory.
 
@@ -265,33 +264,36 @@ to help him to get finer-grained benchmarks)
 
 == Methodology
 
-I analyzed the page fault code in Linux (and in the various papers) which
-gave me the impression that some could be (1) avoided or (2) optimized.
+I analyzed the page fault code in Linux (and in the various papers) which gave
+me the impression that some could be (1) avoided or (2) optimized.
 
 === Part identification
 
-+ I thought that we could remove the ISR entry part and ISR exit part by skipping the
-  kernel.
++ I thought that we could remove the ISR entry part and ISR exit part by
+  skipping the kernel.
 + Skip IRET.
 + Time from ISR exit back to user space, and time from user space to ISR entry.
-+ When a page fault occurs, Linux finds the VMA associated with the virtual address.
-  This takes time. Additionally, Linux needs to acquire locks to prevent concurrent
-  access to the VMA list structure.
++ When a page fault occurs, Linux finds the VMA associated with the virtual
+  address. This takes time. Additionally, Linux needs to acquire locks to
+  prevent concurrent access to the VMA list structure.
 + USM changes the page allocation policy so I thought it would be interesting to
-  time page allocation in the papers/variants. It was also useful for the USM paper.
-+ I also wanted to measure the USM communication paths because I didn't understand
-  why USM would be faster.
+  time page allocation in the papers/variants. It was also useful for the USM
+  paper.
++ I also wanted to measure the USM communication paths because I didn't
+  understand why USM would be faster.
 
 ==
 
-Validating the initial hypothesis: we gain performance by doing a hardware modification
+Validating the initial hypothesis: we gain performance by doing a hardware
+modification
 
 = Hardware modification proposal
 
 There is an existing trend of kernel bypass (examples of papers) which served us
 as a source of inspiration.
 
-Kernel bypass needs special hardware support, so we sought to propose new hardware modifications.
+Kernel bypass needs special hardware support, so we sought to propose new
+hardware modifications.
 
 #pagebreak()
 
@@ -303,8 +305,8 @@ index into this table.
 
 = A model of the execution time of a minor page fault
 
-To evaluate the hardware modifications that we propose, we build and validate
-a model of the current page fault handling and then use it to approximate what
+To evaluate the hardware modifications that we propose, we build and validate a
+model of the current page fault handling and then use it to approximate what
 would be the execution time of a page fault with the modifications.
 
 == Kernel page fault handling
@@ -367,8 +369,8 @@ the handler immediately resolves the page fault with the zero page.
 
 The `userfaultfd` thread continuously reads from the `userfaultfd` file
 descriptor. When a page fault occurs, the read returns and the `userfaultfd`
-thread does a `UFFDIO_ZEROPAGE` operation to resolve the page fault
-with the zero page and wake up the faulting thread, as represented in
+thread does a `UFFDIO_ZEROPAGE` operation to resolve the page fault with the
+zero page and wake up the faulting thread, as represented in
 @userfaultfd-page-fault-flow.
 
 #figure(
@@ -417,8 +419,8 @@ with the zero page and wake up the faulting thread, as represented in
 ) <userfaultfd-page-fault-flow>
 
 The kernel read-locks the VMA and walks the page table three times. In between
-the notification and the `UFFDIO_ZEROPAGE` operation, the VMA that contains
-the faulting address could have been modified from another thread so the kernel
+the notification and the `UFFDIO_ZEROPAGE` operation, the VMA that contains the
+faulting address could have been modified from another thread so the kernel
 verifies that the VMA is still associated with the `userfaultfd` context, and
 walks the page table a second time. I do not understand the third occurence,
 however.
@@ -460,8 +462,8 @@ previous and subsequent instructions to make full use of its instruction
 pipeline. We use _fences_ to prevent instruction reordering around the RDTSC
 instruction as suggested by the manual.
 
-These fences slightly increase the execution time of the operations
-that we measure but make the results easier to interpret. For example,
+These fences slightly increase the execution time of the operations that we
+measure but make the results easier to interpret. For example,
 \@linux-page-fault-no-fence-breakdown shows the execution time of the same
 operation as measured in \@linux-page-fault-breakdown, but without the fences.
 
@@ -499,11 +501,11 @@ using `printk` (similar to `printf` in userspace). The execution time of the
   result
 }
 
-The code for measuring the execution time of the operations that happen during
-a minor page fault can be found in the `page-fault-breakdown` directory of the
-repository: there is a kernel patch as well as the source code of a program
-to be run on a patched kernel that produces a CSV file where each row contains
-the execution time of the operations for a page fault.
+The code for measuring the execution time of the operations that happen during a
+minor page fault can be found in the `page-fault-breakdown` directory of the
+repository: there is a kernel patch as well as the source code of a program to
+be run on a patched kernel that produces a CSV file where each row contains the
+execution time of the operations for a page fault.
 
 == Environment
 
@@ -520,34 +522,31 @@ II. Background:
   + Buddy alloc
 + User-space memory alloc (principe) (papier USM)
   + Pourquoi ? Besoin de custom.
-  + Architecture générale : expliquer les différentes use cases (proc à proc, etc.)
+  + Architecture générale : expliquer les différentes use cases (proc à proc,
+    etc.)
 + UINTR (papier USM et Yves)
-  + UINTR is being studied in the research community in terms of its opportunities: xUI
-    Gaetan
+  + UINTR is being studied in the research community in terms of its
+    opportunities: xUI Gaetan
 
-III. Motivation: PF forwarding to user space has high latency.
-and related work
-+ Problem-statement: Voyage d'un page fault jusqu'à user space (avec nuances KPTI, ...)
-  (UFFD et USM) (le chemin allée, pas le chemin réponse)
-+ Problem-assessment:
-  quantifier (UFFD et USM): comparer avec PF traité dans le noyau (fautes mineures)
+III. Motivation: PF forwarding to user space has high latency. and related work
++ Problem-statement: Voyage d'un page fault jusqu'à user space (avec nuances
+  KPTI, ...) (UFFD et USM) (le chemin allée, pas le chemin réponse)
++ Problem-assessment: quantifier (UFFD et USM): comparer avec PF traité dans le
+  noyau (fautes mineures)
 
 IV. User Fault (UF) Design
 
 + Overview: Fournir une modification matérielle et une librairie à utiliser dans
 tous les uses cases présentés en haut de façon sync et async pour pouvoir
-traiter les défauts de pages en userspace avec fallback potentiel en kernel space
-et de façon très flexible (ce sont les requirements)
+traiter les défauts de pages en userspace avec fallback potentiel en kernel
+space et de façon très flexible (ce sont les requirements)
 
 (pour la flexibilité, parler par exemple des uses cases dans la spec)
 
-+ Preliminary specification
-  Hardware API
-  (Software API imaginée)
++ Preliminary specification Hardware API (Software API imaginée)
 
-  -> Mettre des exemples de code tant que possible
-  (pas obligé de mettre pour chaque use case
+  -> Mettre des exemples de code tant que possible (pas obligé de mettre pour
+  chaque use case
 
-+ Preliminary prototype
-  La spec est le fruit de notre brainstorm
-  mais l'implémentatino c'est lui qui l'a faite
++ Preliminary prototype La spec est le fruit de notre brainstorm mais
+  l'implémentatino c'est lui qui l'a faite
