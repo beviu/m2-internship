@@ -7,6 +7,5 @@
     nixfmt.enable = true;
     ruff.enable = true;
     typstyle.enable = true;
-    yamlfmt.enable = true;
   };
 }
