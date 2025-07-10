@@ -1,11 +1,3 @@
-intel-manual:
-  type: book
-  title: Intel 64 and IA-32 Architectures Software Developer's Manual
-  date: 2024-12-24
-  organization: Intel
-  volume: 1-4
-  serial-number: 253665-086US
-  url: https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html
 fred-spec:
   type: web
   title: Flexible Return and Event Delivery (FRED) Specification
@@ -256,3 +248,198 @@ fbmm:
     publisher:
       name: USENIX Association
       location: Santa Clara, CA
+kone25:
+  type: article
+  title: Understanding Intel User Interrupts
+  author:
+    - Kone, Yves
+    - Duval, Louis
+    - Lachaize, Renaud
+    - Felber, Pascal
+    - Hagimont, Daniel
+    - Tchana, Alain
+  date: 2025-06
+  url: https://doi.org/10.1145/3727132
+  serial-number:
+    doi: 10.1145/3727132
+  abstract: User interrupts (UINTR) is a new hardware feature available in recent Intel Xeon processors. It enables a CPU to send, receive, and handle hardware inter-processor interrupts directly in user mode, meaning without the intervention of the OS kernel. In this paper, we shed light on the inner working of this facility and investigate, with detailed performance and overhead measurements considering deployments on physical machines and virtual machines with Linux and KVM, how it can be leveraged for more efficient inter-process communications, as an alternative to OS (Unix) signals. With UINTR, preemptive user-level thread schedulers can achieve quantum lengths in the microsecond scale.
+  parent:
+    type: periodical
+    title: Proc. ACM Meas. Anal. Comput. Syst.
+    publisher:
+      name: Association for Computing Machinery
+      location: New York, NY, USA
+    issue: 2
+    volume: 9
+intel-manual:
+  type: book
+  title: Intel 64 and IA-32 Architectures Software Developer's Manual
+  date: 2024-12-24
+  organization: Intel
+  volume: 1-4
+  serial-number: 253665-086US
+  url: https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html
+aydogmus25:
+  type: article
+  title: 'Extended User Interrupts (xUI): Fast and Flexible Notification without Polling'
+  author:
+    - Aydogmus, Berk
+    - Guo, Linsong
+    - Zuberi, Danial
+    - Garfinkel, Tal
+    - Tullsen, Dean
+    - Ousterhout, Amy
+    - Taram, Kazem
+  date: 2025
+  page-range: 373-389
+  serial-number:
+    doi: 10.1145/3676641.3716028
+  parent:
+    type: proceedings
+guo25:
+  type: article
+  title: The Benefits and Limitations of User Interrupts for Preemptive Userspace Scheduling
+  author:
+    - Guo, Linsong
+    - Zuberi, Danial
+    - Garfinkel, Tal
+    - Ousterhout, Amy
+  date: 2025-04
+  page-range: 1015-1032
+  url: https://www.usenix.org/conference/nsdi25/presentation/guo
+  serial-number:
+    isbn: 978-1-939133-46-5
+  parent:
+    type: proceedings
+    title: 22nd USENIX Symposium on Networked Systems Design and Implementation (NSDI 25)
+    publisher:
+      name: USENIX Association
+      location: Philadelphia, PA
+gem5:
+  type: article
+  title: The gem5 simulator
+  author:
+    - Binkert, Nathan
+    - Beckmann, Bradford
+    - Black, Gabriel
+    - Reinhardt, Steven K.
+    - Saidi, Ali
+    - Basu, Arkaprava
+    - Hestness, Joel
+    - Hower, Derek R.
+    - Krishna, Tushar
+    - Sardashti, Somayeh
+    - Sen, Rathijit
+    - Sewell, Korey
+    - Shoaib, Muhammad
+    - Vaish, Nilay
+    - Hill, Mark D.
+    - Wood, David A.
+  date: 2011-08
+  page-range: 1-7
+  url: https://doi.org/10.1145/2024716.2024718
+  serial-number:
+    doi: 10.1145/2024716.2024718
+    issn: 0163-5964
+  abstract: The gem5 simulation infrastructure is the merger of the best aspects of the M5 [4] and GEMS [9] simulators. M5 provides a highly configurable simulation framework, multiple ISAs, and diverse CPU models. GEMS complements these features with a detailed and exible memory system, including support for multiple cache coherence protocols and interconnect models. Currently, gem5 supports most commercial ISAs (ARM, ALPHA, MIPS, Power, SPARC, and x86), including booting Linux on three of them (ARM, ALPHA, and x86).The project is the result of the combined efforts of many academic and industrial institutions, including AMD, ARM, HP, MIPS, Princeton, MIT, and the Universities of Michigan, Texas, and Wisconsin. Over the past ten years, M5 and GEMS have been used in hundreds of publications and have been downloaded tens of thousands of times. The high level of collaboration on the gem5 project, combined with the previous success of the component parts and a liberal BSD-like license, make gem5 a valuable full-system simulation tool.
+  parent:
+    type: periodical
+    title: SIGARCH Comput. Archit. News
+    publisher:
+      name: Association for Computing Machinery
+      location: New York, NY, USA
+    issue: 2
+    volume: 39
+peng25:
+  type: article
+  title: 'Pegasus: Transparent and Unified Kernel-Bypass Networking for Fast Local and Remote Communication'
+  author:
+    - Peng, Dinglan
+    - Liu, Congyu
+    - Palit, Tapti
+    - Vahldiek-Oberwagner, Anjo
+    - Vij, Mona
+    - Fonseca, Pedro
+  date: 2025
+  page-range: 360-378
+  url: https://doi.org/10.1145/3689031.3696083
+  serial-number:
+    doi: 10.1145/3689031.3696083
+    isbn: '9798400711961'
+  abstract: Modern software architectures in cloud computing are highly reliant on interconnected local and remote services. Popular architectures, such as the service mesh, rely on the use of independent services or sidecars for a single application. While such modular approaches simplify application development and deployment, they also introduce significant communication overhead since now even local communication that is handled by the kernel becomes a performance bottleneck. This problem has been identified and partially solved for remote communication over fast NICs through the use of kernel-bypass data plane systems. However, existing kernel-bypass mechanisms challenge their practical deployment by either requiring code modification or supporting only a small subset of the network interface.In this paper, we propose Pegasus, a framework for transparent kernel bypass for local and remote communication. By transparently fusing multiple applications into a single process, Pegasus provides an in-process fast path to bypass the kernel for local communication. To accelerate remote communication over fast NICs, Pegasus uses DPDK to directly access the NIC. Pegasus supports transparent kernel bypass for unmodified binaries by implementing core OS services in user space, such as scheduling and memory management, thus removing the kernel from the critical path. Our experiments on a range of real-world applications show that, compared with Linux, Pegasus improves the throughput by 19% to 33% for local communication and 178% to 442% for remote communication, without application changes. Furthermore, Pegasus achieves 222% higher throughput than Linux for co-located, IO-intensive applications that require both local and remote communication, with each communication optimization contributing significantly.
+  parent:
+    type: proceedings
+    title: Proceedings of the Twentieth European Conference on Computer Systems
+    publisher:
+      name: Association for Computing Machinery
+      location: Rotterdam, Netherlands
+    parent:
+      type: proceedings
+      title: EuroSys '25
+fried24:
+  type: article
+  title: Making Kernel Bypass Practical for the Cloud with Junction
+  author:
+    - Fried, Joshua
+    - Chaudhry, Gohar Irfan
+    - Saurez, Enrique
+    - Choukse, Esha
+    - Goiri, Inigo
+    - Elnikety, Sameh
+    - Fonseca, Rodrigo
+    - Belay, Adam
+  date: 2024-04
+  page-range: 55-73
+  url: https://www.usenix.org/conference/nsdi24/presentation/fried
+  serial-number:
+    isbn: 978-1-939133-39-7
+  parent:
+    type: proceedings
+    title: 21st USENIX Symposium on Networked Systems Design and Implementation (NSDI 24)
+    publisher:
+      name: USENIX Association
+      location: Santa Clara, CA
+li24:
+  type: article
+  title: 'LibPreemptible: Enabling Fast, Adaptive, and Hardware-Assisted User-Space Scheduling'
+  author:
+    - Li, Yueying
+    - Lazarev, Nikita
+    - Koufaty, David
+    - Yin, Tenny
+    - Anderson, Andy
+    - Zhang, Zhiru
+    - Suh, G. Edward
+    - Kaffes, Kostis
+    - Delimitrou, Christina
+  date: 2024
+  page-range: 922-936
+  serial-number:
+    doi: 10.1109/HPCA57654.2024.00075
+  parent:
+    type: proceedings
+    title: 2024 IEEE International Symposium on High-Performance Computer Architecture (HPCA)
+    issue: ''
+    volume: 0
+rauscher24:
+  type: article
+  title: 'Cross-Core Interrupt Detection: Exploiting User and Virtualized IPIs'
+  author:
+    - Rauscher, Fabian
+    - Gruss, Daniel
+  date: 2024
+  page-range: 94-108
+  url: https://doi.org/10.1145/3658644.3690242
+  serial-number:
+    doi: 10.1145/3658644.3690242
+    isbn: '9798400706363'
+  abstract: 'Interrupts are fundamental for inter-process and cross-core communication in modern systems. Controlling these communication mechanisms historically requires switches into the kernel or hypervisor, incurring high-performance costs. To alleviate these costs, Intel introduced new hardware mechanisms to send inter-processor interrupts (IPIs) from user space without switching into the kernel and from virtual machines without switching into the hypervisor. However, it is unclear whether this direct, unsupervised interaction between unprivileged (or virtualized) workloads and the underlying hardware introduces a significant change in the attack surface.In this paper, we present the IPI side channel, a novel side-channel attack exploiting the recently introduced user interrupts and IPI virtualization features on Intel Sapphire Rapids and the upcoming Intel Arrow Lake processors. The IPI side channel is the first cross-core interrupt detection side channel, allowing an attacker to monitor interrupts delivered to any physical core of the same processor. Our attack is based on precise measurements of the hardware delivery time of interrupts from user space and virtual machines. More specifically, we exploit that interrupts are delivered through a cross-core bus, leading to timing variations on the attacker''s local IPIs. We present multiple case studies to compare the IPI side channel with the state of the art: First, we present an unprivileged cross-core covert channel with a native true capacity of 434.7 kbit/s (n=100, σx=0.03) and a cross-VM capacity of 3.45 kbit/s (n=100, σx=0.01). Second, we demonstrate a native inter-keystroke timing attack with an F1 score of 97.9%. Third, we present an open-world website fingerprinting attack on the top 100 websites, achieving an F1 score of 89.0% in a native scenario and an F1 score of 71.0% in a cross-VM (thin client) scenario. Furthermore, we discuss the broader context of the IPI side channels and categorize interrupt side channels and mitigations.'
+  parent:
+    type: proceedings
+    title: Proceedings of the 2024 on ACM SIGSAC Conference on Computer and Communications Security
+    publisher:
+      name: Association for Computing Machinery
+      location: Salt Lake City, UT, USA
+    parent:
+      type: proceedings
+      title: CCS '24
