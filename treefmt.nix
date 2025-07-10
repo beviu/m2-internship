@@ -8,4 +8,11 @@
     ruff.enable = true;
     typstyle.enable = true;
   };
+
+  settings = {
+    global.excludes = [
+      # Keep the original formatting for third party code.
+      "page-fault-timings/variants/*"
+    ];
+  };
 }
