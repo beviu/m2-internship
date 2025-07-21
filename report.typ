@@ -1,9 +1,9 @@
 #import "@preview/bytefield:0.0.7": *
 #import "@preview/cetz:0.4.0"
-#import "@preview/cetz-plot:0.1.2"
 #import "@preview/drafting:0.2.2": *
 #import "@preview/subpar:0.2.2"
 #import "./execution.typ": execution, internal-stmt, kernel-stmt, user-stmt
+#import "./pf-privilege-flow.typ": pf-privilege-flow-diagram
 
 #let paragraph-heading(body) = text(weight: "bold", body)
 
@@ -271,7 +271,7 @@ For example, FBMM@fbmm is a modification to Linux that makes it easier for
 developers to modify the memory management by writing kernel modules. However,
 kernel-space code such as kernel modules are harder to modify, test and deploy
 than user-space code. This is why USM uses another approach by delegating parts
-of the Linux memory manager to user-space. ExtMem@extmem is another
+of the Linux memory manager to user-space. ExtMem@jalalian24 is another
 implementation of this idea which uses an existing but less efficient mechanism
 in Linux called userfaultfd@userfaultfd to catch page faults.
 
@@ -798,67 +798,11 @@ directly communicate with the hardware to improve performance---we propose a
 hardware modification to let applications directly handle page faults without
 going through the kernel first, as can be seen in @flow-of-privilege.
 
-#let page-fault-privilege-flow-diagram(bypass-kernel) = cetz.canvas({
-  import cetz.draw: *
-
-  content(
-    (),
-    box(stroke: 1pt, inset: .5em)[CPU],
-    name: "cpu",
-  )
-
-  content(
-    (rel: (2, 0), to: "cpu.east"),
-    anchor: "west",
-    [Handler],
-    name: "handler",
-  )
-
-  line(
-    (rel: (0, 1), to: ("cpu.east", 50%, "handler.west")),
-    (rel: (0, -1), to: ("cpu.east", 50%, "handler.west")),
-    name: "border",
-  )
-
-  content((rel: (-.5em, 0), to: "border.start"), anchor: "north-east", [K])
-
-  content((rel: (.5em, 0), to: "border.start"), anchor: "north-west", [U])
-
-  if bypass-kernel {
-    line(
-      "cpu",
-      (rel: (-.5em, 0), to: "handler.west"),
-      mark: (end: ">"),
-      name: "path",
-    )
-  } else {
-    line(
-      "cpu",
-      (rel: (-1em, 0), to: "border.mid"),
-      mark: (end: ">"),
-      name: "path",
-    )
-
-    line(
-      (rel: (-.5em, 0), to: "border.mid"),
-      (rel: (-.5em, 0), to: "handler.west"),
-      mark: (end: ">"),
-      name: "path",
-    )
-  }
-
-  content(
-    (rel: (.5em, -.5em), to: "cpu.east"),
-    anchor: "north-west",
-    `#PF`,
-  )
-})
-
 #subpar.grid(
   columns: 2,
   column-gutter: 1.5cm,
-  figure(page-fault-privilege-flow-diagram(false), caption: [Without UF]),
-  figure(page-fault-privilege-flow-diagram(true), caption: [With UF]),
+  figure(pf-privilege-flow-diagram(false), caption: [Without UF]),
+  figure(pf-privilege-flow-diagram(true), caption: [With UF]),
 
   caption: [The flow of privilege during the reception of a page fault in user
     space.],

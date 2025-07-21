@@ -13,46 +13,6 @@ torvalds-page-fault-cost:
   type: web
   author: Linus Torvalds
   url: https://web.archive.org/web/20181208181101/https://plus.google.com/+LinusTorvalds/posts/YDKRFDwHwr6
-extmem:
-  type: article
-  title: '{ExtMem}: Enabling {Application-Aware} Virtual Memory Management for {Data-Intensive} Applications'
-  author:
-    - Jalalian, Sepehr
-    - Patel, Shaurya
-    - Hajidehi, Milad Rezaei
-    - Seltzer, Margo
-    - Fedorova, Alexandra
-  date: 2024-07
-  page-range: 397–408
-  url: https://www.usenix.org/conference/atc24/presentation/jalalian
-  serial-number:
-    isbn: 978-1-939133-41-0
-  parent:
-    type: proceedings
-    title: 2024 USENIX Annual Technical Conference (USENIX ATC 24)
-    publisher: USENIX Association
-    location: Santa Clara, CA
-ghost:
-  type: article
-  title: 'ghOSt: Fast and Flexible User-Space Delegation of Linux Scheduling'
-  author:
-    - Humphries, Jack Tigar
-    - Natu, Neel
-    - Chaugule, Ashwin
-    - Weisse, Ofir
-    - Rhoden, Barret
-    - Don, Josh
-    - Rizzo, Luigi
-    - Rombakh, Oleg
-    - Turner, Paul Jack
-    - Kozyrakis, Christos
-  date: 2021
-  page-range: 588–604
-  url: https://doi.org/10.1145/3477132.3483542
-  parent:
-    type: proceedings
-    title: Proceedings of the ACM SIGOPS 28th Symposium on Operating Systems Principles CD-ROM
-    location: New York, NY, USA
 flexsc:
   type: article
   title: 'FlexSC: flexible system call scheduling with exception-less system calls'
@@ -70,26 +30,6 @@ flexsc:
     parent:
       type: proceedings
       title: OSDI'10
-bento:
-  type: article
-  title: High Velocity Kernel File Systems with Bento
-  author:
-    - Miller, Samantha
-    - Zhang, Kaiyuan
-    - Chen, Mengqi
-    - Jennings, Ryan
-    - Chen, Ang
-    - Zhuo, Danyang
-    - Anderson, Thomas
-  date: 2021-02
-  page-range: 65–79
-  url: https://www.usenix.org/conference/fast21/presentation/miller
-  serial-number:
-    isbn: 978-1-939133-20-5
-  parent:
-    type: proceedings
-    title: 19th USENIX Conference on File and Storage Technologies (FAST 21)
-    publisher: USENIX Association
 syrup:
   type: article
   title: 'Syrup: User-Defined Scheduling Across the Stack'
@@ -139,50 +79,6 @@ ufs:
     parent:
       type: proceedings
       title: SOSP '21
-snap:
-  type: article
-  title: 'Snap: a microkernel approach to host networking'
-  author:
-    - Marty, Michael
-    - name: Kruijf
-      given-name: Marc
-      prefix: de
-    - Adriaens, Jacob
-    - Alfeld, Christopher
-    - Bauer, Sean
-    - Contavalli, Carlo
-    - Dalton, Michael
-    - Dukkipati, Nandita
-    - Evans, William C.
-    - Gribble, Steve
-    - Kidd, Nicholas
-    - Kononov, Roman
-    - Kumar, Gautam
-    - Mauer, Carl
-    - Musick, Emily
-    - Olson, Lena
-    - Rubow, Erik
-    - Ryan, Michael
-    - Springborn, Kevin
-    - Turner, Paul
-    - Valancius, Valas
-    - Wang, Xi
-    - Vahdat, Amin
-  date: 2019
-  page-range: 399–413
-  url: https://doi.org/10.1145/3341301.3359657
-  serial-number:
-    doi: 10.1145/3341301.3359657
-    isbn: '9781450368735'
-  abstract: This paper presents our design and experience with a microkernel-inspired approach to host networking called Snap. Snap is a userspace networking system that supports Google's rapidly evolving needs with flexible modules that implement a range of network functions, including edge packet switching, virtualization for our cloud platform, traffic shaping policy enforcement, and a high-performance reliable messaging and RDMA-like service. Snap has been running in production for over three years, supporting the extensible communication needs of several large and critical systems.Snap enables fast development and deployment of new networking features, leveraging the benefits of address space isolation and the productivity of userspace software development together with support for transparently upgrading networking services without migrating applications off of a machine. At the same time, Snap achieves compelling performance through a modular architecture that promotes principled synchronization with minimal state sharing, and supports real-time scheduling with dynamic scaling of CPU resources through a novel kernel/userspace CPU scheduler co-design. Our evaluation demonstrates over 3x Gbps/core improvement compared to a kernel networking stack for RPC workloads, software-based RDMA-like performance of up to 5M IOPS/core, and transparent upgrades that are largely imperceptible to user applications. Snap is deployed to over half of our fleet of machines and supports the needs of numerous teams.
-  parent:
-    type: proceedings
-    title: Proceedings of the 27th ACM Symposium on Operating Systems Principles
-    publisher: Association for Computing Machinery
-    location: Huntsville, Ontario, Canada
-    parent:
-      type: proceedings
-      title: SOSP '19
 checkpoint-and-restart:
   type: article
   title: Instant OS updates via userspace checkpoint-and-restart
@@ -248,6 +144,7 @@ fbmm:
     publisher:
       name: USENIX Association
       location: Santa Clara, CA
+
 kone25:
   type: article
   title: Understanding Intel User Interrupts
@@ -271,6 +168,7 @@ kone25:
       location: New York, NY, USA
     issue: 2
     volume: 9
+
 intel-manual:
   type: book
   title: Intel 64 and IA-32 Architectures Software Developer's Manual
@@ -279,6 +177,12 @@ intel-manual:
   volume: 1-4
   serial-number: 253665-086US
   url: https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html
+
+sched_ext:
+  type: web
+  title: Extensible Scheduler Class
+  url: https://docs.kernel.org/scheduler/sched-ext.html
+
 aydogmus25:
   type: article
   title: 'Extended User Interrupts (xUI): Fast and Flexible Notification without Polling'
@@ -296,6 +200,7 @@ aydogmus25:
     doi: 10.1145/3676641.3716028
   parent:
     type: proceedings
+
 guo25:
   type: article
   title: The Benefits and Limitations of User Interrupts for Preemptive Userspace Scheduling
@@ -315,6 +220,7 @@ guo25:
     publisher:
       name: USENIX Association
       location: Philadelphia, PA
+
 gem5:
   type: article
   title: The gem5 simulator
@@ -350,6 +256,7 @@ gem5:
       location: New York, NY, USA
     issue: 2
     volume: 39
+
 peng25:
   type: article
   title: 'Pegasus: Transparent and Unified Kernel-Bypass Networking for Fast Local and Remote Communication'
@@ -376,6 +283,7 @@ peng25:
     parent:
       type: proceedings
       title: EuroSys '25
+
 fried24:
   type: article
   title: Making Kernel Bypass Practical for the Cloud with Junction
@@ -399,6 +307,7 @@ fried24:
     publisher:
       name: USENIX Association
       location: Santa Clara, CA
+
 li24:
   type: article
   title: 'LibPreemptible: Enabling Fast, Adaptive, and Hardware-Assisted User-Space Scheduling'
@@ -421,6 +330,7 @@ li24:
     title: 2024 IEEE International Symposium on High-Performance Computer Architecture (HPCA)
     issue: ''
     volume: 0
+
 rauscher24:
   type: article
   title: 'Cross-Core Interrupt Detection: Exploiting User and Virtualized IPIs'
@@ -443,3 +353,111 @@ rauscher24:
     parent:
       type: proceedings
       title: CCS '24
+
+humphries2021:
+  type: article
+  title: 'ghOSt: Fast and Flexible User-Space Delegation of Linux Scheduling'
+  author:
+    - Humphries, Jack Tigar
+    - Natu, Neel
+    - Chaugule, Ashwin
+    - Weisse, Ofir
+    - Rhoden, Barret
+    - Don, Josh
+    - Rizzo, Luigi
+    - Rombakh, Oleg
+    - Turner, Paul Jack
+    - Kozyrakis, Christos
+  date: 2021
+  page-range: 588–604
+  url: https://doi.org/10.1145/3477132.3483542
+  parent:
+    type: proceedings
+    title: Proceedings of the ACM SIGOPS 28th Symposium on Operating Systems Principles CD-ROM
+    location: New York, NY, USA
+
+miller21:
+  type: article
+  title: High Velocity Kernel File Systems with Bento
+  author:
+    - Miller, Samantha
+    - Zhang, Kaiyuan
+    - Chen, Mengqi
+    - Jennings, Ryan
+    - Chen, Ang
+    - Zhuo, Danyang
+    - Anderson, Thomas
+  date: 2021-02
+  page-range: 65–79
+  url: https://www.usenix.org/conference/fast21/presentation/miller
+  serial-number:
+    isbn: 978-1-939133-20-5
+  parent:
+    type: proceedings
+    title: 19th USENIX Conference on File and Storage Technologies (FAST 21)
+    publisher: USENIX Association
+
+marty19:
+  type: article
+  title: 'Snap: a microkernel approach to host networking'
+  author:
+    - Marty, Michael
+    - name: Kruijf
+      given-name: Marc
+      prefix: de
+    - Adriaens, Jacob
+    - Alfeld, Christopher
+    - Bauer, Sean
+    - Contavalli, Carlo
+    - Dalton, Michael
+    - Dukkipati, Nandita
+    - Evans, William C.
+    - Gribble, Steve
+    - Kidd, Nicholas
+    - Kononov, Roman
+    - Kumar, Gautam
+    - Mauer, Carl
+    - Musick, Emily
+    - Olson, Lena
+    - Rubow, Erik
+    - Ryan, Michael
+    - Springborn, Kevin
+    - Turner, Paul
+    - Valancius, Valas
+    - Wang, Xi
+    - Vahdat, Amin
+  date: 2019
+  page-range: 399–413
+  url: https://doi.org/10.1145/3341301.3359657
+  serial-number:
+    doi: 10.1145/3341301.3359657
+    isbn: '9781450368735'
+  abstract: This paper presents our design and experience with a microkernel-inspired approach to host networking called Snap. Snap is a userspace networking system that supports Google's rapidly evolving needs with flexible modules that implement a range of network functions, including edge packet switching, virtualization for our cloud platform, traffic shaping policy enforcement, and a high-performance reliable messaging and RDMA-like service. Snap has been running in production for over three years, supporting the extensible communication needs of several large and critical systems.Snap enables fast development and deployment of new networking features, leveraging the benefits of address space isolation and the productivity of userspace software development together with support for transparently upgrading networking services without migrating applications off of a machine. At the same time, Snap achieves compelling performance through a modular architecture that promotes principled synchronization with minimal state sharing, and supports real-time scheduling with dynamic scaling of CPU resources through a novel kernel/userspace CPU scheduler co-design. Our evaluation demonstrates over 3x Gbps/core improvement compared to a kernel networking stack for RPC workloads, software-based RDMA-like performance of up to 5M IOPS/core, and transparent upgrades that are largely imperceptible to user applications. Snap is deployed to over half of our fleet of machines and supports the needs of numerous teams.
+  parent:
+    type: proceedings
+    title: Proceedings of the 27th ACM Symposium on Operating Systems Principles
+    publisher: Association for Computing Machinery
+    location: Huntsville, Ontario, Canada
+    parent:
+      type: proceedings
+      title: SOSP '19
+
+jalalian24:
+  type: article
+  title: '{ExtMem}: Enabling {Application-Aware} Virtual Memory Management for {Data-Intensive} Applications'
+  author:
+    - Jalalian, Sepehr
+    - Patel, Shaurya
+    - Hajidehi, Milad Rezaei
+    - Seltzer, Margo
+    - Fedorova, Alexandra
+  date: 2024-07
+  page-range: 397–408
+  url: https://www.usenix.org/conference/atc24/presentation/jalalian
+  serial-number:
+    isbn: 978-1-939133-41-0
+  parent:
+    type: proceedings
+    title: 2024 USENIX Annual Technical Conference (USENIX ATC 24)
+    publisher: USENIX Association
+    location: Santa Clara, CA

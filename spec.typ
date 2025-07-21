@@ -32,7 +32,7 @@ is a tool to freeze and checkpoint applications to the disk, and later resume
 them. It's also used to implement a similar checkpoint and restore functionality
 on QEMU (a virtual machine manager) when using KVM.
 
-userfaultfd was also used in _ExtMem_@extmem to modify the policy used for
+userfaultfd was also used in _ExtMem_@jalalian24 to modify the policy used for
 virtual page allocations and page reclamation, as well as the swap backend. It
 showed that it could be possible to increase an application's performance by
 tuning the memory management policies and swap backend to the application.
