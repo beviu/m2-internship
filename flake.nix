@@ -25,6 +25,21 @@
               (pkgs.python3.withPackages (ps: [ ps.pandas ]))
             ];
           };
+
+          gem5 = pkgs.mkShell {
+            nativeBuildInputs = [
+              pkgs.m4
+              pkgs.pre-commit
+              pkgs.protobuf
+              pkgs.scons
+            ];
+
+            buildInputs = [
+              pkgs.hdf5-cpp
+              pkgs.libpng
+              pkgs.zlib
+            ];
+          };
         }
       );
 
