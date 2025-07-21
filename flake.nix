@@ -23,6 +23,8 @@
               pkgs.clang-tools
               pkgs.clang
               (pkgs.python3.withPackages (ps: [ ps.pandas ]))
+              pkgs.meson
+              pkgs.samurai
             ];
           };
 
