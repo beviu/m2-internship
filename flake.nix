@@ -31,7 +31,7 @@
       formatter = forAllSystems (
         system:
         let
-          pkgs = import nixpkgs { inherit system; };
+          pkgs = nixpkgs.legacyPackages.${system};
           treefmtEval = treefmt-nix.lib.evalModule pkgs ./treefmt.nix;
         in
         treefmtEval.config.build.wrapper
