@@ -1,0 +1,53 @@
+Key findings:
+- Contrary to conventional wisdom, polling only offers marginal I/O
+  performance improvements over interrupts. Most overhead comes from kernel
+  thread scheduling.
+- The CPU usage that comes with polling imposes limitations on building
+  high-performance file systems.
+- The IPC costs in user space file systems are too high.
+
+Interesting properties:
+- Coordianated scheduling, using sched_ext
+- Protected sharing, using intra-address space isolation
+
+Figure 3 contains a breakdown of a read access with io_uring.
+
+Comparison between io_uring with polling and with interrupts. Most of the
+difference comes from thread scheduling latency. This in turns comes from
+the kernel scheduling code that takes a long time to execute. The authors
+propose a solution where the sleeping thread doesn't poll, but is still
+kept awake (?).
+
+Figure 5 shows that polling is bad for latency when multiple tasks need to
+poll or when there is one CPU intensive task.
+
+The paper uses trusted execution environments (?) to make sure that
+applications don't tamper with the wrong data on disk, and also to modify
+kernel scheduling (?). The kernel scheduler is sched_bpf, and that makes
+it possible to mmap its state in the TEE.
+
+AeoDriver is a trusted entity, and AeoFS has a trusted entity to handle
+metadata.
+
+In order to prepare the UPIR to receive a user interrupt when the disk
+generates an interrupt, the UPID is mmaped into the address space of
+AeoDriver.
+
+Trusted entities are implemented using memory protection keys (MPK). It
+uses the WRPKRU instruction (48 cycles) to change domains.
+
+Upon launching, the privileged launching process inspects the binary of the
+untrusted code to verify that it does not contain WRPKRU. During runtime, it
+prevents the unstrusted code from inserting WRPKRU via self-modifying code.
+
+Aeolia assigns different user interrupt vectors to different threads, so that
+the interrupt vector of an out-of-schedule interrupt will always mismatch the
+current UINV register, thus delivered to the kernel as a regular interrupt.
+
+When an out-of-schedule interrupt is delivered, there is an optimization.
+Instead of having the thread self-IPI, the kernel inserts a stack frame so
+that on return, the thread is inside the handler.
+
+AeoFS is inspired by Trio, a library FS that separates "core" state that
+contains critical metadata that must never be lost (e.g. access permissions)
+from auxiliary state that is private to each LibFS instance.
