@@ -1,40 +1,49 @@
-use std::ptr;
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::Instant,
+};
 
-pub struct PageFaultGenerator {
-    mmap: memmap2::MmapMut,
-    page_size: usize,
-    offset: usize,
-}
+use tokio::sync::{Barrier, Notify};
 
-pub struct CapacityExceeded;
+use crate::mmap::Mmap;
 
-impl PageFaultGenerator {
-    pub fn new(capacity: usize) -> std::io::Result<Self> {
-        let ret = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
-        let page_size = usize::try_from(ret).map_err(|_err| std::io::Error::last_os_error())?;
-        let len = capacity * page_size;
-        let mmap = memmap2::MmapOptions::new().len(len).map_anon()?;
-        Ok(Self {
-            mmap,
-            page_size,
-            offset: 0,
-        })
-    }
+mod mmap;
 
-    pub fn generate_page_fault(&mut self) -> Result<(), CapacityExceeded> {
-        if self.offset >= self.mmap.len() {
-            return Err(CapacityExceeded);
-        }
-        let page = unsafe { self.mmap.as_ptr().add(self.offset) };
-        unsafe { ptr::read_volatile(page) };
-        self.offset += self.page_size;
-        Ok(())
-    }
+fn get_page_size() -> std::io::Result<usize> {
+    let ret = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
+    usize::try_from(ret).map_err(|_err| std::io::Error::last_os_error())
 }
 
 fn main() {
     let runtime = tokio::runtime::Builder::new_multi_thread().build().unwrap();
-    const COUNT: usize = 8192;
-    let mut generator = PageFaultGenerator::new(COUNT).unwrap();
-    runtime.block_on(async move { while generator.generate_page_fault().is_ok() {} });
+    const COUNT: usize = 65536;
+    let page_size = get_page_size().unwrap();
+    let mut mmap = Mmap::new_anonymous(libc::PROT_READ, COUNT * page_size).unwrap();
+    let start_barrier = Arc::new(Barrier::new(COUNT + 1));
+    let remaining = Arc::new(AtomicUsize::new(COUNT));
+    let done_notify = Arc::new(Notify::new());
+    while !mmap.is_empty() {
+        let (page, rest) = unsafe { mmap.split_at_unchecked(page_size) };
+        let start_barrier_ = start_barrier.clone();
+        let remaining_ = remaining.clone();
+        let done_notify_ = done_notify.clone();
+        runtime.spawn(async move {
+            start_barrier_.wait().await;
+            unsafe { core::ptr::read_volatile(page.as_ptr()) };
+            if remaining_.fetch_sub(1, Ordering::Relaxed) == 1 {
+                done_notify_.notify_one();
+            }
+        });
+        mmap = rest;
+    }
+    runtime.block_on(async {
+        let start = Instant::now();
+        start_barrier.wait().await;
+        done_notify.notified().await;
+        let end = Instant::now();
+        println!("{}ns", end.duration_since(start).as_nanos());
+    });
 }
