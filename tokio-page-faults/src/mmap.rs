@@ -1,4 +1,7 @@
-use std::{io, ops::Deref};
+use std::{
+    io,
+    ops::{Deref, DerefMut},
+};
 
 pub struct Mmap {
     ptr: *mut libc::c_void,
@@ -42,6 +45,12 @@ impl Deref for Mmap {
 
     fn deref(&self) -> &Self::Target {
         unsafe { core::slice::from_raw_parts(self.ptr.cast(), self.len) }
+    }
+}
+
+impl DerefMut for Mmap {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { core::slice::from_raw_parts_mut(self.ptr.cast(), self.len) }
     }
 }
 

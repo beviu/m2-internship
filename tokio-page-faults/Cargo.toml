@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-libc = { version = "0.2.177", default-features = false }
-memmap2 = { version = "0.9.9", default-features = false }
-tokio = { version = "1.48.0", default-features = false, features = ["rt-multi-thread", "sync"] }
+atomic-wait = "1"
+libc = { version = "0.2", default-features = false }
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "sync"] }
