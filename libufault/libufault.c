@@ -1,4 +1,4 @@
-#include <libuserfault.h>
+#include <libufault.h>
 
 /* This function will not be exported and is not
  * directly callable by users of this library.

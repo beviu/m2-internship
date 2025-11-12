@@ -1,4 +1,4 @@
-#include <libuserfault.h>
+#include <libufault.h>
 #include <stdio.h>
 
 int main(int argc, char **argv) {
