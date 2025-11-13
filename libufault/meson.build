@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 lib = library(
-  'libufault',
+  'ufault',
   'libufault.c',
   install : true,
   c_shared_args : lib_args,
