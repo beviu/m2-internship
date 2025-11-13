@@ -60,7 +60,7 @@ static int uintr_register_self(uint8_t vector, unsigned int flags) {
 
 static sig_atomic_t uintr_count = 0;
 
-static void __attribute__((interrupt))
+static void __attribute__((interrupt, target("general-regs-only")))
 uintr_handler(struct __uintr_frame *frame, unsigned long long vector) {
   (void)frame;
   (void)vector;
