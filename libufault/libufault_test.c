@@ -8,10 +8,11 @@
 
 static sig_atomic_t ufault_count = 0;
 
-static void __attribute__((interrupt, target("general-regs-only")))
+static void __attribute__((interrupt, target("uintr,general-regs-only")))
 handler(struct __uintr_frame *frame, unsigned long long vector) {
   (void)frame;
   (void)vector;
+
   ++ufault_count;
 }
 
