@@ -14,7 +14,14 @@ typedef void (*ufault_handler_t)(struct __uintr_frame *frame,
 
 int LIBUFAULT_PUBLIC ufault_register_handler(ufault_handler_t handler,
                                              int flags);
-int LIBUFAULT_PUBLIC ufault_unregister_handler(int flags);
+
+static inline __attribute__((always_inline)) void ufault_stuf(void) {
+  asm volatile(".long 0xeb010ff3");
+}
+
+static inline __attribute__((always_inline)) void ufault_cluf(void) {
+  asm volatile(".long 0xea010ff3");
+}
 
 static inline __attribute__((always_inline)) void ufault_kret(void) {
   asm volatile(".long 0xe9010ff3");

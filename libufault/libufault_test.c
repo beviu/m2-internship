@@ -24,7 +24,11 @@ static bool do_page_fault(void) {
     return false;
   }
 
+  ufault_stuf();
+
   *(volatile char *)page;
+
+  ufault_cluf();
 
   munmap(page, 1);
 

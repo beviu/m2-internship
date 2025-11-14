@@ -1,0 +1,28 @@
+From e68cd50a14d254fe3c24a9958570862a33d8242d Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Fri, 14 Nov 2025 12:47:39 +0100
+Subject: [PATCH 3/4] x86: Add CONFIG_X86_USER_FAULTS
+
+---
+ arch/x86/Kconfig | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
+index 7cb9155ae9b5..6ee0679789ae 100644
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -1901,6 +1901,11 @@ config X86_UINTR_BLOCKING
+ 	  experimental and flaky. Enable this only if you are specifically
+ 	  testing this. Failures can happen when stressed.
+ 
++config X86_USER_FAULTS
++	bool "User Faults (UFAULT)"
++	depends on X86_64
++	depends on CPU_SUP_INTEL
++
+ choice
+ 	prompt "TSX enable mode"
+ 	depends on CPU_SUP_INTEL
+-- 
+2.51.0
+
