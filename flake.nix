@@ -20,10 +20,11 @@
         {
           default = pkgs.mkShell {
             packages = [
-              pkgs.clang-tools
               pkgs.clang
-              (pkgs.python3.withPackages (ps: [ ps.pandas ]))
+              pkgs.clang-tools
+              pkgs.glibc.static
               pkgs.meson
+              (pkgs.python3.withPackages (ps: [ ps.pandas ]))
               pkgs.samurai
             ];
           };
