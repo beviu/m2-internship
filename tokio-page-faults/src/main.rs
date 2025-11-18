@@ -89,6 +89,7 @@ fn experiment_1_threads() {
 
     let page_size = get_page_size().unwrap();
     let mut mmap = Mmap::new_anonymous(libc::PROT_READ, EXPERIMENT_1_COUNT * page_size).unwrap();
+    unsafe { madvise(mmap.as_mut_ptr().cast(), mmap.len(), libc::MADV_NOHUGEPAGE).unwrap() };
 
     thread::scope(|scope| {
         while !mmap.is_empty() {
