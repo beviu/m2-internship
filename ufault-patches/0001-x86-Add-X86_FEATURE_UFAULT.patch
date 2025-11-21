@@ -1,7 +1,7 @@
 From 303c38596a54eec51d294202f30a4ced5786a3dd Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 14 Nov 2025 11:36:18 +0100
-Subject: [PATCH 1/4] x86: Add X86_FEATURE_UFAULT
+Subject: [PATCH 1/9] x86: Add X86_FEATURE_UFAULT
 
 ---
  arch/x86/include/asm/cpufeatures.h | 1 +

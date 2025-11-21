@@ -1,16 +1,16 @@
-From c851f04ffa56c74d6f9898eeee7cb05ba284032b Mon Sep 17 00:00:00 2001
+From 2aba6185ef3307de8b9ef6e0381c5eef8522ff02 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 25 Jul 2025 13:33:10 +0200
-Subject: [PATCH 4/4] x86: Add ufault_register_handler system call
+Subject: [PATCH 4/9] x86: Add ufault_register_handler system call
 
 ---
  arch/x86/entry/syscalls/syscall_64.tbl |  1 +
  arch/x86/include/asm/entry-common.h    |  4 ++++
  arch/x86/include/asm/processor.h       |  3 +++
- arch/x86/include/asm/ufault.h          | 11 +++++++++++
+ arch/x86/include/asm/ufault.h          | 15 +++++++++++++++
  arch/x86/kernel/Makefile               |  1 +
  arch/x86/kernel/ufault.c               | 19 +++++++++++++++++++
- 6 files changed, 39 insertions(+)
+ 6 files changed, 43 insertions(+)
  create mode 100644 arch/x86/include/asm/ufault.h
  create mode 100644 arch/x86/kernel/ufault.c
 
@@ -64,10 +64,10 @@ index 0859583f7192..fdade9df13a3 100644
  	 * context switch. Store it in thread_struct to avoid a lookup in
 diff --git a/arch/x86/include/asm/ufault.h b/arch/x86/include/asm/ufault.h
 new file mode 100644
-index 000000000000..481e2c225a86
+index 000000000000..299da95be9d8
 --- /dev/null
 +++ b/arch/x86/include/asm/ufault.h
-@@ -0,0 +1,11 @@
+@@ -0,0 +1,15 @@
 +/* SPDX-License-Identifier: GPL-2.0 */
 +#ifndef _ASM_X86_UFAULT_H
 +#define _ASM_X86_UFAULT_H
@@ -75,6 +75,10 @@ index 000000000000..481e2c225a86
 +#ifdef CONFIG_X86_USER_FAULTS
 +
 +void switch_ufault_return(void);
++
++#else
++
++static inline void switch_ufault_return(void) {}
 +
 +#endif /* CONFIG_X86_USER_FAULTS */
 +
