@@ -20,6 +20,7 @@
         {
           extmem-ufault = pkgs.callPackage ./pkgs/extmem-ufault/package.nix { };
           gapbs = pkgs.callPackage ./pkgs/gapbs/package.nix { };
+          twitter-dataset = pkgs.callPackage ./pkgs/twitter-dataset/package.nix { };
         }
       );
 
