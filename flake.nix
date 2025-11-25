@@ -12,6 +12,16 @@
       forAllSystems = nixpkgs.lib.genAttrs nixpkgs.lib.systems.flakeExposed;
     in
     {
+      packages = forAllSystems (
+        system:
+        let
+          pkgs = import nixpkgs { inherit system; };
+        in
+        {
+          extmem-ufault = pkgs.callPackage ./extmem-ufault/package.nix { };
+        }
+      );
+
       devShells = forAllSystems (
         system:
         let
