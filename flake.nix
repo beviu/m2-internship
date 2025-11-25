@@ -18,7 +18,8 @@
           pkgs = import nixpkgs { inherit system; };
         in
         {
-          extmem-ufault = pkgs.callPackage ./extmem-ufault/package.nix { };
+          extmem-ufault = pkgs.callPackage ./pkgs/extmem-ufault/package.nix { };
+          gapbs = pkgs.callPackage ./pkgs/gapbs/package.nix { };
         }
       );
 

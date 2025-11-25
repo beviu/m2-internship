@@ -2,3 +2,6 @@
 
 # clangd
 .cache/
+
+# Nix
+result
