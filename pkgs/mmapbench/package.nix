@@ -17,7 +17,7 @@ stdenv.mkDerivation {
     hash = "sha256-/xJHhAPB1wWL+/QenX1nosLbEuJIuKwo8DN19ejPBgE=";
   };
 
-  patches = [ ./0001-Use-MAP_POPULATE-instead-of-memsetting-the-memory-pr.patch ];
+  patches = [ ./0001-Change-fileSize-from-16G-to-16M.patch ];
 
   buildInputs = [
     boost
