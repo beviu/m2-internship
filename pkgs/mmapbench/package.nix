@@ -17,6 +17,8 @@ stdenv.mkDerivation {
     hash = "sha256-/xJHhAPB1wWL+/QenX1nosLbEuJIuKwo8DN19ejPBgE=";
   };
 
+  patches = [ ./0001-Use-MAP_POPULATE-instead-of-memsetting-the-memory-pr.patch ];
+
   buildInputs = [
     boost
     tbb

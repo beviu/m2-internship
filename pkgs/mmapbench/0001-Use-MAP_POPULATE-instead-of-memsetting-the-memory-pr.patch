@@ -1,0 +1,31 @@
+From 1e4ee53be876dd3a1323e1452fda6caf2089443c Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Wed, 26 Nov 2025 16:10:56 +0100
+Subject: [PATCH] Use MAP_POPULATE instead of memsetting the memory prior to
+ benchmark
+
+---
+ mmapbench.cpp | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/mmapbench.cpp b/mmapbench.cpp
+index 1855611..d757d9e 100644
+--- a/mmapbench.cpp
++++ b/mmapbench.cpp
+@@ -114,11 +114,9 @@ int main(int argc, char** argv) {
+ 
+   //char* p = (char*)mmap(nullptr, fileSize, PROT_READ, MAP_SHARED, fd, 0);
+   //char* p = (char*)mmap(nullptr, fileSize, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+-  char* p = (char*)mmap(nullptr, fileSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+-  
+-  assert(p != MAP_FAILED);
++  char* p = (char*)mmap(nullptr, fileSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
+ 
+-  memset(p, 1, fileSize);
++  assert(p != MAP_FAILED);
+ 
+   int hint = (argc > 4) ? atoi(argv[4]) : 0;
+   if (hint == 1)
+-- 
+2.51.0
+
