@@ -1,0 +1,143 @@
+From 660ec891dbfd7c133e046863bea2985a9f2f2dec Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Fri, 21 Nov 2025 10:57:20 +0100
+Subject: [PATCH] Implement User Fault support
+
+---
+ src/core.c | 77 +++++++++++++++++++++++++++++++++++++++++++++++++++---
+ src/core.h |  9 +++++--
+ 2 files changed, 81 insertions(+), 5 deletions(-)
+
+diff --git a/src/core.c b/src/core.c
+index 8126259..54d6d0f 100644
+--- a/src/core.c
++++ b/src/core.c
+@@ -33,6 +33,9 @@
+ #include "storagemanager.h"
+ #endif
+ 
++#ifdef USWAP_UF
++#include <x86gprintrin.h>
++#endif
+ 
+ pthread_t fault_thread;
+ 
+@@ -214,8 +217,75 @@ void uswap_sig_handler(int code, siginfo_t *siginfo, void *context)
+ }
+ 
+ 
++#ifdef USWAP_UF
++
++static unsigned long rdaddr()
++{
++    unsigned long addr;
++
++    asm(".byte 0x0f, 0x01, 0xd2" : "=a"(addr));
++
++    return addr;
++}
++
++__attribute__((interrupt, target("uintr"), target("general-regs-only")))
++void uswap_ufault_handler(struct __uintr_frame *frame, unsigned long long vector)
++{
++    unsigned long fault_addr;
++    unsigned long page_boundary;
++    struct user_page *page;
++
++    internal_call = true;
++
++    fault_addr = rdaddr();
++    page_boundary = fault_addr & ~(PAGE_SIZE - 1);
++
++    page = find_page(page_boundary);
++    if(page == NULL){
++        handle_first_fault(page_boundary);
++    }
++    else if(page->swapped_out){
++        handle_missing_fault(page);
++    }
++    else{
++        handle_wp_fault(page);
++    }
++
++    internal_call = false;
++}
++
++typedef void (*ufault_handler_t)(struct __uintr_frame *frame, unsigned long long vector);
++
++static long syscall_2(long num, long arg1, long arg2)
++{
++    long ret;
++
++    asm volatile("syscall"
++                 : "=a"(ret)
++                 : "0"(num), "D"(arg1), "S"(arg2)
++                 : "rcx", "r11", "memory", "cc");
++
++    return ret;
++}
++
++
++static int ufault_register_handler(ufault_handler_t handler, int flags)
++{
++    return syscall_2(480, (long)handler, flags);
++}
++
++
++void uswap_register_ufault_handler()
++{
++    LOG("Registering a User Fault handler\n");
++
++    ufault_register_handler(uswap_ufault_handler, 0);
++}
++
++#endif
++
+ 
+-void uswap_register_handler(int sig)
++void uswap_register_signal_handler(int sig)
+ {
+     struct sigaction action;
+     LOG("Registering a signal handler\n");
+@@ -308,8 +378,9 @@ void extmem_init()
+   uswap_init_iouring();
+ #endif
+ 
+-  
+-  #ifdef USWAP_SIGNAL  // for self-paging mode
++  #ifdef USWAP_UF
++  uswap_register_ufault_handler();
++  #elif defined(USWAP_SIGNAL) // for self-paging mode
+   uswap_register_handler(SIGBUS);
+   //uswap_register_handler(SIGSEGV);  // depending on system may need sigsegv or sigbus
+   #else  // IPC mode
+diff --git a/src/core.h b/src/core.h
+index e547983..b9c73c6 100644
+--- a/src/core.h
++++ b/src/core.h
+@@ -47,7 +47,8 @@ extern "C" {
+ #define USWAP_IOURING
+ //#define USWAP_SPDK
+ 
+-#define USWAP_SIGNAL  
++#define USWAP_UF
++//#define USWAP_SIGNAL
+ //#define USWAP_UFFD
+ 
+ //#define POPULATE_ALL
+@@ -217,7 +218,11 @@ void extmem_clear_stats();
+ 
+ void uswap_sig_handler(int code, siginfo_t *siginfo, void *context);
+ 
+-void uswap_register_handler(int sig);
++void uswap_register_signal_handler(int sig);
++
++#ifdef USWAP_UF
++void uswap_register_ufault_handler();
++#endif
+ 
+ int core_try_prefault(uint64_t base_boundry);
+ 
+-- 
+2.51.0
+

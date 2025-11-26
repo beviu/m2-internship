@@ -1,9 +1,14 @@
 {
   bash,
+  coreutils,
   e2fsprogs,
+  extmem,
+  extmem-ufault,
   lib,
   m5ops,
+  mmapbench,
   runCommand,
+  util-linux,
   writeClosure,
   writeScript,
 }:
@@ -11,9 +16,35 @@
 let
   initScript = writeScript "extmem-benchmark-init" ''
     #!${lib.getExe bash}
-    echo Hello, world!
-    ${lib.getExe m5ops} exit
-    ${lib.getExe m5ops} exit
+
+    export PATH=${
+      lib.makeBinPath [
+        coreutils
+        m5ops
+        mmapbench
+        util-linux
+      ]
+    }
+
+    mount -t tmpfs -o size=19G tmpfs /tmp
+
+    export DRAMSIZE=8289934592 # less than 8GB to account for metadata
+    export SWAPDIR=/tmp/swap # swap path, change according to your system, note that this will be overwritten
+
+    fallocate -l 18G "$SWAPDIR"
+
+    m5 exit
+
+    echo "Starting mmapbench in random write mode..."
+    mmapbench /dev/null 1 1 0 0 1 | head -n 3
+
+    echo "Starting mmapbench in random write mode with ExtMem (SIGBUS)..."
+    LD_PRELOAD=${extmem}/lib/libextmem-default.so mmapbench /dev/null 1 1 0 0 1 | head -n 3
+
+    echo "Starting mmapbench in random write mode with ExtMem (User Faults)..."
+    LD_PRELOAD=${extmem-ufault}/lib/libextmem-default.so mmapbench /dev/null 1 1 0 0 1 | head -n 3
+
+    m5 exit
   '';
   closure = writeClosure [
     initScript
@@ -21,12 +52,9 @@ let
   rootfs = runCommand "extmem-benchmark-rootfs" { } ''
     mkdir -p $out/${builtins.storeDir}
     xargs cp -r --target-directory $out/${builtins.storeDir} < ${closure}
-
-    mkdir -p $out/sbin
+    # /dev is created so that the kernel can mount a devtmpfs at /dev during boot.
+    mkdir $out/{sbin,dev,proc,sys,tmp}
     ln -s ${initScript} $out/sbin/init
-
-    # Let the kernel mount a devtmpfs at /dev during boot.
-    mkdir $out/dev
   '';
 in
 runCommand "extmem-benchmark-image.img" { } ''

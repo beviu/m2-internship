@@ -1,6 +1,7 @@
 {
   boost,
   fetchFromGitHub,
+  lib,
   stdenv,
   tbb,
 }:
@@ -29,4 +30,12 @@ stdenv.mkDerivation {
     mkdir -p $out/bin
     cp mmapbench $out/bin/
   '';
+
+  meta = {
+    description = "mmap benchmark application";
+    homepage = "https://github.com/SepehrDV2/mmap-anon-benchmarks";
+    license = lib.licenses.mit;
+    platforms = lib.platforms.linux;
+    mainProgram = "mmapbench";
+  };
 }

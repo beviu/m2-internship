@@ -2,9 +2,11 @@
   capstone_4,
   cmake,
   fetchFromGitHub,
+  lib,
   liburing,
   pkg-config,
   stdenv,
+  withUserFaults ? false,
 }:
 
 let
@@ -55,8 +57,8 @@ let
   };
 
 in
-stdenv.mkDerivation rec {
-  pname = "ExtMem";
+stdenv.mkDerivation {
+  pname = "extmem${lib.optionalString withUserFaults "-ufault"}";
   version = "2024-10-15";
 
   src = fetchFromGitHub {
@@ -66,14 +68,17 @@ stdenv.mkDerivation rec {
     hash = "sha256-YDDyXg2zljVtBBsYOvz34ixJojxWxXIHDwwhvOibJ90=";
   };
 
+  patches = lib.optional withUserFaults ./0001-Implement-User-Fault-support.patch;
+
   buildInputs = [
     liburing
     syscall_intercept
   ];
 
-  sourceRoot = "${src.name}/src";
-
   postPatch = ''
+    # The next phases will also need to run in the src directory.
+    cd src
+
     sed -i Makefile \
       -e 's/-Wall /-Wall -Wno-int-conversion -Wno-implicit-function-declaration /g' \
       -e 's@../linux/usr/include/@${linuxHeaders}@g'
