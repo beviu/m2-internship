@@ -17,9 +17,13 @@
         let
           pkgs = import nixpkgs { inherit system; };
         in
-        {
+        rec {
+          extmem-benchmark-image = pkgs.callPackage ./pkgs/extmem-benchmark-image/package.nix {
+            inherit m5ops;
+          };
           extmem-ufault = pkgs.callPackage ./pkgs/extmem-ufault/package.nix { };
           gapbs = pkgs.callPackage ./pkgs/gapbs/package.nix { };
+          m5ops = pkgs.callPackage ./pkgs/m5ops/package.nix { };
           mmapbench = pkgs.callPackage ./pkgs/mmapbench/package.nix { };
           twitter-dataset = pkgs.callPackage ./pkgs/twitter-dataset/package.nix { };
         }
