@@ -27,6 +27,7 @@ let
     }
 
     mount -t tmpfs -o size=19G tmpfs /tmp
+    mount -t proc proc /proc
 
     export DRAMSIZE=8289934592 # less than 8GB to account for metadata
     export SWAPDIR=/tmp/swap # swap path, change according to your system, note that this will be overwritten
