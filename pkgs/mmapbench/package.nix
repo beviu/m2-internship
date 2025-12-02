@@ -17,7 +17,7 @@ stdenv.mkDerivation {
     hash = "sha256-/xJHhAPB1wWL+/QenX1nosLbEuJIuKwo8DN19ejPBgE=";
   };
 
-  patches = [ ./0001-Change-fileSize-from-16G-to-16M.patch ];
+  patches = [ ./0001-Change-fileSize-from-16G-to-16M-and-sleep-to-0.05s.patch ];
 
   buildInputs = [
     boost

@@ -1,14 +1,14 @@
-From a104ac566e99717e88fa1f5f4a419c8a467c43ff Mon Sep 17 00:00:00 2001
+From 845325db16d40b01df4bb5ef1eb4845cc6e6f8b5 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Wed, 26 Nov 2025 16:55:07 +0100
-Subject: [PATCH] Change fileSize from 16G to 16M
+Subject: [PATCH] Change fileSize from 16G to 16M and sleep to 0.05s
 
 ---
- mmapbench.cpp | 2 +-
- 1 file changed, 1 insertion(+), 1 deletion(-)
+ mmapbench.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/mmapbench.cpp b/mmapbench.cpp
-index 1855611..243bf77 100644
+index 1855611..af44a66 100644
 --- a/mmapbench.cpp
 +++ b/mmapbench.cpp
 @@ -110,7 +110,7 @@ int main(int argc, char** argv) {
@@ -20,6 +20,15 @@ index 1855611..243bf77 100644
  
    //char* p = (char*)mmap(nullptr, fileSize, PROT_READ, MAP_SHARED, fd, 0);
    //char* p = (char*)mmap(nullptr, fileSize, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+@@ -230,7 +230,7 @@ int main(int argc, char** argv) {
+   auto lastIObytes = readIObytes();
+   double start = gettime();
+   while (true) {
+-    sleep(1);
++    sleep(0.05);
+     uint64_t shootdowns = readTLBShootdownCount();
+     uint64_t IObytes = readIObytes();
+     uint64_t workCount = 0;
 -- 
 2.51.0
 
