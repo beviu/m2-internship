@@ -310,9 +310,12 @@ A need for more *flexibility* in memory management.
 ))
 
 #columns(2, [
-  #alternatives(linux-page-fault-handling(), linux-page-fault-handling(
-    find-physical-page-bold: true,
-  ))
+  #alternatives(
+    linux-page-fault-handling(),
+    linux-page-fault-handling(
+      find-physical-page-bold: true,
+    ),
+  )
 
   ==== Legend
 

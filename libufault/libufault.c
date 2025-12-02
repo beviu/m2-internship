@@ -22,6 +22,4 @@ int ufault_register_handler(ufault_handler_t handler, int flags) {
   return syscall_2(480, (long)handler, flags);
 }
 
-int ufault_unregister_handler(int flags) {
-  return syscall_1(481, flags);
-}
+int ufault_unregister_handler(int flags) { return syscall_1(481, flags); }

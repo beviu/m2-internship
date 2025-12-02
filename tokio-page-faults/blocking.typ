@@ -8,8 +8,8 @@ operating system's memory management code: it switches the CPU to kernel-mode,
 jumps to a predefined handler in the kernel, the kernel does some processing,
 and then returns to user-mode. Like system calls#footnote[This is true even for
   "non-blocking" system calls or system calls that allow multiplexing operations
-  such as `io_uring_enter`.], page faults are synchronous: during the handling of
-the page fault, no user code can run.
+  such as `io_uring_enter`.], page faults are synchronous: during the handling
+of the page fault, no user code can run.
 
 Some applications have a notion of user-level threads (_uthreads_), _green
 threads_ or _tasks_. They are units of work that can run concurrently. They are
@@ -62,36 +62,26 @@ to another uthread $u_2$ and continue execution instead of being suspended?
 #subpar.grid(
   columns: 2,
   caption: [Two ways to handle a uthread that blocks],
-  figure(
-    caption: [The kthread blocks],
-    time-diagram(
-      grid(
-        stroke: black,
-        inset: 0pt,
-        columns: (2cm, 2cm),
-        rows: .75cm,
-        gutter: 0pt,
-        align: center + horizon,
-        grid.cell(fill: yellow, $u_1$),
-        grid.cell(fill: grayed-out, text(.6em)[Scheduled \ Out]),
-      ),
-    ),
-  ),
-  figure(
-    caption: [The kthread switches to another uthread],
-    time-diagram(
-      grid(
-        stroke: black,
-        inset: 0pt,
-        columns: (2cm, 2cm),
-        rows: .75cm,
-        gutter: 0pt,
-        align: center + horizon,
-        grid.cell(fill: yellow, $u_1$),
-        grid.cell(fill: green, $u_2$),
-      ),
-    ),
-  ),
+  figure(caption: [The kthread blocks], time-diagram(grid(
+    stroke: black,
+    inset: 0pt,
+    columns: (2cm, 2cm),
+    rows: .75cm,
+    gutter: 0pt,
+    align: center + horizon,
+    grid.cell(fill: yellow, $u_1$),
+    grid.cell(fill: grayed-out, text(.6em)[Scheduled \ Out]),
+  ))),
+  figure(caption: [The kthread switches to another uthread], time-diagram(grid(
+    stroke: black,
+    inset: 0pt,
+    columns: (2cm, 2cm),
+    rows: .75cm,
+    gutter: 0pt,
+    align: center + horizon,
+    grid.cell(fill: yellow, $u_1$),
+    grid.cell(fill: green, $u_2$),
+  ))),
 )
 
 To understand the performance implications of the two ways of handling a uthread
@@ -105,9 +95,8 @@ In this case, the system is CPU bound and there are many other kthreads waiting
 to run. When our kthread blocks, the scheduler is going to pick another kthread
 $k_2$ and switch to it.
 
-#figure(
-  caption: [The scheduler switches to the kthread $k_2$],
-  time-diagram(grid(
+#figure(caption: [The scheduler switches to the kthread $k_2$], time-diagram(
+  grid(
     stroke: black,
     inset: 0pt,
     columns: (2cm, 2cm),
@@ -116,8 +105,8 @@ $k_2$ and switch to it.
     align: center + horizon,
     grid.cell(fill: yellow, $u_1$),
     grid.cell(fill: purple, $k_2$),
-  )),
-)
+  ),
+))
 
 If the scheduler is fair, it will return the remaining time in $k_1$'s time
 quantum to $k_1$ later. However, latency still increased for $k_1$ and the
@@ -129,23 +118,20 @@ switch has been paid.
 In this case, the system is otherwise idle, there are no other kthreads to run
 and the application has as many kthreads as there are CPUs.
 
-#figure(
-  caption: [The CPU is idle],
-  time-diagram(grid(
-    stroke: black,
-    inset: 0pt,
-    columns: (2cm, 2cm),
-    rows: .75cm,
-    gutter: 0pt,
-    align: center + horizon,
-    grid.cell(fill: yellow, $u_1$),
-    grid.cell(fill: grayed-out, text(.6em)[Scheduled \ Out]),
-  )),
-)
+#figure(caption: [The CPU is idle], time-diagram(grid(
+  stroke: black,
+  inset: 0pt,
+  columns: (2cm, 2cm),
+  rows: .75cm,
+  gutter: 0pt,
+  align: center + horizon,
+  grid.cell(fill: yellow, $u_1$),
+  grid.cell(fill: grayed-out, text(.6em)[Scheduled \ Out]),
+)))
 
-The scheduler puts the CPU to sleep. The latency of $k_1$ and the uthreads
-that it is executing—except for $u_1$—increased. Additionally, the cost of
-putting the CPU to sleep and waiting for it to resume is paid.
+The scheduler puts the CPU to sleep. The latency of $k_1$ and the uthreads that
+it is executing—except for $u_1$—increased. Additionally, the cost of putting
+the CPU to sleep and waiting for it to resume is paid.
 
 === The number of page faults inside the application
 
@@ -158,8 +144,8 @@ case it is easy to see that the current behavior is not what we want.
 
 We would like to take an application and measure:
 - the time $t_"run"$ that it spends running in a kthread in user-space, and
-- the time $t_"lost"$ that is lost scheduling out the kthread, waiting for it
-  to become _runnable_ again, and scheduling back to it again.
+- the time $t_"lost"$ that is lost scheduling out the kthread, waiting for it to
+  become _runnable_ again, and scheduling back to it again.
 
 Then we could compute the total time $t_"total" = t_"run" + t_"lost"$ and
 compute the proportion of the total time that we lost $x_"lost" = t_"lost"

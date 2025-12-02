@@ -11,10 +11,10 @@
   == Overview
 
   Currently, when an Intel CPU detects a page fault, it switches to privilege
-  level 0 (this is the privilege level that corresponds to kernel-space) and jumps
-  to the handler associated with page faults (`#PF`) in the interrupt descriptor
-  table. The handler comes from the kernel and so the application cannot directly
-  control page fault handling.
+  level 0 (this is the privilege level that corresponds to kernel-space) and
+  jumps to the handler associated with page faults (`#PF`) in the interrupt
+  descriptor table. The handler comes from the kernel and so the application
+  cannot directly control page fault handling.
 
   _userfaultfd_ already lets application catch page faults. It works like this:
 
@@ -60,20 +60,20 @@
 
   == Coexistence with Linux's page fault handler
 
-  Applications might want to handle only a subset of the page faults and let Linux
-  handle the rest as usual. For example, a database could let Linux handle page
-  faults on the stack and executable mappings but handle page faults on the
+  Applications might want to handle only a subset of the page faults and let
+  Linux handle the rest as usual. For example, a database could let Linux handle
+  page faults on the stack and executable mappings but handle page faults on the
   database file itself.
 
-  The application might want to specify which page fault should be handled by the
-  kernel versus by itself in the following ways:
+  The application might want to specify which page fault should be handled by
+  the kernel versus by itself in the following ways:
 
   + a range of virtual addresses,
   + a `mmap` flag,
   + the entire heap,
   + the entire address space (except for the kernel part),
-  + The application might ask for every page fault happening inside a code section
-    to become a user fault.
+  + The application might ask for every page fault happening inside a code
+    section to become a user fault.
   + A flag or attribute of a thread that indicates if every fault becomes a user
     fault.
   + A mix of the previous ideas.
@@ -84,9 +84,9 @@
 
   ==== User fault handler
 
-  The user fault handler has the same ABI as a user interrupt handler, except for
-  the vector number which is replaced by an _error code_ which encodes information
-  about the fault:
+  The user fault handler has the same ABI as a user interrupt handler, except
+  for the vector number which is replaced by an _error code_ which encodes
+  information about the fault:
 
   #bytefield(
     msb: right,

@@ -19,7 +19,13 @@
         in
         rec {
           extmem-benchmark-image = pkgs.callPackage ./pkgs/extmem-benchmark-image/package.nix {
-            inherit extmem extmem-ufault m5ops mmapbench simple-mmap-test;
+            inherit
+              extmem
+              extmem-ufault
+              m5ops
+              mmapbench
+              simple-mmap-test
+              ;
           };
           extmem = pkgs.callPackage ./pkgs/extmem/package.nix { };
           extmem-ufault = extmem.override { withUserFaults = true; };

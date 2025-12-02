@@ -53,6 +53,9 @@ let
     cmakeFlags = [
       # Perl is required for checking coding style.
       "-DPERFORM_STYLE_CHECKS=OFF"
+
+      # Work around compatibility error.
+      "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
     ];
   };
 
