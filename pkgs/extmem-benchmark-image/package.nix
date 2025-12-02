@@ -35,6 +35,10 @@ let
 
     m5 exit
 
+    echo "Starting simple-mmap-test..."
+    simple-mmap-test
+    echo "Exit status: $?"
+
     echo "Starting simple-mmap-test with ExtMem (User Faults)..."
     LD_PRELOAD=${extmem-ufault}/lib/libextmem-default.so simple-mmap-test
     echo "Exit status: $?"
