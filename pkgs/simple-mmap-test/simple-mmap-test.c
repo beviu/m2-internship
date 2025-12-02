@@ -11,7 +11,10 @@ int main() {
     return EXIT_FAILURE;
   }
 
-  const size_t len = 2L * 1024L * 1024L * 1024L;
+  puts("Mapping memory...");
+
+  const size_t len = 2UL * 1024UL * 1024UL * 1024UL;
+
   void *addr = mmap(NULL, len, PROT_READ | PROT_WRITE,
                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   if (addr == MAP_FAILED) {
@@ -19,8 +22,23 @@ int main() {
     return EXIT_FAILURE;
   }
 
-  for (size_t i = 0; i < 1024L * 1024L; i += len)
+  puts("Writing to memory map...");
+
+  int last_percentage = -1;
+
+  const size_t total = 1024UL * 1024UL;
+  for (size_t i = 0; i < total; i += page_size) {
     ((volatile char *)addr)[i] = 1;
+
+    int percentage = i * 100UL / total;
+    if (percentage > last_percentage) {
+      printf("\rProgress: %d%%", percentage);
+      fflush(stdout);
+      last_percentage = percentage;
+    }
+  }
+
+  puts("\rProgress: 100%");
 
   munmap(addr, len);
 
