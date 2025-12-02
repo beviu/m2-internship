@@ -32,9 +32,6 @@ let
     mount -t proc proc /proc
 
     export DRAMSIZE=8289934592 # less than 8GB to account for metadata
-    export SWAPDIR=/tmp/swap # swap path, change according to your system, note that this will be overwritten
-
-    fallocate -l 18G "$SWAPDIR"
 
     m5 exit
 

@@ -95,6 +95,9 @@ stdenv.mkDerivation {
     # The next phases will also need to run in the src directory.
     cd src
 
+    # Disable swap.
+    sed -i 's@#define SWAPPER@//#define SWAPPER@g' core.h
+
     sed -i 's@../linux/usr/include/@${linuxHeaders}@g' Makefile
   '';
 
