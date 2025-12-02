@@ -19,13 +19,14 @@
         in
         rec {
           extmem-benchmark-image = pkgs.callPackage ./pkgs/extmem-benchmark-image/package.nix {
-            inherit extmem extmem-ufault m5ops mmapbench;
+            inherit extmem extmem-ufault m5ops mmapbench simple-mmap-test;
           };
           extmem = pkgs.callPackage ./pkgs/extmem/package.nix { };
           extmem-ufault = extmem.override { withUserFaults = true; };
           gapbs = pkgs.callPackage ./pkgs/gapbs/package.nix { };
           m5ops = pkgs.callPackage ./pkgs/m5ops/package.nix { };
           mmapbench = pkgs.callPackage ./pkgs/mmapbench/package.nix { };
+          simple-mmap-test = pkgs.callPackage ./pkgs/simple-mmap-test/package.nix { };
           twitter-dataset = pkgs.callPackage ./pkgs/twitter-dataset/package.nix { };
         }
       );

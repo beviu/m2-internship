@@ -8,6 +8,7 @@
   m5ops,
   mmapbench,
   runCommand,
+  simple-mmap-test,
   util-linux,
   writeClosure,
   writeScript,
@@ -22,6 +23,7 @@ let
         coreutils
         m5ops
         mmapbench
+        simple-mmap-test
         util-linux
       ]
     }
@@ -35,6 +37,10 @@ let
     fallocate -l 18G "$SWAPDIR"
 
     m5 exit
+
+    echo "Starting simple-mmap-test with ExtMem (User Faults)..."
+    LD_PRELOAD=${extmem-ufault}/lib/libextmem-default.so simple-mmap-test
+    echo "Exit status: $?"
 
     echo "Starting mmapbench in random write mode..."
     mmapbench /dev/null 1 1 0 0 1 | head -n 3
