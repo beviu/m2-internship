@@ -1,0 +1,83 @@
+From adf80124db7ea6156bc11bca8ae32f777c51fae7 Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Tue, 2 Dec 2025 11:28:55 +0100
+Subject: [PATCH 03/12] Add integer to pointer casts where needed
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This fixes the following compilation errors:
+
+core.c: In function ‘extmem_migrate_downdisk’:
+core.c:892:46: error: passing argument 3 of ‘ioring_write_store’ makes pointer from integer without a cast [-Wint-conversion]
+  892 |     ioring_write_store(diskfd, new_addr, page->va, pagesize);
+      |                                          ~~~~^~~~
+      |                                              |
+      |                                              uint64_t {aka long unsigned int}
+In file included from core.c:31:
+storage_iouring.h:14:59: note: expected ‘const void *’ but argument is of type ‘uint64_t’ {aka ‘long unsigned int’}
+   14 | void ioring_write_store(int fd, off_t offset, const void *data, size_t size);
+      |                                               ~~~~~~~~~~~~^~~~
+core.c:903:19: error: passing argument 1 of ‘madvise’ makes pointer from integer without a cast [-Wint-conversion]
+  903 |   if (madvise(page->va, pagesize, MADV_DONTNEED) == -1){
+      |               ~~~~^~~~
+      |                   |
+      |                   uint64_t {aka long unsigned int}
+core.c: In function ‘extmem_migrate_downdisk_vector’:
+core.c:967:65: error: passing argument 3 of ‘ioring_prepare_write’ makes pointer from integer without a cast [-Wint-conversion]
+  967 |         ioring_prepare_write(diskfd, new_addr, page[nr_prepared]->va, PAGE_SIZE);
+      |                                                ~~~~~~~~~~~~~~~~~^~~~
+      |                                                                 |
+      |                                                                 uint64_t {aka long unsigned int}
+core.c:996:34: error: passing argument 1 of ‘madvise’ makes pointer from integer without a cast [-Wint-conversion]
+  996 |     if (madvise(page[nr_prepared]->va, PAGE_SIZE, MADV_DONTNEED) == -1){
+      |                 ~~~~~~~~~~~~~~~~~^~~~
+      |                                  |
+      |                                  uint64_t {aka long unsigned int}
+---
+ src/core.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/src/core.c b/src/core.c
+index c0601d6..5d4a077 100644
+--- a/src/core.c
++++ b/src/core.c
+@@ -890,7 +890,7 @@ void extmem_migrate_downdisk(struct user_page *page, uint64_t disk_offset, bool
+     assert(!"spdk functions not implemented yet")
+   #elif defined(USWAP_IOURING)
+     //LOG("initiating io_uring write\n");
+-    ioring_write_store(diskfd, new_addr, page->va, pagesize);
++    ioring_write_store(diskfd, new_addr, (const void *)page->va, pagesize);
+   #else
+     extmem_disk_write(diskfd, page->va, new_addr, pagesize);
+   #endif
+@@ -901,7 +901,7 @@ void extmem_migrate_downdisk(struct user_page *page, uint64_t disk_offset, bool
+   // Unmap the physical mapping of the page
+   // This is not portable but works as expected in Linux
+   // Doing munmap would remove uffd mappings, doing mremap with some flags may work
+-  if (madvise(page->va, pagesize, MADV_DONTNEED) == -1){
++  if (madvise((void *)page->va, pagesize, MADV_DONTNEED) == -1){
+         perror("madvise DONTNEED failed");
+         assert(0);
+   }
+@@ -964,7 +964,7 @@ void extmem_migrate_downdisk_vector(int nr_evicting, struct user_page **page, st
+         assert(!"spdk functions not implemented yet")
+       #elif defined(USWAP_IOURING)
+         //LOG("initiating io_uring write\n");
+-        ioring_prepare_write(diskfd, new_addr, page[nr_prepared]->va, PAGE_SIZE);
++        ioring_prepare_write(diskfd, new_addr, (const void *)page[nr_prepared]->va, PAGE_SIZE);
+       #else
+         extmem_disk_write(diskfd, page[nr_prepared]->va, new_addr, PAGE_SIZE);
+       #endif      
+@@ -993,7 +993,7 @@ void extmem_migrate_downdisk_vector(int nr_evicting, struct user_page **page, st
+     // Unmap the physical mapping of the page
+     // This is not portable but works as expected in Linux
+     // Doing munmap would remove uffd mappings, doing mremap with some flags may work
+-    if (madvise(page[nr_prepared]->va, PAGE_SIZE, MADV_DONTNEED) == -1){
++    if (madvise((void *)page[nr_prepared]->va, PAGE_SIZE, MADV_DONTNEED) == -1){
+           perror("madvise DONTNEED failed");
+           assert(0);
+     }
+-- 
+2.51.2
+

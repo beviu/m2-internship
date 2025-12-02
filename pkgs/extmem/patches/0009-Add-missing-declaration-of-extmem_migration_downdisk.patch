@@ -1,0 +1,34 @@
+From ce5264aab9ede039d82062212224507d9c7760ba Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Tue, 2 Dec 2025 12:10:23 +0100
+Subject: [PATCH 09/12] Add missing declaration of
+ extmem_migration_downdisk_vector function
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This fixes the following compilation error:
+
+policies/disklinux.c:729:5: error: implicit declaration of function ‘extmem_migrate_downdisk_vector’; did you mean ‘extmem_migrate_downdisk’? [-Wimplicit-function-declaration]
+  729 |     extmem_migrate_downdisk_vector(nr_evicting, victim, diskpage, writeback);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |     extmem_migrate_downdisk
+---
+ src/core.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/core.h b/src/core.h
+index 7251bdd..af51249 100644
+--- a/src/core.h
++++ b/src/core.h
+@@ -206,6 +206,7 @@ void handle_missing_fault(struct user_page *page);
+ //void extmem_migrate_updisk(struct user_page *page, struct user_page *freepage);
+ void extmem_migrate_updisk(struct user_page *page, uint64_t dram_offset);
+ void extmem_migrate_downdisk(struct user_page *page, uint64_t disk_offset, bool need_wp, bool writeback);
++void extmem_migrate_downdisk_vector(int nr_evicting, struct user_page **page, struct user_page **diskpage, bool *writeback);
+ 
+ void extmem_disk_write(int storage_fd, void* src, uint64_t dest, size_t pagesize);
+ void extmem_disk_read(int storage_fd, uint64_t src, void *dest, size_t pagesize);
+-- 
+2.51.2
+

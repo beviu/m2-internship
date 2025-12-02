@@ -1,0 +1,34 @@
+From 7bda5628af7fac4b419e092e168bc29edd288544 Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Tue, 2 Dec 2025 11:53:19 +0100
+Subject: [PATCH 06/12] Add missing declaration of core_try_prefetch function
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This fixes the following compilation error:
+
+core.c: In function ‘handle_missing_fault’:
+core.c:1218:23: error: implicit declaration of function ‘core_try_prefetch’; did you mean ‘core_try_prefault’? [-Wimplicit-function-declaration]
+ 1218 |       nr_prefetched = core_try_prefetch(page_boundry);
+      |                       ^~~~~~~~~~~~~~~~~
+      |                       core_try_prefault
+---
+ src/core.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/core.h b/src/core.h
+index a5efda6..0694cbf 100644
+--- a/src/core.h
++++ b/src/core.h
+@@ -222,6 +222,7 @@ void uswap_sig_handler(int code, siginfo_t *siginfo, void *context);
+ void uswap_register_handler(int sig);
+ 
+ int core_try_prefault(uint64_t base_boundry);
++int core_try_prefetch(uint64_t base_boundry);
+ 
+ #ifdef __cplusplus
+ }
+-- 
+2.51.2
+

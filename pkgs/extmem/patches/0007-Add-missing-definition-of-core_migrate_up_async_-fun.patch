@@ -1,0 +1,38 @@
+From f66ca3f02eaf4ce26b54a00f97b6de4983a17bc3 Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Tue, 2 Dec 2025 12:05:57 +0100
+Subject: [PATCH 07/12] Add missing definition of core_migrate_up_async_*
+ functions
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This fixes the following compilation errors:
+
+policies/disklinux.c:185:3: error: implicit declaration of function ‘core_migrate_up_async_start’ [-Wimplicit-function-declaration]
+  185 |   core_migrate_up_async_start(page);
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+policies/disklinux.c:198:3: error: implicit declaration of function ‘core_migrate_up_async_finish’ [-Wimplicit-function-declaration]
+  198 |   core_migrate_up_async_finish(page, offset);
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---
+ src/core.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/src/core.h b/src/core.h
+index 0694cbf..7251bdd 100644
+--- a/src/core.h
++++ b/src/core.h
+@@ -221,6 +221,9 @@ void uswap_sig_handler(int code, siginfo_t *siginfo, void *context);
+ 
+ void uswap_register_handler(int sig);
+ 
++void core_migrate_up_async_start(struct user_page *page);
++void core_migrate_up_async_finish(struct user_page *page, uint64_t dram_offset);
++
+ int core_try_prefault(uint64_t base_boundry);
+ int core_try_prefetch(uint64_t base_boundry);
+ 
+-- 
+2.51.2
+

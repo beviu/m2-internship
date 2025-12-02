@@ -1,0 +1,53 @@
+From 8454c2276c06256bac4d62bf3c447d7162de35c6 Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Tue, 2 Dec 2025 11:51:40 +0100
+Subject: [PATCH 05/12] Add missing declarations of lrudisk_* functions
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This fixes the following compilation errors:
+
+In file included from core.c:25:
+core.c: In function ‘handle_missing_fault’:
+core.h:132:43: error: implicit declaration of function ‘lrudisk_swapin_external_async’; did you mean ‘page_swapin_external_async’? [-Wimplicit-function-declaration]
+  132 |   #define page_swapin_external_async(...) lrudisk_swapin_external_async(__VA_ARGS__)
+      |                                           ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+core.c:1179:5: note: in expansion of macro ‘page_swapin_external_async’
+ 1179 |     page_swapin_external_async(page);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~
+core.c: In function ‘core_try_prefetch’:
+core.h:130:35: error: implicit declaration of function ‘lrudisk_detach_page’; did you mean ‘lrudisk_track_page’? [-Wimplicit-function-declaration]
+  130 |   #define policy_detach_page(...) lrudisk_detach_page(__VA_ARGS__)
+      |                                   ^~~~~~~~~~~~~~~~~~~
+core.c:1613:5: note: in expansion of macro ‘policy_detach_page’
+ 1613 |     policy_detach_page(page);
+      |     ^~~~~~~~~~~~~~~~~~
+core.h:133:38: error: implicit declaration of function ‘lrudisk_ack_swapin’; did you mean ‘lrudisk_swapin’? [-Wimplicit-function-declaration]
+  133 |   #define policy_ack_swapped_in(...) lrudisk_ack_swapin(__VA_ARGS__)
+      |                                      ^~~~~~~~~~~~~~~~~~
+core.c:1719:5: note: in expansion of macro ‘policy_ack_swapped_in’
+ 1719 |     policy_ack_swapped_in(page, freepage);
+      |     ^~~~~~~~~~~~~~~~~~~~~
+---
+ src/core.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/core.h b/src/core.h
+index 7e82237..a5efda6 100644
+--- a/src/core.h
++++ b/src/core.h
+@@ -105,6 +105,10 @@ extern FILE *statsf;
+ //#define LOG_STATS(str, ...) fprintf(statsf, str, __VA_ARGS__)
+ //#define LOG_STATS(str, ...) while (0) {}
+ 
++void lrudisk_detach_page(struct user_page *page);
++void lrudisk_swapin_external_async(struct user_page *page);
++void lrudisk_ack_swapin(struct user_page *page, struct user_page *freepage);
++
+ #if defined (PAGE_RANK)
+   #define pagefault(...) lrudisk_pagefault(__VA_ARGS__)
+   #define paging_init(...) lrudisk_init(__VA_ARGS__)
+-- 
+2.51.2
+

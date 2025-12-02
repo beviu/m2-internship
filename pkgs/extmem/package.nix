@@ -68,7 +68,20 @@ stdenv.mkDerivation {
     hash = "sha256-YDDyXg2zljVtBBsYOvz34ixJojxWxXIHDwwhvOibJ90=";
   };
 
-  patches = lib.optional withUserFaults ./0001-Implement-User-Fault-support.patch;
+  patches = [
+    ./patches/0001-Remove-main_mmap-variable-that-is-never-read.patch
+    ./patches/0002-Remove-call-to-undefined-function-lrudisk_ack_vma.patch
+    ./patches/0003-Add-integer-to-pointer-casts-where-needed.patch
+    ./patches/0004-Add-missing-declarations-of-ioring_-functions.patch
+    ./patches/0005-Add-missing-declarations-of-lrudisk_-functions.patch
+    ./patches/0006-Add-missing-declaration-of-core_try_prefetch-functio.patch
+    ./patches/0007-Add-missing-definition-of-core_migrate_up_async_-fun.patch
+    ./patches/0008-Fix-direct_allocate_page_asynch-typos.patch
+    ./patches/0009-Add-missing-declaration-of-extmem_migration_downdisk.patch
+    ./patches/0010-Remove-unused-functions-lrudisk_allocate_page_critic.patch
+    ./patches/0011-Remove-call-to-undefined-function-lrudisk_stats.patch
+  ]
+  ++ lib.optional withUserFaults ./patches/0012-Implement-User-Fault-support.patch;
 
   buildInputs = [
     liburing
@@ -79,9 +92,7 @@ stdenv.mkDerivation {
     # The next phases will also need to run in the src directory.
     cd src
 
-    sed -i Makefile \
-      -e 's/-Wall /-Wall -Wno-int-conversion -Wno-implicit-function-declaration /g' \
-      -e 's@../linux/usr/include/@${linuxHeaders}@g'
+    sed -i 's@../linux/usr/include/@${linuxHeaders}@g' Makefile
   '';
 
   installPhase = ''

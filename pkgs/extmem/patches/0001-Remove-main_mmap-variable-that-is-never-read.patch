@@ -1,0 +1,42 @@
+From cd9cc32e00906fad1b3f1ff46a6a87918ebdd77b Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Tue, 2 Dec 2025 11:21:48 +0100
+Subject: [PATCH 01/12] Remove main_mmap variable that is never read
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This fixes the following compilation error:
+
+core.c: In function ‘extmem_mmap’:
+core.c:482:13: error: assignment to ‘uint64_t’ {aka ‘long unsigned int’} from ‘void *’ makes integer from pointer without a cast [-Wint-conversion]
+  482 |   main_mmap = p;
+      |             ^
+---
+ src/core.c | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/src/core.c b/src/core.c
+index 8126259..2683a26 100644
+--- a/src/core.c
++++ b/src/core.c
+@@ -66,8 +66,6 @@ uint64_t disk_promotion = 0;
+ uint64_t bytes_migrated = 0;
+ uint64_t migration_waits = 0;
+ 
+-uint64_t main_mmap = 0;
+-
+ FILE* logfile;
+ FILE* statsf;
+ FILE* timef;
+@@ -479,7 +477,6 @@ void* extmem_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t
+   }
+   assert(p != NULL && p != MAP_FAILED);
+ 
+-  main_mmap = p;
+   // register with uffd
+   struct uffdio_register uffdio_register;
+   uffdio_register.range.start = (uint64_t)p;
+-- 
+2.51.2
+

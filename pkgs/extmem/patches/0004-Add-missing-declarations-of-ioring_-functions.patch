@@ -1,0 +1,46 @@
+From 85de58e257c0a005dc06228721acef122bd3a8f7 Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Tue, 2 Dec 2025 11:40:08 +0100
+Subject: [PATCH 04/12] Add missing declarations of ioring_* functions
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This fixes the following compilation errors:
+
+core.c: In function ‘extmem_migrate_downdisk_vector’:
+core.c:967:9: error: implicit declaration of function ‘ioring_prepare_write’; did you mean ‘ioring_prepare_read’? [-Wimplicit-function-declaration]
+  967 |         ioring_prepare_write(diskfd, new_addr, page[nr_prepared]->va, PAGE_SIZE);
+      |         ^~~~~~~~~~~~~~~~~~~~
+      |         ioring_prepare_read
+core.c:980:3: error: implicit declaration of function ‘ioring_submit_all_writes’; did you mean ‘ioring_submit_all_reads’? [-Wimplicit-function-declaration]
+  980 |   ioring_submit_all_writes();
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~
+      |   ioring_submit_all_reads
+core.c:985:5: error: implicit declaration of function ‘ioring_finish_write’; did you mean ‘ioring_finish_read’? [-Wimplicit-function-declaration]
+  985 |     ioring_finish_write();
+      |     ^~~~~~~~~~~~~~~~~~~
+      |     ioring_finish_read
+---
+ src/storage_iouring.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/src/storage_iouring.h b/src/storage_iouring.h
+index becfaee..a1db528 100644
+--- a/src/storage_iouring.h
++++ b/src/storage_iouring.h
+@@ -17,8 +17,11 @@ void thread_init_iouring();
+ 
+ void ioring_finish_read(int fd, off_t offset, void *buffer, size_t size);
+ void ioring_start_read(int fd, off_t offset, void *buffer, size_t size);
++void ioring_finish_write();
+ 
+ void ioring_prepare_read(int fd, off_t offset, void *buffer, size_t size);
++void ioring_prepare_write(int fd, off_t offset, const void *data, size_t size);
+ void ioring_submit_all_reads();
++void ioring_submit_all_writes();
+ 
+ #endif
+-- 
+2.51.2
+

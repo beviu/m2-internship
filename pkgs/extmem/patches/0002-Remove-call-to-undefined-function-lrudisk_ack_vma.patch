@@ -1,0 +1,62 @@
+From c7aa679b0a0e64be5ac842955094eab91edaeb0b Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Tue, 2 Dec 2025 11:25:03 +0100
+Subject: [PATCH 02/12] Remove call to undefined function lrudisk_ack_vma
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This fixes the following compilation error:
+
+In file included from core.c:25:
+core.c: In function ‘extmem_mmap’:
+core.h:135:31: error: implicit declaration of function ‘lrudisk_ack_vma’; did you mean ‘lrudisk_track_page’? [-Wimplicit-function-declaration]
+  135 |   #define policy_ack_vma(...) lrudisk_ack_vma(__VA_ARGS__)
+      |                               ^~~~~~~~~~~~~~~
+core.c:500:3: note: in expansion of macro ‘policy_ack_vma’
+  500 |   policy_ack_vma(p, length, 0);
+      |   ^~~~~~~~~~~~~~
+---
+ src/core.c | 5 ++---
+ src/core.h | 2 --
+ 2 files changed, 2 insertions(+), 5 deletions(-)
+
+diff --git a/src/core.c b/src/core.c
+index 2683a26..c0601d6 100644
+--- a/src/core.c
++++ b/src/core.c
+@@ -496,9 +496,8 @@ void* extmem_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t
+   }
+ 
+   mem_mmaped = length;
+-  
+-  policy_ack_vma(p, length, 0);
+-  
++
++
+   internal_call = false;
+   LOG("extmem_mmap: finished, mapped at 0x%lx until 0x%lx\n", (uint64_t)p, (uint64_t)p + length);
+   LOGFLUSH();
+diff --git a/src/core.h b/src/core.h
+index e547983..7e82237 100644
+--- a/src/core.h
++++ b/src/core.h
+@@ -118,7 +118,6 @@ extern FILE *statsf;
+   #define policy_put_freepage(...) lrudisk_put_page_free(__VA_ARGS__)
+   #define page_swapin_external_async(...) lrudisk_swapin_external_async(__VA_ARGS__)
+   #define policy_ack_swapped_in(...) lrudisk_ack_swapin(__VA_ARGS__)
+-  #define policy_ack_vma(...) lrudisk_ack_vma(__VA_ARGS__)
+ #elif defined (LRU_SWAP)
+   #define pagefault(...) lrudisk_pagefault(__VA_ARGS__)
+   #define paging_init(...) lrudisk_init(__VA_ARGS__)
+@@ -132,7 +131,6 @@ extern FILE *statsf;
+   #define policy_put_freepage(...) lrudisk_put_page_free(__VA_ARGS__)
+   #define page_swapin_external_async(...) lrudisk_swapin_external_async(__VA_ARGS__)
+   #define policy_ack_swapped_in(...) lrudisk_ack_swapin(__VA_ARGS__)
+-  #define policy_ack_vma(...) lrudisk_ack_vma(__VA_ARGS__)
+ #endif
+ 
+ #define MAX_USER_THREADS (128)
+-- 
+2.51.2
+

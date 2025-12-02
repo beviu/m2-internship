@@ -1,0 +1,91 @@
+From f297491e2f0ad61dd4c5d60e4f4a430ce9e7fb1c Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Tue, 2 Dec 2025 12:07:52 +0100
+Subject: [PATCH 08/12] Fix direct_allocate_page_asynch typos
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This fixes the following compilation error:
+
+policies/disklinux.c:458:20: error: implicit declaration of function ‘direct_allocate_page_asynch’; did you mean ‘direct_allocate_page_async’? [-Wimplicit-function-declaration]
+  458 |     nr_reclaimed = direct_allocate_page_asynch(nr_pages, priority);
+      |                    ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                    direct_allocate_page_async
+---
+ src/policies/disklinux.c | 6 +++---
+ src/policies/pageRank.c  | 8 ++++----
+ 2 files changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/src/policies/disklinux.c b/src/policies/disklinux.c
+index ed85a75..3ffcac8 100644
+--- a/src/policies/disklinux.c
++++ b/src/policies/disklinux.c
+@@ -455,7 +455,7 @@ void *lrudisk_synchkswapd()
+     // LOGPOLICY("kswapd reclaim. nr=%lu Pages put on eviction list: %lu\n", nr_pages, ret);
+     gettimeofday(&start, NULL);
+     
+-    nr_reclaimed = direct_allocate_page_asynch(nr_pages, priority);
++    nr_reclaimed = direct_allocate_page_async(nr_pages, priority);
+ 
+     //calculate number of pages to reclaim
+     // update lists
+@@ -801,7 +801,7 @@ void *lrudisk_evictionworker_vector()
+ 
+ 
+ /*  put some pages in evictor list */
+-int direct_allocate_page_asynch(int nr_pages, int priority)
++int direct_allocate_page_async(int nr_pages, int priority)
+ {
+   struct timeval start, end;
+   struct user_page *page;
+@@ -977,7 +977,7 @@ static struct user_page* fetch_free_asynch()
+     if(shrinkage_running == false){
+       if((active_list.numentries + inactive_list.numentries > dramsize / (PAGE_SIZE * 2))){
+       //if((active_list.numentries + inactive_list.numentries > dramsize / (PAGE_SIZE * 2)) && priority > 0){
+-        nr_reclaimed += direct_allocate_page_asynch(nr_pages, priority);
++        nr_reclaimed += direct_allocate_page_async(nr_pages, priority);
+         priority--;  
+       }
+     }
+diff --git a/src/policies/pageRank.c b/src/policies/pageRank.c
+index 50ed487..400e38a 100644
+--- a/src/policies/pageRank.c
++++ b/src/policies/pageRank.c
+@@ -459,7 +459,7 @@ void *lrudisk_synchkswapd()
+     }
+     gettimeofday(&start, NULL);
+     
+-    nr_reclaimed = direct_allocate_page_asynch(nr_pages, priority);
++    nr_reclaimed = direct_allocate_page_async(nr_pages, priority);
+ 
+     //calculate number of pages to reclaim
+     // update lists
+@@ -839,7 +839,7 @@ void *lrudisk_evictionworker_vector()
+ 
+ 
+ /*  put some pages in evictor list */
+-int direct_allocate_page_asynch(int nr_pages, int priority)
++int direct_allocate_page_async(int nr_pages, int priority)
+ {
+   struct timeval start, end;
+   struct user_page *page;
+@@ -975,13 +975,13 @@ static struct user_page* fetch_free_asynch()
+     }
+     // DRAM was full, try to free pages
+     //if(tries < 3 && (active_list.numentries + inactive_list.numentries > dramsize / (PAGE_SIZE * 2))){
+-    //  direct_allocate_page_asynch(nr_pages);
++    //  direct_allocate_page_async(nr_pages);
+     //}
+     //tries++;
+     if(shrinkage_running == false){
+       if((active_list.numentries + inactive_list.numentries > dramsize / (PAGE_SIZE * 2))){
+       //if((active_list.numentries + inactive_list.numentries > dramsize / (PAGE_SIZE * 2)) && priority > 0){
+-        nr_reclaimed += direct_allocate_page_asynch(nr_pages, priority);
++        nr_reclaimed += direct_allocate_page_async(nr_pages, priority);
+         priority--;  
+       }
+     }
+-- 
+2.51.2
+

@@ -1,0 +1,71 @@
+From 54787a183bccf6e4ec96902d2577042d512eed5b Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Tue, 2 Dec 2025 13:33:12 +0100
+Subject: [PATCH 11/12] Remove call to undefined function lrudisk_stats
+
+---
+ src/core.c               | 1 -
+ src/core.h               | 2 --
+ src/policies/disklinux.h | 1 -
+ src/policies/pageRank.h  | 1 -
+ 4 files changed, 5 deletions(-)
+
+diff --git a/src/core.c b/src/core.c
+index 5d4a077..1dd7555 100644
+--- a/src/core.c
++++ b/src/core.c
+@@ -1895,7 +1895,6 @@ void extmem_print_stats()
+                 migrations_up, 
+                 migrations_down,
+                 migration_waits);
+-  mmgr_stats(); 
+   
+ }
+ 
+diff --git a/src/core.h b/src/core.h
+index af51249..e516653 100644
+--- a/src/core.h
++++ b/src/core.h
+@@ -113,7 +113,6 @@ void lrudisk_ack_swapin(struct user_page *page, struct user_page *freepage);
+   #define pagefault(...) lrudisk_pagefault(__VA_ARGS__)
+   #define paging_init(...) lrudisk_init(__VA_ARGS__)
+   #define mmgr_remove(...) lrudisk_remove_page(__VA_ARGS__)
+-  #define mmgr_stats(...) lrudisk_stats(__VA_ARGS__)
+   #define policy_shutdown(...) while(0) {}
+   #define page_swapin(...) lrudisk_swapin(__VA_ARGS__)
+   #define page_swapin_external(...) lrudisk_swapin_external(__VA_ARGS__)
+@@ -126,7 +125,6 @@ void lrudisk_ack_swapin(struct user_page *page, struct user_page *freepage);
+   #define pagefault(...) lrudisk_pagefault(__VA_ARGS__)
+   #define paging_init(...) lrudisk_init(__VA_ARGS__)
+   #define mmgr_remove(...) lrudisk_remove_page(__VA_ARGS__)
+-  #define mmgr_stats(...) lrudisk_stats(__VA_ARGS__)
+   #define policy_shutdown(...) while(0) {}
+   #define page_swapin(...) lrudisk_swapin(__VA_ARGS__)
+   #define page_swapin_external(...) lrudisk_swapin_external(__VA_ARGS__)
+diff --git a/src/policies/disklinux.h b/src/policies/disklinux.h
+index 4e7110e..9c067c1 100644
+--- a/src/policies/disklinux.h
++++ b/src/policies/disklinux.h
+@@ -25,7 +25,6 @@ struct user_page* lrudisk_pagefault(void);
+ struct user_page* lrudisk_pagefault_unlocked(void);
+ void lrudisk_init(void);
+ void lrudisk_remove_page(struct user_page *page);
+-void lrudisk_stats();
+ static struct user_page* fetch_free_page();
+ static struct user_page* fetch_free_asynch();
+ int direct_allocate_page_async(int nr_pages, int priority);
+diff --git a/src/policies/pageRank.h b/src/policies/pageRank.h
+index 83ba130..560f121 100644
+--- a/src/policies/pageRank.h
++++ b/src/policies/pageRank.h
+@@ -33,7 +33,6 @@ struct user_page* lrudisk_pagefault(void);
+ struct user_page* lrudisk_pagefault_unlocked(void);
+ void lrudisk_init(void);
+ void lrudisk_remove_page(volatile struct user_page *page);
+-void lrudisk_stats();
+ static struct user_page* fetch_free_page();
+ static struct user_page* fetch_free_asynch();
+ int direct_allocate_page_async(int nr_pages, int priority);
+-- 
+2.51.2
+

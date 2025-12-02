@@ -1,0 +1,187 @@
+From 7696c766c37d22eda982ad5884acbec889d20e82 Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Tue, 2 Dec 2025 12:14:18 +0100
+Subject: [PATCH 10/12] Remove unused functions lrudisk_allocate_page_critical
+ and fetch_free_page
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This fixes the following compilation error:
+
+policies/disklinux.c: In function ‘lrudisk_allocate_page_critical’:
+policies/disklinux.c:879:10: error: implicit declaration of function ‘direct_allocate_page’; did you mean ‘direct_allocate_page_async’? [-Wimplicit-function-declaration]
+  879 |   page = direct_allocate_page();
+      |          ^~~~~~~~~~~~~~~~~~~~
+      |          direct_allocate_page_async
+---
+ src/policies/disklinux.c | 89 ----------------------------------------
+ src/policies/pageRank.c  | 52 -----------------------
+ 2 files changed, 141 deletions(-)
+
+diff --git a/src/policies/disklinux.c b/src/policies/disklinux.c
+index 3ffcac8..91c17d6 100644
+--- a/src/policies/disklinux.c
++++ b/src/policies/disklinux.c
+@@ -849,95 +849,6 @@ int direct_allocate_page_async(int nr_pages, int priority)
+   return reclaimed;
+ }
+ 
+-
+-
+-static struct user_page* lrudisk_allocate_page_critical()
+-{
+-  struct timeval start, end;
+-  struct user_page *page;
+-  struct user_page *cp;
+-  int tries;
+-
+-  gettimeofday(&start, NULL);
+-  page = dequeue_fifo(&dram_free_list);
+-  if (page != NULL) {
+-    //pthread_mutex_lock(&(page->page_lock));
+-    assert(page->in_dram);
+-    //assert(!page->present);
+-
+-    //page->present = true;
+-    enqueue_fifo(&inactive_list, page);
+-      
+-    gettimeofday(&end, NULL);
+-    LOG_TIME("mem_policy_allocate_page: %f s\n", elapsed(&start, &end));
+-
+-      
+-    return page;
+-  }
+-    
+-  // DRAM was full, get a free page by force
+-  page = direct_allocate_page();
+-  if(page == NULL){
+-    perror("direct reclaim failed");
+-    assert(!"Out of memory");
+-  }
+-
+-  enqueue_fifo(&inactive_list, page);
+-      
+-  return page;
+-    
+-
+-}
+-
+-/*  Get free physical page, a listless in_dram page */
+-static struct user_page* fetch_free_page()
+-{
+-  struct timeval start, end;
+-  struct user_page *page;
+-#ifdef LRU_SWAP
+-  struct user_page *cp;
+-  int tries;
+-#endif
+-
+-  if(kswapd_running == false && (active_list.numentries + inactive_list.numentries > (HIGH_WATER_THRESHOLD * dramsize / (PAGE_SIZE * 100)))){
+-    LOGPOLICY("High threshold reached waking up kswapd\n");
+-    pthread_mutex_lock(&kswapd_lock);
+-    pthread_cond_signal(&kswapd_cv);
+-    pthread_mutex_unlock(&kswapd_lock);
+-  }
+-
+-  //gettimeofday(&start, NULL);
+-  //for (tries = 0; tries < 2; tries++) {
+-    page = dequeue_fifo(&dram_free_list);
+-    if (page != NULL) {
+-      //pthread_mutex_lock(&(page->page_lock));
+-      assert(page->in_dram);
+-      //assert(!page->present);
+-
+-      //page->present = true;
+-      //enqueue_fifo(&active_list, page);
+-      //TODO: put in inactive list and set the accessed bit true
+-      //gettimeofday(&end, NULL);
+-      //LOG_TIME("mem_policy_allocate_page: %f s\n", elapsed(&start, &end));
+-
+-      //pthread_mutex_unlock(&(page->page_lock));
+-      
+-      return page;
+-    }
+-    
+-    // DRAM was full, get a free page by force
+-    page = direct_allocate_page();
+-    if(page == NULL){
+-      perror("direct reclaim failed");
+-      assert(!"Out of memory");
+-    }
+-
+-    
+-
+-    return page;
+-
+-}
+-
+ /*  Get free physical space, a listless in_dram page */
+ static struct user_page* fetch_free_asynch()
+ {
+diff --git a/src/policies/pageRank.c b/src/policies/pageRank.c
+index 400e38a..fe771b5 100644
+--- a/src/policies/pageRank.c
++++ b/src/policies/pageRank.c
+@@ -888,58 +888,6 @@ int direct_allocate_page_async(int nr_pages, int priority)
+   return reclaimed;
+ }
+ 
+-
+-/*  called with global lock held via lru_pagefault function */
+-static struct user_page* lrudisk_allocate_page_critical()
+-{
+-  struct timeval start, end;
+-  struct user_page *page;
+-  struct user_page *cp;
+-  int tries;
+-
+-  gettimeofday(&start, NULL);
+-  //for (tries = 0; tries < 2; tries++) {
+-    page = dequeue_fifo(&dram_free_list);
+-    if (page != NULL) {
+-      //pthread_mutex_lock(&(page->page_lock));
+-      assert(page->in_dram);
+-      //assert(!page->present);
+-
+-      //page->present = true;
+-      enqueue_fifo(&inactive_list, page);
+-      //TODO: put in inactive list and set the accessed bit true
+-      gettimeofday(&end, NULL);
+-      LOG_TIME("mem_policy_allocate_page: %f s\n", elapsed(&start, &end));
+-
+-      //pthread_mutex_unlock(&(page->page_lock));
+-      // if(((dram_free_list.numentries * 100) / (active_list.numentries + inactive_list.numentries + 1)) < KSWAPD_LOW_THRESHOLD){
+-      //   pthread_mutex_lock(&kswapd_lock);
+-      //   pthread_cond_signal(&kswapd_cv);
+-      //   pthread_mutex_unlock(&kswapd_lock);
+-      // }
+-
+-      return page;
+-    }
+-    
+-    // DRAM was full, get a free page by force
+-    page = direct_allocate_page();
+-    if(page == NULL){
+-      perror("direct reclaim failed");
+-      assert(!"Out of memory");
+-    }
+-
+-    // if(dram_free_list.numentries < KSWAPD_LOW_THRESHOLD){
+-    //   pthread_mutex_lock(&kswapd_lock);
+-    //   pthread_cond_signal(&kswapd_cv);
+-    //   pthread_mutex_unlock(&kswapd_lock);
+-
+-    // }
+-    enqueue_fifo(&inactive_list, page);
+-      
+-    return page;
+-   
+-}
+-
+ /*  Get free physical space, a listless in_dram page */
+ static struct user_page* fetch_free_asynch()
+ {
+-- 
+2.51.2
+
