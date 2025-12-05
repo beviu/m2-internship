@@ -1,0 +1,105 @@
+From f6b01dbf673a3f35ffa24a9e25e3233d754d435d Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Thu, 4 Dec 2025 13:33:55 +0100
+Subject: [PATCH 12/14] Log more steps during initialization
+
+---
+ src/core.c            | 14 ++++++++++++--
+ src/intercept_layer.c |  6 ++++--
+ 2 files changed, 16 insertions(+), 4 deletions(-)
+
+diff --git a/src/core.c b/src/core.c
+index 1dd7555..ecd1fef 100644
+--- a/src/core.c
++++ b/src/core.c
+@@ -246,7 +246,9 @@ void extmem_init()
+   any user-program global state, including file descriptors
+   and stdio buffers.
+ */
+-  
++
++  LOG("extmem_init: starting\n");
++
+   logfile = fopen("logs.txt", "w+");
+   if (logfile == NULL) {
+     perror("log file open\n");
+@@ -281,7 +283,8 @@ void extmem_init()
+   }
+   assert(diskfd >= 0);
+ #endif
+-  
++
++  LOG("extmem_init: creating userfaultfd\n");
+ 
+   uffd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK );
+   if (uffd == -1) {
+@@ -302,15 +305,19 @@ void extmem_init()
+   }
+ 
+ #ifdef USWAP_IOURING
++  LOG("extmem_init: initializing io_uring\n");
++
+   // Initialize IO_URING
+   uswap_init_iouring();
+ #endif
+ 
+   
+   #ifdef USWAP_SIGNAL  // for self-paging mode
++  LOG("extmem_init: registering SIGBUS handler\n");
+   uswap_register_handler(SIGBUS);
+   //uswap_register_handler(SIGSEGV);  // depending on system may need sigsegv or sigbus
+   #else  // IPC mode
++  LOG("extmem_init: creating fault handler thread\n");
+   s = pthread_create(&fault_thread, NULL, handle_fault, 0);
+   if (s != 0) {
+     perror("pthread_create");
+@@ -365,12 +372,14 @@ void extmem_init()
+   #endif
+ 
+   // Page cache: small victim cache for swapped out pages
++  LOG("extmem_init: allocating page cache\n");
+   page_cache =libc_mmap(NULL,16 * PAGE_SIZE * MAX_USER_THREADS, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE , -1, 0);
+   if (page_cache == MAP_FAILED) {
+     perror("page cache mmap");
+     assert(0);
+   }
+ 
++  LOG("extmem_init: clearing page cache to zeros\n");
+   memset(page_cache , 0, PAGE_SIZE * 16 * MAX_USER_THREADS);
+ 
+ 
+@@ -379,6 +388,7 @@ void extmem_init()
+   assert(s == 0);
+ #endif
+ 
++  LOG("extmem_init: paging_init\n");
+   paging_init();
+ 
+   is_init = true;
+diff --git a/src/intercept_layer.c b/src/intercept_layer.c
+index a439f1c..a2feb42 100644
+--- a/src/intercept_layer.c
++++ b/src/intercept_layer.c
+@@ -105,8 +105,8 @@ static void* bind_symbol(const char *sym)
+     fprintf(stderr, "interception layer: dlsym failed (%s)\n", sym);
+     abort();
+   }
+-  //fprintf(stdout, "binding %s to %p", sym, ptr);
+-  LOG("binding %s to %p", sym, ptr);
++  //fprintf(stdout, "binding %s to %p\n", sym, ptr);
++  LOG("binding %s to %p\n", sym, ptr);
+   
+   return ptr;
+ }
+@@ -127,6 +127,8 @@ static int hook(long syscall_number, long arg0, long arg1, long arg2, long arg3,
+ 
+ static __attribute__((constructor)) void init(void)
+ {
++  LOG("extmem: entry point called\n");
++
+   libc_mmap = bind_symbol("mmap");
+   libc_munmap = bind_symbol("munmap");
+   libc_malloc = bind_symbol("malloc");
+-- 
+2.51.2
+

@@ -83,8 +83,10 @@ stdenv.mkDerivation {
     ./patches/0009-Add-missing-declaration-of-extmem_migration_downdisk.patch
     ./patches/0010-Remove-unused-functions-lrudisk_allocate_page_critic.patch
     ./patches/0011-Remove-call-to-undefined-function-lrudisk_stats.patch
+    ./patches/0012-Log-more-steps-during-initialization.patch
+    ./patches/0013-Make-LOG-print-to-stderr-by-default.patch
   ]
-  ++ lib.optional withUserFaults ./patches/0012-Implement-User-Fault-support.patch;
+  ++ lib.optional withUserFaults ./patches/0014-Implement-User-Fault-support.patch;
 
   buildInputs = [
     liburing

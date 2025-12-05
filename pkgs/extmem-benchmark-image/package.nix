@@ -28,15 +28,14 @@ let
       ]
     }
 
-    mount -t tmpfs -o size=19G tmpfs /tmp
     mount -t proc proc /proc
 
-    export DRAMSIZE=8289934592 # less than 8GB to account for metadata
+    export DRAMSIZE=1048576
 
     m5 exit
 
     echo "Starting simple-mmap-test..."
-    simple-mmap-test
+    LD_DEBUG=all simple-mmap-test
     echo "Exit status: $?"
 
     echo "Starting simple-mmap-test with ExtMem (User Faults)..."

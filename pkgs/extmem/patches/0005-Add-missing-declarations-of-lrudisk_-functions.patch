@@ -1,7 +1,7 @@
 From 8454c2276c06256bac4d62bf3c447d7162de35c6 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Tue, 2 Dec 2025 11:51:40 +0100
-Subject: [PATCH 05/12] Add missing declarations of lrudisk_* functions
+Subject: [PATCH 05/14] Add missing declarations of lrudisk_* functions
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit

@@ -1,15 +1,15 @@
-From a5f3199b5715fdfc765c0aea63b325fcb0d30bb6 Mon Sep 17 00:00:00 2001
+From 16feb2fc97308b71e73b6ea3e73c78cf4e07b3cb Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 21 Nov 2025 10:57:20 +0100
-Subject: [PATCH 12/12] Implement User Fault support
+Subject: [PATCH 14/14] Implement User Fault support
 
 ---
- src/core.c | 77 +++++++++++++++++++++++++++++++++++++++++++++++++++---
- src/core.h |  9 +++++--
- 2 files changed, 81 insertions(+), 5 deletions(-)
+ src/core.c | 84 ++++++++++++++++++++++++++++++++++++++++++++++++++++--
+ src/core.h |  9 ++++--
+ 2 files changed, 88 insertions(+), 5 deletions(-)
 
 diff --git a/src/core.c b/src/core.c
-index 1dd7555..f54a175 100644
+index ecd1fef..62e81f3 100644
 --- a/src/core.c
 +++ b/src/core.c
 @@ -33,6 +33,9 @@
@@ -22,7 +22,7 @@ index 1dd7555..f54a175 100644
  
  pthread_t fault_thread;
  
-@@ -212,8 +215,75 @@ void uswap_sig_handler(int code, siginfo_t *siginfo, void *context)
+@@ -212,8 +215,80 @@ void uswap_sig_handler(int code, siginfo_t *siginfo, void *context)
  }
  
  
@@ -64,7 +64,8 @@ index 1dd7555..f54a175 100644
 +}
 +
 +typedef void (*ufault_handler_t)(struct __uintr_frame *frame, unsigned long long vector);
-+
+ 
+-void uswap_register_handler(int sig)
 +static long syscall_2(long num, long arg1, long arg2)
 +{
 +    long ret;
@@ -88,31 +89,37 @@ index 1dd7555..f54a175 100644
 +{
 +    LOG("Registering a User Fault handler\n");
 +
-+    ufault_register_handler(uswap_ufault_handler, 0);
++    int ret = ufault_register_handler(uswap_ufault_handler, 0);
++    if (ret < 0)
++    {
++        fprintf(stderr, "ufault_register_handler: %s\n", strerror(-ret));
++        abort();
++    }
 +}
 +
 +#endif
 +
- 
--void uswap_register_handler(int sig)
++
 +void uswap_register_signal_handler(int sig)
  {
      struct sigaction action;
      LOG("Registering a signal handler\n");
-@@ -306,8 +376,9 @@ void extmem_init()
+@@ -311,8 +386,11 @@ void extmem_init()
    uswap_init_iouring();
  #endif
  
 -  
 -  #ifdef USWAP_SIGNAL  // for self-paging mode
++   
 +  #ifdef USWAP_UF
++  LOG("extmem_init: registering User Fault handler\n");
 +  uswap_register_ufault_handler();
 +  #elif defined(USWAP_SIGNAL) // for self-paging mode
+   LOG("extmem_init: registering SIGBUS handler\n");
    uswap_register_handler(SIGBUS);
    //uswap_register_handler(SIGSEGV);  // depending on system may need sigsegv or sigbus
-   #else  // IPC mode
 diff --git a/src/core.h b/src/core.h
-index e516653..791eb69 100644
+index 6186c77..2f482fc 100644
 --- a/src/core.h
 +++ b/src/core.h
 @@ -47,7 +47,8 @@ extern "C" {
