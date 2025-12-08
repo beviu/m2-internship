@@ -45,9 +45,12 @@
         {
           default = pkgs.mkShell {
             nativeBuildInputs = [
+              # clang-tools needs to go before clang
+              # (https://github.com/NixOS/nixpkgs/issues/308482#issuecomment-2090095873)
+              pkgs.clang-tools
+
               (pkgs.python3.withPackages (ps: [ ps.pandas ]))
               pkgs.clang
-              pkgs.clang-tools
               pkgs.glibc.static
               pkgs.m4
               pkgs.meson
