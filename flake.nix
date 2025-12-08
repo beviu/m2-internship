@@ -44,21 +44,16 @@
         in
         {
           default = pkgs.mkShell {
-            packages = [
+            nativeBuildInputs = [
+              (pkgs.python3.withPackages (ps: [ ps.pandas ]))
               pkgs.clang
               pkgs.clang-tools
               pkgs.glibc.static
-              pkgs.meson
-              (pkgs.python3.withPackages (ps: [ ps.pandas ]))
-              pkgs.samurai
-            ];
-          };
-
-          gem5 = pkgs.mkShell {
-            nativeBuildInputs = [
               pkgs.m4
+              pkgs.meson
               pkgs.pre-commit
               pkgs.protobuf
+              pkgs.samurai
               pkgs.scons
             ];
 
