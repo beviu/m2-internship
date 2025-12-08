@@ -1,4 +1,4 @@
-{ stdenv }:
+{ m5ops, stdenv }:
 
 stdenv.mkDerivation {
   pname = "simple-mmap-test";
@@ -6,8 +6,10 @@ stdenv.mkDerivation {
 
   src = ./.;
 
+  buildInputs = [ m5ops ];
+
   buildPhase = ''
-    $CC simple-mmap-test.c -O3 -o simple-mmap-test
+    $CC simple-mmap-test.c -o simple-mmap-test -O3 -lm5
   '';
 
   installPhase = ''

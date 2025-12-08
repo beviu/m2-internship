@@ -1,8 +1,34 @@
+#include <gem5/m5ops.h>
+#include <m5_mmap.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
+
+static void write_fault_pages(void *addr, size_t len, size_t page_size) {
+  int last_percentage = -1;
+
+  for (size_t i = 0; i < len; i += page_size) {
+    ((volatile char *)addr)[i] = 1;
+
+    int percentage = i * 100UL / len;
+    if (percentage > last_percentage) {
+      printf("\rProgress: %d%%", percentage);
+      fflush(stdout);
+      last_percentage = percentage;
+    }
+  }
+
+  puts("\rProgress: 100%");
+}
+
+static bool should_do_m5_exit() {
+  const char *value = getenv("SIMPLE_MMAP_TEST_M5_EXIT");
+  return value && strcmp(value, "1") == 0;
+}
 
 int main() {
   long page_size = sysconf(_SC_PAGESIZE);
@@ -24,21 +50,15 @@ int main() {
 
   puts("Writing to memory map...");
 
-  int last_percentage = -1;
-
-  const size_t total = 1024UL * 1024UL;
-  for (size_t i = 0; i < total; i += page_size) {
-    ((volatile char *)addr)[i] = 1;
-
-    int percentage = i * 100UL / total;
-    if (percentage > last_percentage) {
-      printf("\rProgress: %d%%", percentage);
-      fflush(stdout);
-      last_percentage = percentage;
-    }
+  bool do_m5_exit = should_do_m5_exit();
+  if (do_m5_exit) {
+    map_m5_mem();
+    m5_exit_addr(0);
   }
 
-  puts("\rProgress: 100%");
+  write_fault_pages(addr, 1024UL * 1024UL, page_size);
+
+  m5_exit_addr(0);
 
   munmap(addr, len);
 

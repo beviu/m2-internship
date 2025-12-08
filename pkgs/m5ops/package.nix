@@ -30,18 +30,22 @@ stdenv.mkDerivation (finalAttrs: {
 
   buildFlags = [ "build/${isa}/out/m5" ];
 
-  # Needed so the build script doesn't hide all Nix environment variables.
   postPatch = ''
+    # Needed so the build script doesn't hide all Nix environment variables.
     substituteInPlace SConstruct \
       --replace-fail "Environment()" "Environment(ENV=os.environ)"
+
+    # Don't force -no-pie as it breaks using the static library in a PIE
+    # executable, which is the default.
+    sed -i "s/static_env\.Append(LINKFLAGS=\[ '-no-pie', '-static' \])/static_env.Append(LINKFLAGS='-static', ASFLAGS='-DM5OP_PIC')/g" src/SConscript
   '';
 
   installPhase = ''
     runHook preInstall
-    mkdir -p $out/{bin,lib}
+    mkdir -p $out/{bin,include,lib}
     cp build/${isa}/out/m5 $out/bin/
     cp build/${isa}/out/libm5.a $out/lib/
-    cp -r ../../include $out/include
+    cp -r ../../include/* src/m5_mmap.h $out/include/
     runHook postInstall
   '';
 

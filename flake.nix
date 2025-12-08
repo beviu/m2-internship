@@ -7,7 +7,7 @@
   };
 
   outputs =
-    { nixpkgs, treefmt-nix, ... }:
+    { nixpkgs, self, treefmt-nix, ... }:
     let
       forAllSystems = nixpkgs.lib.genAttrs nixpkgs.lib.systems.flakeExposed;
     in
@@ -32,7 +32,9 @@
           gapbs = pkgs.callPackage ./pkgs/gapbs/package.nix { };
           m5ops = pkgs.callPackage ./pkgs/m5ops/package.nix { };
           mmapbench = pkgs.callPackage ./pkgs/mmapbench/package.nix { };
-          simple-mmap-test = pkgs.callPackage ./pkgs/simple-mmap-test/package.nix { };
+          simple-mmap-test = pkgs.callPackage ./pkgs/simple-mmap-test/package.nix {
+            inherit m5ops;
+          };
           twitter-dataset = pkgs.callPackage ./pkgs/twitter-dataset/package.nix { };
         }
       );
@@ -64,6 +66,7 @@
               pkgs.hdf5-cpp
               pkgs.libpng
               pkgs.zlib
+              self.packages.${system}.m5ops
             ];
           };
         }

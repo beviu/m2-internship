@@ -28,30 +28,13 @@ let
       ]
     }
 
-    mount -t proc proc /proc
-
-    export DRAMSIZE=1048576
-
-    m5 exit
-
     echo "Starting simple-mmap-test..."
-    LD_DEBUG=all simple-mmap-test
+    SIMPLE_MMAP_TEST_M5_EXIT=1 simple-mmap-test
     echo "Exit status: $?"
 
-    echo "Starting simple-mmap-test with ExtMem (User Faults)..."
-    LD_PRELOAD=${extmem-ufault}/lib/libextmem-default.so simple-mmap-test
-    echo "Exit status: $?"
-
-    echo "Starting mmapbench in random write mode..."
-    mmapbench /dev/null 1 1 0 0 1 | head -n 3
-
-    echo "Starting mmapbench in random write mode with ExtMem (SIGBUS)..."
-    LD_PRELOAD=${extmem}/lib/libextmem-default.so mmapbench /dev/null 1 1 0 0 1 | head -n 3
-
-    echo "Starting mmapbench in random write mode with ExtMem (User Faults)..."
-    LD_PRELOAD=${extmem-ufault}/lib/libextmem-default.so mmapbench /dev/null 1 1 0 0 1 | head -n 3
-
-    m5 exit
+    # Wait here for the m5 exit command to complete, instead of exiting the
+    # process which would cause a kernel panic.
+    sleep infinity
   '';
   closure = writeClosure [
     initScript
