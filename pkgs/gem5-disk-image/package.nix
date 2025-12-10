@@ -15,7 +15,7 @@
 }:
 
 let
-  initScript = writeScript "extmem-benchmark-init" ''
+  initScript = writeScript "gem5-init" ''
     #!${lib.getExe bash}
 
     export PATH=${
@@ -39,7 +39,7 @@ let
   closure = writeClosure [
     initScript
   ];
-  rootfs = runCommand "extmem-benchmark-rootfs" { } ''
+  rootfs = runCommand "gem5-rootfs" { } ''
     mkdir -p $out/${builtins.storeDir}
     xargs cp -r --target-directory $out/${builtins.storeDir} < ${closure}
     # /dev is created so that the kernel can mount a devtmpfs at /dev during boot.
@@ -47,6 +47,6 @@ let
     ln -s ${initScript} $out/sbin/init
   '';
 in
-runCommand "extmem-benchmark-image.img" { } ''
+runCommand "gem5-disk-image.img" { } ''
   ${lib.getExe' e2fsprogs "mkfs.ext2"} -d ${rootfs} $out 256M
 ''

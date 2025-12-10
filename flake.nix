@@ -7,7 +7,12 @@
   };
 
   outputs =
-    { nixpkgs, self, treefmt-nix, ... }:
+    {
+      nixpkgs,
+      self,
+      treefmt-nix,
+      ...
+    }:
     let
       forAllSystems = nixpkgs.lib.genAttrs nixpkgs.lib.systems.flakeExposed;
     in
@@ -18,7 +23,7 @@
           pkgs = import nixpkgs { inherit system; };
         in
         rec {
-          extmem-benchmark-image = pkgs.callPackage ./pkgs/extmem-benchmark-image/package.nix {
+          gem5-disk-image = pkgs.callPackage ./pkgs/gem5-disk-image/package.nix {
             inherit
               extmem
               extmem-ufault
