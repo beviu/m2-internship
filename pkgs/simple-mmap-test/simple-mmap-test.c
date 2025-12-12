@@ -25,8 +25,8 @@ static void write_fault_pages(void *addr, size_t len, size_t page_size) {
   puts("\rProgress: 100%");
 }
 
-static bool should_do_m5_exit() {
-  const char *value = getenv("SIMPLE_MMAP_TEST_M5_EXIT");
+static bool env_var_is_true(const char *name) {
+  const char *value = getenv(name);
   return value && strcmp(value, "1") == 0;
 }
 
@@ -50,15 +50,17 @@ int main() {
 
   puts("Writing to memory map...");
 
-  bool do_m5_exit = should_do_m5_exit();
-  if (do_m5_exit) {
+  if (env_var_is_true("SIMPLE_MMAP_TEST_M5_EXIT_BEFORE")) {
     map_m5_mem();
     m5_exit_addr(0);
   }
 
   write_fault_pages(addr, 1024UL * 1024UL, page_size);
 
-  m5_exit_addr(0);
+  if (env_var_is_true("SIMPLE_MMAP_TEST_M5_EXIT_AFTER")) {
+    map_m5_mem();
+    m5_exit_addr(0);
+  }
 
   munmap(addr, len);
 

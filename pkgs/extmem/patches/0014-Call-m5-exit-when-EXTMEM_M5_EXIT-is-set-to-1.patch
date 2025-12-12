@@ -1,0 +1,52 @@
+From e63306ba3ce838422fe3e7a753c20c2c4821db81 Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Fri, 12 Dec 2025 15:30:21 +0100
+Subject: [PATCH 14/15] Call m5 exit when EXTMEM_M5_EXIT is set to 1
+
+---
+ src/Makefile | 2 +-
+ src/core.c   | 8 ++++++++
+ 2 files changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/src/Makefile b/src/Makefile
+index 724e656..7ff743b 100644
+--- a/src/Makefile
++++ b/src/Makefile
+@@ -3,7 +3,7 @@ CFLAGS = -g -Wall -O3 -fPIC -fno-omit-frame-pointer
+ #CFLAGS = -g3 -Wall -O0 -fPIC
+ LDFLAGS = -shared -fno-omit-frame-pointer
+ INCLUDES = -I../linux/usr/include/
+-LIBS = -lm -lpthread -luring -ldl -lsyscall_intercept
++LIBS = -lm -lpthread -luring -ldl -lsyscall_intercept -lm5
+ 
+ default: libextmem-default.so
+ 
+diff --git a/src/core.c b/src/core.c
+index ecd1fef..f279bfe 100644
+--- a/src/core.c
++++ b/src/core.c
+@@ -33,6 +33,8 @@
+ #include "storagemanager.h"
+ #endif
+ 
++#include <gem5/m5ops.h>
++#include <m5_mmap.h>
+ 
+ pthread_t fault_thread;
+ 
+@@ -311,6 +313,12 @@ void extmem_init()
+   uswap_init_iouring();
+ #endif
+ 
++  const char *do_m5_exit = getenv("EXTMEM_M5_EXIT");
++  if (do_m5_exit && strcmp(do_m5_exit, "1") == 0) {
++    LOG("extmem_init: m5 exit\n");
++    map_m5_mem();
++    m5_exit_addr(0);
++  }
+   
+   #ifdef USWAP_SIGNAL  // for self-paging mode
+   LOG("extmem_init: registering SIGBUS handler\n");
+-- 
+2.51.2
+

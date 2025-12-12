@@ -31,6 +31,9 @@ let
       ]
     }
 
+    export EXTMEM_PATH=${extmem}
+    export EXTMEM_UFAULT_PATH=${extmem-ufault}
+
     ${./init.sh}
   '';
   closure = writeClosure [

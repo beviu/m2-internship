@@ -1,28 +1,29 @@
-From 16feb2fc97308b71e73b6ea3e73c78cf4e07b3cb Mon Sep 17 00:00:00 2001
+From 92fcfd999ab6069ec98f30db9a313db323f65727 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 21 Nov 2025 10:57:20 +0100
-Subject: [PATCH 14/14] Implement User Fault support
+Subject: [PATCH 15/15] Implement User Fault support
 
 ---
- src/core.c | 84 ++++++++++++++++++++++++++++++++++++++++++++++++++++--
+ src/core.c | 83 ++++++++++++++++++++++++++++++++++++++++++++++++++++--
  src/core.h |  9 ++++--
- 2 files changed, 88 insertions(+), 5 deletions(-)
+ 2 files changed, 88 insertions(+), 4 deletions(-)
 
 diff --git a/src/core.c b/src/core.c
-index ecd1fef..62e81f3 100644
+index f279bfe..33d034c 100644
 --- a/src/core.c
 +++ b/src/core.c
-@@ -33,6 +33,9 @@
+@@ -33,6 +33,10 @@
  #include "storagemanager.h"
  #endif
  
 +#ifdef USWAP_UF
 +#include <x86gprintrin.h>
 +#endif
++
+ #include <gem5/m5ops.h>
+ #include <m5_mmap.h>
  
- pthread_t fault_thread;
- 
-@@ -212,8 +215,80 @@ void uswap_sig_handler(int code, siginfo_t *siginfo, void *context)
+@@ -214,8 +218,80 @@ void uswap_sig_handler(int code, siginfo_t *siginfo, void *context)
  }
  
  
@@ -64,8 +65,7 @@ index ecd1fef..62e81f3 100644
 +}
 +
 +typedef void (*ufault_handler_t)(struct __uintr_frame *frame, unsigned long long vector);
- 
--void uswap_register_handler(int sig)
++
 +static long syscall_2(long num, long arg1, long arg2)
 +{
 +    long ret;
@@ -99,18 +99,17 @@ index ecd1fef..62e81f3 100644
 +
 +#endif
 +
-+
+ 
+-void uswap_register_handler(int sig)
 +void uswap_register_signal_handler(int sig)
  {
      struct sigaction action;
      LOG("Registering a signal handler\n");
-@@ -311,8 +386,11 @@ void extmem_init()
-   uswap_init_iouring();
- #endif
- 
--  
+@@ -320,7 +396,10 @@ void extmem_init()
+     m5_exit_addr(0);
+   }
+   
 -  #ifdef USWAP_SIGNAL  // for self-paging mode
-+   
 +  #ifdef USWAP_UF
 +  LOG("extmem_init: registering User Fault handler\n");
 +  uswap_register_ufault_handler();

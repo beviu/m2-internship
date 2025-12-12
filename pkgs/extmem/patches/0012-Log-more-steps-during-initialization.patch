@@ -1,7 +1,7 @@
 From f6b01dbf673a3f35ffa24a9e25e3233d754d435d Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Thu, 4 Dec 2025 13:33:55 +0100
-Subject: [PATCH 12/14] Log more steps during initialization
+Subject: [PATCH 12/15] Log more steps during initialization
 
 ---
  src/core.c            | 14 ++++++++++++--

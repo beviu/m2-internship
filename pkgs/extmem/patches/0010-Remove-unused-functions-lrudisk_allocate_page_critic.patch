@@ -1,7 +1,7 @@
 From 7696c766c37d22eda982ad5884acbec889d20e82 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Tue, 2 Dec 2025 12:14:18 +0100
-Subject: [PATCH 10/14] Remove unused functions lrudisk_allocate_page_critical
+Subject: [PATCH 10/15] Remove unused functions lrudisk_allocate_page_critical
  and fetch_free_page
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8

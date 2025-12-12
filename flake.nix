@@ -32,8 +32,12 @@
               simple-mmap-test
               ;
           };
-          extmem = pkgs.callPackage ./pkgs/extmem/package.nix { };
-          extmem-ufault = extmem.override { withUserFaults = true; };
+          extmem = pkgs.callPackage ./pkgs/extmem/package.nix { inherit m5ops; };
+          extmem-ufault = extmem.override {
+            inherit m5ops;
+
+            withUserFaults = true;
+          };
           gapbs = pkgs.callPackage ./pkgs/gapbs/package.nix { };
           m5ops = pkgs.callPackage ./pkgs/m5ops/package.nix { };
           mmapbench = pkgs.callPackage ./pkgs/mmapbench/package.nix { };

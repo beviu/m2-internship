@@ -1,7 +1,7 @@
 From 8e7e3506adc407efafecb6839ad136cc6214b84b Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Thu, 4 Dec 2025 13:33:55 +0100
-Subject: [PATCH 13/14] Make LOG print to stderr by default
+Subject: [PATCH 13/15] Make LOG print to stderr by default
 
 ---
  src/core.h | 4 ++--

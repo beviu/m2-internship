@@ -1,7 +1,7 @@
 From f66ca3f02eaf4ce26b54a00f97b6de4983a17bc3 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Tue, 2 Dec 2025 12:05:57 +0100
-Subject: [PATCH 07/14] Add missing definition of core_migrate_up_async_*
+Subject: [PATCH 07/15] Add missing definition of core_migrate_up_async_*
  functions
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
