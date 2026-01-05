@@ -45,6 +45,7 @@
             inherit m5ops;
           };
           twitter-dataset = pkgs.callPackage ./pkgs/twitter-dataset/package.nix { };
+          userfault-test = pkgs.callPackage ./pkgs/userfault-test/package.nix { };
         }
       );
 
