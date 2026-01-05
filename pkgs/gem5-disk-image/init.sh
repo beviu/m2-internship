@@ -29,6 +29,12 @@ case "$action" in
     echo "Starting simple-mmap-test with ExtMem (User Faults)..."
     LD_PRELOAD="$EXTMEM_UFAULT_PATH/lib/libextmem-default.so" EXTMEM_M5_EXIT=1 SIMPLE_MMAP_TEST_M5_EXIT_AFTER=1 simple-mmap-test
     ;;
+  userfault-test)
+    echo "Starting userfault-test..."
+    m5 exit
+    userfault-test
+    m5 exit
+    ;;
   *)
     echo "Unknown action." >&2
     graceful_exit
