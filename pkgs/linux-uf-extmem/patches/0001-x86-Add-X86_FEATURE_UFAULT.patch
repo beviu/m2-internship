@@ -1,0 +1,39 @@
+From 303c38596a54eec51d294202f30a4ced5786a3dd Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Fri, 14 Nov 2025 11:36:18 +0100
+Subject: [PATCH 1/9] x86: Add X86_FEATURE_UFAULT
+
+---
+ arch/x86/include/asm/cpufeatures.h | 1 +
+ arch/x86/kernel/cpu/common.c       | 3 +++
+ 2 files changed, 4 insertions(+)
+
+diff --git a/arch/x86/include/asm/cpufeatures.h b/arch/x86/include/asm/cpufeatures.h
+index a970819bf77e..2f2c0a828554 100644
+--- a/arch/x86/include/asm/cpufeatures.h
++++ b/arch/x86/include/asm/cpufeatures.h
+@@ -391,6 +391,7 @@
+ #define X86_FEATURE_AVX512_4FMAPS	(18*32+ 3) /* AVX-512 Multiply Accumulation Single precision */
+ #define X86_FEATURE_FSRM		(18*32+ 4) /* Fast Short Rep Mov */
+ #define X86_FEATURE_UINTR		(18*32+ 5) /* User Interrupts support */
++#define X86_FEATURE_UFAULT		(18*32+ 6) /* User Faults support */
+ #define X86_FEATURE_AVX512_VP2INTERSECT (18*32+ 8) /* AVX-512 Intersect for D/Q */
+ #define X86_FEATURE_SRBDS_CTRL		(18*32+ 9) /* "" SRBDS mitigation MSR available */
+ #define X86_FEATURE_MD_CLEAR		(18*32+10) /* VERW clears CPU buffers */
+diff --git a/arch/x86/kernel/cpu/common.c b/arch/x86/kernel/cpu/common.c
+index 7d61b9260a7b..720fba47fbc6 100644
+--- a/arch/x86/kernel/cpu/common.c
++++ b/arch/x86/kernel/cpu/common.c
+@@ -1889,6 +1889,9 @@ static void identify_cpu(struct cpuinfo_x86 *c)
+ 	/* Set up User Interrupts */
+ 	setup_uintr(c);
+ 
++	if (cpu_feature_enabled(X86_FEATURE_UFAULT))
++		pr_info_once("x86: User Fault (UFAULT) enabled.\n");
++
+ 	/* Enable FSGSBASE instructions if available. */
+ 	if (cpu_has(c, X86_FEATURE_FSGSBASE)) {
+ 		cr4_set_bits(X86_CR4_FSGSBASE);
+-- 
+2.51.2
+

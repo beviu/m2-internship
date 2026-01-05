@@ -40,6 +40,7 @@
             withUserFaults = true;
           };
           gapbs = pkgs.callPackage ./pkgs/gapbs/package.nix { };
+          linux-uf-extmem = pkgs.callPackage ./pkgs/linux-uf-extmem/package.nix { };
           m5ops = pkgs.callPackage ./pkgs/m5ops/package.nix { };
           mmapbench = pkgs.callPackage ./pkgs/mmapbench/package.nix { };
           simple-mmap-test = pkgs.callPackage ./pkgs/simple-mmap-test/package.nix {

@@ -1,0 +1,26 @@
+From 0152d0c53becf759cd5a12620e36100c286b92c3 Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Fri, 25 Jul 2025 16:29:34 +0200
+Subject: [PATCH 2/9] x86: Add User Fault MSR definitions
+
+---
+ arch/x86/include/asm/msr-index.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/arch/x86/include/asm/msr-index.h b/arch/x86/include/asm/msr-index.h
+index a419fc76b4fc..9f409cff53ba 100644
+--- a/arch/x86/include/asm/msr-index.h
++++ b/arch/x86/include/asm/msr-index.h
+@@ -458,6 +458,9 @@
+ #define MSR_IA32_UINTR_PD		0x989
+ #define MSR_IA32_UINTR_TT		0x98a
+ 
++#define MSR_IA32_UFAULT_ENABLE	0x99d
++#define MSR_IA32_UFAULT_HANDLER	0x99e
++
+ /* CPUID.6.EAX */
+ #define HWP_BASE_BIT			(1<<7)
+ #define HWP_NOTIFICATIONS_BIT		(1<<8)
+-- 
+2.51.2
+
