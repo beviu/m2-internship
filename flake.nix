@@ -23,6 +23,7 @@
           pkgs = import nixpkgs { inherit system; };
         in
         rec {
+          gem5 = pkgs.callPackage ./pkgs/gem5/package.nix { };
           gem5-disk-image = pkgs.callPackage ./pkgs/gem5-disk-image/package.nix {
             inherit
               extmem

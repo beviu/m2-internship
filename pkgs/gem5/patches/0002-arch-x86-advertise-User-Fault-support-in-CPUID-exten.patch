@@ -1,0 +1,26 @@
+From c2dded1db8b4b0fc98b3927d91bc797366d2ad3f Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Mon, 5 Jan 2026 14:50:34 +0100
+Subject: [PATCH 2/2] arch-x86: advertise User Fault support in CPUID extended
+ features
+
+---
+ src/arch/x86/X86ISA.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/arch/x86/X86ISA.py b/src/arch/x86/X86ISA.py
+index aa48d1aa6e..178f35240e 100644
+--- a/src/arch/x86/X86ISA.py
++++ b/src/arch/x86/X86ISA.py
+@@ -83,7 +83,7 @@ class X86ISA(BaseISA):
+     )
+     # 0000_0007h
+     ExtendedFeatures = VectorParam.UInt32(
+-        [0x00000000, 0x01800000, 0x00000000, 0x00000000], "feature flags"
++        [0x00000000, 0x01800000, 0x00000040, 0x00000000], "feature flags"
+     )
+     # 0000_000Dh - This uses ECX index, so the last entry must be all zeros
+     ExtendedState = VectorParam.UInt32(
+-- 
+2.51.2
+
