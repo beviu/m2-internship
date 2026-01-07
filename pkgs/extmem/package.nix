@@ -22,11 +22,7 @@ let
       hash = "sha256-jACRCB8ZaCciOw8+OFdxnw+h+epjutcrf6mhM99hQgE=";
     };
 
-    buildPhase = ''
-      make headers $makeFlags
-    '';
-
-    doCheck = false;
+    buildFlags = [ "headers" ];
 
     installPhase = ''
       cp -r usr/include/. $out/
