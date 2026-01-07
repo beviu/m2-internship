@@ -17,6 +17,30 @@
       forAllSystems = nixpkgs.lib.genAttrs nixpkgs.lib.systems.flakeExposed;
     in
     {
+      apps = forAllSystems (
+        system:
+        let
+          pkgs = import nixpkgs { inherit system; };
+          lib = pkgs.lib;
+        in
+        {
+          gem5 = {
+            type = "app";
+            program =
+              let
+                gem5-config = pkgs.replaceVars ./gem5-config.py {
+                  defaultDiskImage = self.packages.${system}.gem5-disk-image;
+                  defaultKernel = self.packages.${system}.linux-uf-extmem;
+                };
+                script = pkgs.writeShellScript "gem5.sh" ''
+                  exec ${lib.getExe self.packages.${system}.gem5} ${gem5-config} "$@"
+                '';
+              in
+              script.outPath;
+          };
+        }
+      );
+
       packages = forAllSystems (
         system:
         let

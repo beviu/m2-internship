@@ -5,3 +5,6 @@
 
 # Nix
 result
+
+# Gem5
+m5out/
