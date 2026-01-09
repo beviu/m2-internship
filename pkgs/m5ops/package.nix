@@ -13,13 +13,13 @@
 
 stdenv.mkDerivation (finalAttrs: {
   pname = "m5ops-${isa}";
-  version = "24.1.0.3";
+  version = "25.1.0.0";
 
   src = fetchFromGitHub {
     owner = "gem5";
     repo = "gem5";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-MLceCx4Sv+LHDXdmc4wuIArDZjelh7dDqmnPGNVJ2zo=";
+    hash = "sha256-0goJSUGR0PJe9DEbxhKUHSlkfc8Gqqnd8Pwn8cZigFw=";
   };
 
   nativeBuildInputs = [ scons ];
