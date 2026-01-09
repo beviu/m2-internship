@@ -1,0 +1,26 @@
+From d8f113a748ada13cc1bb17084aadf3bab82d83b1 Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Mon, 5 Jan 2026 14:37:33 +0100
+Subject: [PATCH 1/5] arch-x86: Fix indentation in two_byte_opcodes.isa
+
+---
+ src/arch/x86/isa/decoder/two_byte_opcodes.isa | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/arch/x86/isa/decoder/two_byte_opcodes.isa b/src/arch/x86/isa/decoder/two_byte_opcodes.isa
+index a32d41a169..7cb212fcda 100644
+--- a/src/arch/x86/isa/decoder/two_byte_opcodes.isa
++++ b/src/arch/x86/isa/decoder/two_byte_opcodes.isa
+@@ -137,8 +137,8 @@
+                     0x3: decode MODRM_RM {
+                         0x0: BasicOperate::SERIALIZE({{/*Nothing*/}},
+                                                          IsSerializeAfter);
+-                        }
+                     }
++                }
+                 0x6: Inst::LMSW(Ew);
+                 0x7: decode MODRM_MOD {
+                     0x3: decode MODRM_RM {
+-- 
+2.52.0
+

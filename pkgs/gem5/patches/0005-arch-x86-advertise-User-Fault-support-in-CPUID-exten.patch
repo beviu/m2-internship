@@ -1,7 +1,7 @@
-From c2dded1db8b4b0fc98b3927d91bc797366d2ad3f Mon Sep 17 00:00:00 2001
+From e5cbf0f214af7186751718e23f4573481ced8f83 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Mon, 5 Jan 2026 14:50:34 +0100
-Subject: [PATCH 2/2] arch-x86: advertise User Fault support in CPUID extended
+Subject: [PATCH 5/5] arch-x86: advertise User Fault support in CPUID extended
  features
 
 ---
@@ -22,5 +22,5 @@ index aa48d1aa6e..178f35240e 100644
      # 0000_000Dh - This uses ECX index, so the last entry must be all zeros
      ExtendedState = VectorParam.UInt32(
 -- 
-2.51.2
+2.52.0
 

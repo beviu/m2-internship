@@ -31,8 +31,11 @@ stdenv.mkDerivation (finalAttrs: {
   };
 
   patches = [
-    ./patches/0001-arch-x86-implement-User-Faults.patch
-    ./patches/0002-arch-x86-advertise-User-Fault-support-in-CPUID-exten.patch
+    ./patches/0001-arch-x86-Fix-indentation-in-two_byte_opcodes.isa.patch
+    ./patches/0002-arch-x86-Implement-UIRET.patch
+    ./patches/0003-arch-x86-implement-User-Fault-delivery.patch
+    ./patches/0004-arch-x86-implement-STUF-and-CLUF.patch
+    ./patches/0005-arch-x86-advertise-User-Fault-support-in-CPUID-exten.patch
   ];
 
   nativeBuildInputs = [

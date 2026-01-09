@@ -1,0 +1,65 @@
+From 32a547c185e37f5040ee85bc664b28bb32d1e3a4 Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Fri, 9 Jan 2026 15:45:47 +0100
+Subject: [PATCH 2/5] arch-x86: Implement UIRET
+
+Most of the code is taken from Berk's great work!
+---
+ src/arch/x86/isa/decoder/two_byte_opcodes.isa |  1 +
+ .../interrupts_and_exceptions.py              | 28 +++++++++++++++++++
+ 2 files changed, 29 insertions(+)
+
+diff --git a/src/arch/x86/isa/decoder/two_byte_opcodes.isa b/src/arch/x86/isa/decoder/two_byte_opcodes.isa
+index 7cb212fcda..e596aef08b 100644
+--- a/src/arch/x86/isa/decoder/two_byte_opcodes.isa
++++ b/src/arch/x86/isa/decoder/two_byte_opcodes.isa
+@@ -137,6 +137,7 @@
+                     0x3: decode MODRM_RM {
+                         0x0: BasicOperate::SERIALIZE({{/*Nothing*/}},
+                                                          IsSerializeAfter);
++                        0x4: Inst::UIRET();
+                     }
+                 }
+                 0x6: Inst::LMSW(Ew);
+diff --git a/src/arch/x86/isa/insts/general_purpose/control_transfer/interrupts_and_exceptions.py b/src/arch/x86/isa/insts/general_purpose/control_transfer/interrupts_and_exceptions.py
+index 278d432e51..bded4d28a0 100644
+--- a/src/arch/x86/isa/insts/general_purpose/control_transfer/interrupts_and_exceptions.py
++++ b/src/arch/x86/isa/insts/general_purpose/control_transfer/interrupts_and_exceptions.py
+@@ -341,6 +341,34 @@ def macroop INT_REAL_I {
+ def macroop INT_VIRT_I {
+     panic "Virtual mode int3 isn't implemented!"
+ };
++
++def macroop UIRET {
++    # Pop tempRip;
++    ld t6, ss, [1, t0, rsp], dataSize=8, addressSize=8
++    addi rsp, rsp, 8, dataSize=8
++
++    # Pop tempRFLAGS;
++    ld t7, ss, [1, t0, rsp], dataSize=8, addressSize=8
++    addi rsp, rsp, 8, dataSize=8
++
++    # Pop tempRsp;
++    ld t8, ss, [1, t0, rsp], dataSize=8, addressSize=8
++    addi rsp, rsp, 8, dataSize=8
++
++    # RIP := tempRip;
++    wrip t6, t0, dataSize=8
++
++    # RFLAGS:= (RFLAGS & ~254DD5H) | (tempRFLAGS & 254DD5H);
++    rflags t6, dataSize=8
++    limm t1, ~(0x254DD5), dataSize=8
++    and t6, t6, t1, dataSize=8
++    limm t1, (0x254DD5), dataSize=8
++    and t7, t7, t1, dataSize=8
++    or t6, t6, t7, dataSize=8
++
++    # RSP := tempRsp;
++    mov rsp, rsp, t8, dataSize=8
++};
+ """
+ # let {{
+ #    class INT(Inst):
+-- 
+2.52.0
+
