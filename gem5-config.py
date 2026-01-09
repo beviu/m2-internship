@@ -28,6 +28,7 @@ import argparse
 import os
 
 from gem5.coherence_protocol import CoherenceProtocol
+from gem5.components.boards.kernel_disk_workload import KernelDiskWorkload
 from gem5.components.boards.x86_board import X86Board
 from gem5.components.cachehierarchies.ruby.mesi_two_level_cache_hierarchy import (
     MESITwoLevelCacheHierarchy,
@@ -38,7 +39,7 @@ from gem5.components.processors.simple_switchable_processor import (
     SimpleSwitchableProcessor,
 )
 from gem5.isas import ISA
-from gem5.resources.resource import obtain_resource, BinaryResource, DiskImageResource
+from gem5.resources.resource import BinaryResource, DiskImageResource
 from gem5.simulate.exit_handler import ExitHandler
 from gem5.simulate.simulator import Simulator
 from gem5.utils.override import overrides
@@ -112,10 +113,20 @@ processor = SimpleSwitchableProcessor(
     num_cores=2,
 )
 
+
+# Our kernel assigns the IDE drive to /dev/sda instead of /dev/hda which is what
+# X86Board assumes.
+class SdaX86Board(X86Board):
+    @overrides(KernelDiskWorkload)
+    def get_disk_device(self):
+        return "/dev/sda"
+
+
 # Here we set up the board. The X86Board allows for FS mode (full system) or
 # SE mode (syscall emulation) X86 simulations.
 
-board = X86Board(
+
+board = SdaX86Board(
     clk_freq="3GHz",
     processor=processor,
     memory=memory,
@@ -137,17 +148,7 @@ board.set_kernel_disk_workload(
 )
 
 
-class QuitExitHandler(ExitHandler, hypercall_num=1):
-    @overrides(ExitHandler)
-    def _process(self, simulator: "Simulator") -> None:
-        pass
-
-    @overrides(ExitHandler)
-    def _exit_simulation(self) -> bool:
-        return True
-
-
-class SwitchProcessorExitHandler(ExitHandler, hypercall_num=2):
+class SwitchProcessorExitHandler(ExitHandler, hypercall_num=8):
     @overrides(ExitHandler)
     def _process(self, simulator: "Simulator") -> None:
         simulator.switch_processor()

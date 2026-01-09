@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 
+switch_processor() {
+  m5 hypercall 8
+}
+
 graceful_exit() {
   # Flush data to be transmitted to the serial port before exiting.
   perl -MPOSIX -e 'tcflush(0, TCOFLUSH)'
   sleep 10
-  # The first m5 exit switches from KVM mode to full emulation mode, and
-  # the second requests actually stopping Gem5.
-  m5 exit
   m5 exit
 }
 
@@ -31,15 +32,15 @@ case "$action" in
     ;;
   userfault-test)
     echo "Starting userfault-test..."
-    m5 exit
+    switch_processor
     userfault-test
-    m5 exit
     ;;
   *)
     echo "Unknown action." >&2
-    graceful_exit
     ;;
 esac
+
+graceful_exit
 
 # Wait here for the m5 exit command to complete, instead of exiting the
 # process which would cause a kernel panic.
