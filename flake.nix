@@ -30,7 +30,7 @@
               let
                 gem5-config = pkgs.replaceVars ./gem5-config.py {
                   defaultDiskImage = self.packages.${system}.gem5-disk-image;
-                  defaultKernel = self.packages.${system}.linux-uf-extmem;
+                  defaultKernel = "${self.packages.${system}.linux-uf-extmem.dev}/vmlinux";
                 };
                 script = pkgs.writeShellScript "gem5.sh" ''
                   exec ${lib.getExe self.packages.${system}.gem5} ${gem5-config} "$@"
@@ -48,11 +48,19 @@
         in
         rec {
           gem5 = pkgs.callPackage ./pkgs/gem5/package.nix { };
+          gem5-bridge = pkgs.callPackage ./pkgs/gem5-bridge/package.nix {
+            kernel = linux-uf-extmem;
+            kernelModuleMakeFlags = linux-uf-extmem.commonMakeFlags ++ [
+              "KBUILD_OUTPUT=${linux-uf-extmem.dev}/lib/modules/${linux-uf-extmem.modDirVersion}/build"
+            ];
+          };
           gem5-disk-image = pkgs.callPackage ./pkgs/gem5-disk-image/package.nix {
             inherit
               extmem
               extmem-ufault
+              gem5-bridge
               m5ops
+              linux-uf-extmem
               mmapbench
               simple-mmap-test
               userfault-test

@@ -1,7 +1,7 @@
 From d03d2a6e3173fc69563a3fddf03a5362fc680d6a Mon Sep 17 00:00:00 2001
 From: SepehrDV2 <sepehr.jalalian.edu@gmail.com>
 Date: Sun, 7 Jan 2024 13:20:18 -0800
-Subject: [PATCH 9/9] attempt at showing full upcall path
+Subject: [PATCH 29/29] attempt at showing full upcall path
 
 ---
  arch/x86/kernel/signal.c |  4 +++-
@@ -72,5 +72,5 @@ index ddb151fb8b08..3451064758a0 100644
   * This is also useful for kernel threads that want to temporarily
   * (or permanently) block certain signals.
 -- 
-2.51.2
+2.52.0
 

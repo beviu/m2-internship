@@ -1,7 +1,7 @@
 From 2aba6185ef3307de8b9ef6e0381c5eef8522ff02 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 25 Jul 2025 13:33:10 +0200
-Subject: [PATCH 4/9] x86: Add ufault_register_handler system call
+Subject: [PATCH 24/29] x86: Add ufault_register_handler system call
 
 ---
  arch/x86/entry/syscalls/syscall_64.tbl |  1 +
@@ -121,5 +121,5 @@ index 000000000000..82b6cb8ad674
 +	wrmsrl(MSR_IA32_UFAULT_HANDLER, current->thread.ufault_handler);
 +}
 -- 
-2.51.2
+2.52.0
 
