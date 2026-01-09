@@ -10,6 +10,7 @@
   perl,
   runCommand,
   simple-mmap-test,
+  userfault-test,
   util-linux,
   writeClosure,
   writeScript,
@@ -27,6 +28,7 @@ let
         mmapbench
         perl
         simple-mmap-test
+        userfault-test
         util-linux
       ]
     }

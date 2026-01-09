@@ -55,6 +55,7 @@
               m5ops
               mmapbench
               simple-mmap-test
+              userfault-test
               ;
           };
           extmem = pkgs.callPackage ./pkgs/extmem/package.nix { inherit m5ops; };
