@@ -1,7 +1,7 @@
 From 3c5726003d0e7cf579288f09e2e31dfb38fb0af5 Mon Sep 17 00:00:00 2001
 From: Sohil Mehta <sohil.mehta@intel.com>
 Date: Thu, 8 Sep 2022 16:01:25 -0700
-Subject: [PATCH 17/29] io_uring: add x86 uintr support to io_uring
+Subject: [PATCH 17/28] io_uring: add x86 uintr support to io_uring
 
 An update to libuintr causes uintr opcodes (IORING_REGISTER_UINTR and
 IORING_UNREGISTER_UINTR) to conflict. Update them to be a little further

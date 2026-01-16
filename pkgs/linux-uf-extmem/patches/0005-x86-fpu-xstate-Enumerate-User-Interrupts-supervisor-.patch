@@ -1,7 +1,7 @@
 From a4e75d69a63d06917792c1fc51b5c858549aefd8 Mon Sep 17 00:00:00 2001
 From: Sohil Mehta <sohil.mehta@intel.com>
 Date: Wed, 31 Aug 2022 17:08:14 -0700
-Subject: [PATCH 05/29] x86/fpu/xstate: Enumerate User Interrupts supervisor
+Subject: [PATCH 05/28] x86/fpu/xstate: Enumerate User Interrupts supervisor
  state
 
 Enable xstate supervisor support for User Interrupts by default.

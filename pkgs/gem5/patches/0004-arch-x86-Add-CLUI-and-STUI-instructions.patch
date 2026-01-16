@@ -1,0 +1,44 @@
+From c739a906b0a282cf4e40ad3394c40ce2a9d374f1 Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Thu, 15 Jan 2026 16:02:53 +0100
+Subject: [PATCH 04/17] arch-x86: Add CLUI and STUI instructions
+
+---
+ src/arch/x86/isa/decoder/two_byte_opcodes.isa            | 2 ++
+ .../x86/isa/insts/general_purpose/flags/set_and_clear.py | 9 +++++++++
+ 2 files changed, 11 insertions(+)
+
+diff --git a/src/arch/x86/isa/decoder/two_byte_opcodes.isa b/src/arch/x86/isa/decoder/two_byte_opcodes.isa
+index 28dc5c6d07..64ac45be95 100644
+--- a/src/arch/x86/isa/decoder/two_byte_opcodes.isa
++++ b/src/arch/x86/isa/decoder/two_byte_opcodes.isa
+@@ -138,6 +138,8 @@
+                         0x0: BasicOperate::SERIALIZE({{/*Nothing*/}},
+                                                          IsSerializeAfter);
+                         0x5: Inst::TESTUI();
++                        0x6: Inst::CLUI();
++                        0x7: Inst::STUI();
+                     }
+                 }
+                 0x6: Inst::LMSW(Ew);
+diff --git a/src/arch/x86/isa/insts/general_purpose/flags/set_and_clear.py b/src/arch/x86/isa/insts/general_purpose/flags/set_and_clear.py
+index 4c6ee6abdf..4d302e23ae 100644
+--- a/src/arch/x86/isa/insts/general_purpose/flags/set_and_clear.py
++++ b/src/arch/x86/isa/insts/general_purpose/flags/set_and_clear.py
+@@ -175,4 +175,13 @@ def macroop CLI_REAL {
+ def macroop CLI_VIRT {
+     panic "Virtual mode cli isn't implemented!"
+ };
++
++def macroop CLUI {
++    wrval ctrlRegIdx("misc_reg::Uif"), t0, dataSize=8
++};
++
++def macroop STUI {
++    limm t1, 1, dataSize=8
++    wrval ctrlRegIdx("misc_reg::Uif"), t1, dataSize=8
++};
+ """
+-- 
+2.52.0
+

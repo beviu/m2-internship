@@ -32,10 +32,22 @@ stdenv.mkDerivation (finalAttrs: {
 
   patches = [
     ./patches/0001-arch-x86-Fix-indentation-in-two_byte_opcodes.isa.patch
-    ./patches/0002-arch-x86-Implement-UIRET.patch
-    ./patches/0003-arch-x86-implement-User-Fault-delivery.patch
-    ./patches/0004-arch-x86-implement-STUF-and-CLUF.patch
-    ./patches/0005-arch-x86-advertise-User-Fault-support-in-CPUID-exten.patch
+    ./patches/0002-arch-x86-Add-misc_reg-Uif-register.patch
+    ./patches/0003-arch-x86-Add-TESTUI-instruction.patch
+    ./patches/0004-arch-x86-Add-CLUI-and-STUI-instructions.patch
+    ./patches/0005-arch-x86-Add-UIRET-instruction.patch
+    ./patches/0006-arch-x86-Add-IA32_UINTR_MISC-MSR.patch
+    ./patches/0007-arch-x86-Add-IA32_UFAULT_HANDLER-MSR.patch
+    ./patches/0008-arch-x86-Add-IA32_UINTR_TT-MSR.patch
+    ./patches/0009-arch-x86-Add-physical-parameter-to-load-store-operat.patch
+    ./patches/0010-arch-x86-Add-SENDUIPI-instruction.patch
+    ./patches/0011-arch-x86-Advertise-User-Interrupt-support-in-CPUID-e.patch
+    ./patches/0012-arch-x86-Add-misc_reg-Uff-register.patch
+    ./patches/0013-arch-x86-Add-TESTUF-instruction.patch
+    ./patches/0014-arch-x86-Add-STUF-and-CLUF-instructions.patch
+    ./patches/0015-arch-x86-Add-IA32_UFAULT_HANDLER-MSR.patch
+    ./patches/0016-arch-x86-Implement-User-Fault-delivery.patch
+    ./patches/0017-arch-x86-Advertise-User-Fault-support-in-CPUID-exten.patch
   ];
 
   nativeBuildInputs = [

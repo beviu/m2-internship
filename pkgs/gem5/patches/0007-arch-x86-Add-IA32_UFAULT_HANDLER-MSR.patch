@@ -1,0 +1,37 @@
+From 9762ccba2e5fd853ea27292808a4dc7b81feb65f Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Fri, 16 Jan 2026 10:37:18 +0100
+Subject: [PATCH 07/17] arch-x86: Add IA32_UFAULT_HANDLER MSR
+
+---
+ src/arch/x86/regs/misc.hh | 1 +
+ src/arch/x86/regs/msr.cc  | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/src/arch/x86/regs/misc.hh b/src/arch/x86/regs/misc.hh
+index ced0853030..d9b4f4b3e5 100644
+--- a/src/arch/x86/regs/misc.hh
++++ b/src/arch/x86/regs/misc.hh
+@@ -148,6 +148,7 @@ enum : RegIndex
+     M5Reg,
+ 
+     Uif,
++    Uihandler,
+ 
+     /*
+      * Model Specific Registers
+diff --git a/src/arch/x86/regs/msr.cc b/src/arch/x86/regs/msr.cc
+index 9ed12457bc..e293f8264f 100644
+--- a/src/arch/x86/regs/msr.cc
++++ b/src/arch/x86/regs/msr.cc
+@@ -112,6 +112,7 @@ const MsrMap::value_type msrMapData[] = {
+     MsrVal(0x417, misc_reg::Mc5Misc),
+     MsrVal(0x41B, misc_reg::Mc6Misc),
+     MsrVal(0x41F, misc_reg::Mc7Misc),
++    MsrVal(0x986, misc_reg::Uihandler),
+     MsrVal(0x988, misc_reg::UintrMisc),
+     MsrVal(0xC0000080, misc_reg::Efer),
+     MsrVal(0xC0000081, misc_reg::Star),
+-- 
+2.52.0
+

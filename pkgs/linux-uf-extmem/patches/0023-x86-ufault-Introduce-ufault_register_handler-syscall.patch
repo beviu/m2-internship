@@ -1,0 +1,47 @@
+From 2d5d5d870f8eb9d0e4f7402d3d4492bcaac2d276 Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Fri, 25 Jul 2025 13:33:10 +0200
+Subject: [PATCH 23/28] x86/ufault: Introduce ufault_register_handler() syscall
+
+---
+ arch/x86/entry/syscalls/syscall_64.tbl |  1 +
+ arch/x86/kernel/ufault.c               | 12 ++++++++++++
+ 2 files changed, 13 insertions(+)
+
+diff --git a/arch/x86/entry/syscalls/syscall_64.tbl b/arch/x86/entry/syscalls/syscall_64.tbl
+index 4ca4f4a3d60c..4c41cc90073e 100644
+--- a/arch/x86/entry/syscalls/syscall_64.tbl
++++ b/arch/x86/entry/syscalls/syscall_64.tbl
+@@ -382,6 +382,7 @@
+ 477	common	uintr_register_self	sys_uintr_register_self
+ 478	common	uintr_alt_stack		sys_uintr_alt_stack
+ 479	common	uintr_ipi_fd		sys_uintr_ipi_fd
++480	common	ufault_register_handler	sys_ufault_register_handler
+ 
+ #
+ # Due to a historical design error, certain syscalls are numbered differently
+diff --git a/arch/x86/kernel/ufault.c b/arch/x86/kernel/ufault.c
+index 3453839facb8..5ca4e4ab2db2 100644
+--- a/arch/x86/kernel/ufault.c
++++ b/arch/x86/kernel/ufault.c
+@@ -1,5 +1,17 @@
++#include <linux/syscalls.h>
++
+ #include <asm/ufault.h>
+ 
++SYSCALL_DEFINE2(ufault_register_handler, long, handler, int, flags)
++{
++	if (flags)
++		return -EINVAL;
++
++	current->thread.ufault_handler = handler;
++
++	return 0;
++}
++
+ void switch_ufault_prepare(struct task_struct *prev)
+ {
+ 	current->thread.ufault_enabled = testuf();
+-- 
+2.52.0
+

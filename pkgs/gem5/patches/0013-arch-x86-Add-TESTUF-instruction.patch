@@ -1,0 +1,47 @@
+From afb2324c7253c9622a9ae64a730f99f8663f9b71 Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Fri, 16 Jan 2026 13:53:53 +0100
+Subject: [PATCH 13/17] arch-x86: Add TESTUF instruction
+
+---
+ src/arch/x86/isa/decoder/two_byte_opcodes.isa       |  1 +
+ .../insts/general_purpose/compare_and_test/test.py  | 13 +++++++++++++
+ 2 files changed, 14 insertions(+)
+
+diff --git a/src/arch/x86/isa/decoder/two_byte_opcodes.isa b/src/arch/x86/isa/decoder/two_byte_opcodes.isa
+index c50d816a31..0cac00a6bd 100644
+--- a/src/arch/x86/isa/decoder/two_byte_opcodes.isa
++++ b/src/arch/x86/isa/decoder/two_byte_opcodes.isa
+@@ -137,6 +137,7 @@
+                     0x3: decode MODRM_RM {
+                         0x0: BasicOperate::SERIALIZE({{/*Nothing*/}},
+                                                          IsSerializeAfter);
++                        0x1: Inst::TESTUF();
+                         0x4: Inst::UIRET();
+                         0x5: Inst::TESTUI();
+                         0x6: Inst::CLUI();
+diff --git a/src/arch/x86/isa/insts/general_purpose/compare_and_test/test.py b/src/arch/x86/isa/insts/general_purpose/compare_and_test/test.py
+index e9f762083d..592f0cd7d9 100644
+--- a/src/arch/x86/isa/insts/general_purpose/compare_and_test/test.py
++++ b/src/arch/x86/isa/insts/general_purpose/compare_and_test/test.py
+@@ -85,4 +85,17 @@ def macroop TESTUI
+     and t1, t1, t2, dataSize=8
+     wruflags t1, t0, dataSize=8
+ };
++
++def macroop TESTUF
++{
++    # CF := UFF;
++    rdval t1, ctrlRegIdx("misc_reg::Uff"), dataSize=8
++    addi t0, t1, "(uint64_t)(-1)", flags=(CF,), dataSize=8
++
++    # ZF := AF := OF := PF := SF := 0;
++    ruflags t1, dataSize=8
++    limm t2, "~((uint64_t)(ZFBit | AFBit | OFBit | PFBit | SFBit))", dataSize=8
++    and t1, t1, t2, dataSize=8
++    wruflags t1, t0, dataSize=8
++};
+ """
+-- 
+2.52.0
+

@@ -1,7 +1,7 @@
 From d292b8066fb6101c36ab338d5d0a652a05c542ac Mon Sep 17 00:00:00 2001
 From: Sohil Mehta <sohil.mehta@intel.com>
 Date: Tue, 25 May 2021 16:57:37 -0700
-Subject: [PATCH 02/29] x86/uintr/man-page: Include man pages draft for
+Subject: [PATCH 02/28] x86/uintr/man-page: Include man pages draft for
  reference
 
 Included here in plain text format for reference and review.

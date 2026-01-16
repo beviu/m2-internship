@@ -1,7 +1,7 @@
 From 5f1583c2b8805d223bbf0031bdb2e7f6b3e1ad5a Mon Sep 17 00:00:00 2001
 From: Sohil Mehta <sohil.mehta@intel.com>
 Date: Tue, 6 Sep 2022 13:26:25 -0700
-Subject: [PATCH 06/29] x86/irq: Reserve a user IPI notification and kernel
+Subject: [PATCH 06/28] x86/irq: Reserve a user IPI notification and kernel
  vectors
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8

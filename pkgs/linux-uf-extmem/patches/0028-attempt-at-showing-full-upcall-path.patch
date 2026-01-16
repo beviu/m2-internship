@@ -1,7 +1,7 @@
-From d03d2a6e3173fc69563a3fddf03a5362fc680d6a Mon Sep 17 00:00:00 2001
+From 7277da8eeb9c177ce25457e9e587adcd0d03a756 Mon Sep 17 00:00:00 2001
 From: SepehrDV2 <sepehr.jalalian.edu@gmail.com>
 Date: Sun, 7 Jan 2024 13:20:18 -0800
-Subject: [PATCH 29/29] attempt at showing full upcall path
+Subject: [PATCH 28/28] attempt at showing full upcall path
 
 ---
  arch/x86/kernel/signal.c |  4 +++-

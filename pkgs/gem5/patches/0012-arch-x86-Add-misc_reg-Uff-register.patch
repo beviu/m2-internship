@@ -1,0 +1,27 @@
+From e29ff19fc60de5fce4692defd3b6415bb213b869 Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Mon, 5 Jan 2026 14:37:33 +0100
+Subject: [PATCH 12/17] arch-x86: Add misc_reg::Uff register
+
+This register will store whether User Faults are enabled or not, like
+misc_reg::Uif for User Interrupts.
+---
+ src/arch/x86/regs/misc.hh | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/arch/x86/regs/misc.hh b/src/arch/x86/regs/misc.hh
+index 77a731a863..d6e59c2d36 100644
+--- a/src/arch/x86/regs/misc.hh
++++ b/src/arch/x86/regs/misc.hh
+@@ -150,6 +150,8 @@ enum : RegIndex
+     Uif,
+     Uihandler,
+ 
++    Uff,
++
+     /*
+      * Model Specific Registers
+      */
+-- 
+2.52.0
+

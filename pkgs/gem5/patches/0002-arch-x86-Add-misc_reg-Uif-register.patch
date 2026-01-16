@@ -1,0 +1,26 @@
+From e9e095c329fc3fea49c4928826b218c524ab3e30 Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Thu, 15 Jan 2026 16:02:53 +0100
+Subject: [PATCH 02/17] arch-x86: Add misc_reg::Uif register
+
+This register will store UIF (user-interrupt flag).
+---
+ src/arch/x86/regs/misc.hh | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/arch/x86/regs/misc.hh b/src/arch/x86/regs/misc.hh
+index 535d251948..a5b37f5259 100644
+--- a/src/arch/x86/regs/misc.hh
++++ b/src/arch/x86/regs/misc.hh
+@@ -147,6 +147,8 @@ enum : RegIndex
+     //Register to keep handy values like the CPU mode in.
+     M5Reg,
+ 
++    Uif,
++
+     /*
+      * Model Specific Registers
+      */
+-- 
+2.52.0
+

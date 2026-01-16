@@ -1,17 +1,16 @@
-From 53a4a484eec7b48fd0e88855bbd9b224bad1eae2 Mon Sep 17 00:00:00 2001
+From de0f8d07cd05c316b2b29a153848261d1a2f3027 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Mon, 5 Jan 2026 14:37:33 +0100
-Subject: [PATCH 3/5] arch-x86: implement User Fault delivery
+Subject: [PATCH 16/17] arch-x86: Implement User Fault delivery
 
-Most of the code is taken from Berk's great work!
+Code was written by Berk.
 ---
  src/arch/x86/faults.cc            | 28 ++++++++++++++++++++
  src/arch/x86/faults.hh            | 32 ++++++++++++++++++++++
  src/arch/x86/isa/insts/romutil.py | 44 +++++++++++++++++++++++++++++++
- src/arch/x86/regs/misc.hh         |  5 +++-
- src/arch/x86/regs/msr.cc          |  3 +++
+ src/arch/x86/regs/misc.hh         |  1 +
  src/arch/x86/tlb.cc               | 15 ++++++++---
- 6 files changed, 122 insertions(+), 5 deletions(-)
+ 5 files changed, 116 insertions(+), 4 deletions(-)
 
 diff --git a/src/arch/x86/faults.cc b/src/arch/x86/faults.cc
 index fce92b1fb4..f0a428ce7c 100644
@@ -96,7 +95,7 @@ index a1ff1b02c2..e7fd127c18 100644
  {
    public:
 diff --git a/src/arch/x86/isa/insts/romutil.py b/src/arch/x86/isa/insts/romutil.py
-index 7082b4d4a5..23915523d8 100644
+index 7082b4d4a5..d4d8074da0 100644
 --- a/src/arch/x86/isa/insts/romutil.py
 +++ b/src/arch/x86/isa/insts/romutil.py
 @@ -269,5 +269,49 @@ def rom
@@ -142,7 +141,7 @@ index 7082b4d4a5..23915523d8 100644
 +    wrflags t10, t6, dataSize=8
 +
 +    # RIP := UFHANDLER
-+    rdval t1, ctrlRegIdx("misc_reg::UserFaultHandler")
++    rdval t1, ctrlRegIdx("misc_reg::Ufhandler"), dataSize=8
 +    wripi t1, 0, dataSize=8
 +
 +    eret
@@ -150,52 +149,26 @@ index 7082b4d4a5..23915523d8 100644
  """
  )
 diff --git a/src/arch/x86/regs/misc.hh b/src/arch/x86/regs/misc.hh
-index 535d251948..1edf2bab0c 100644
+index 0d49bfe9da..5456f4bbab 100644
 --- a/src/arch/x86/regs/misc.hh
 +++ b/src/arch/x86/regs/misc.hh
-@@ -252,8 +252,11 @@ enum : RegIndex
-     Mc7Misc,
-     McMiscEnd,
+@@ -646,6 +646,7 @@ BitUnion64(CR3)
+ EndBitUnion(CR3)
  
-+    UserFaultEnabled = McMiscEnd,
-+    UserFaultHandler,
-+
-     // Extended feature enable register
--    Efer = McMiscEnd,
-+    Efer,
- 
-     Star,
-     Lstar,
-diff --git a/src/arch/x86/regs/msr.cc b/src/arch/x86/regs/msr.cc
-index 7fdb8841fd..45fe197d95 100644
---- a/src/arch/x86/regs/msr.cc
-+++ b/src/arch/x86/regs/msr.cc
-@@ -27,6 +27,7 @@
-  */
- 
- #include "arch/x86/regs/msr.hh"
-+#include "arch/x86/regs/misc.hh"
- 
- namespace gem5
- {
-@@ -112,6 +113,8 @@ const MsrMap::value_type msrMapData[] = {
-     MsrVal(0x417, misc_reg::Mc5Misc),
-     MsrVal(0x41B, misc_reg::Mc6Misc),
-     MsrVal(0x41F, misc_reg::Mc7Misc),
-+    MsrVal(0x99D, misc_reg::UserFaultEnabled),
-+    MsrVal(0x99E, misc_reg::UserFaultHandler),
-     MsrVal(0xC0000080, misc_reg::Efer),
-     MsrVal(0xC0000081, misc_reg::Star),
-     MsrVal(0xC0000082, misc_reg::Lstar),
+ BitUnion64(CR4)
++    Bitfield<26> ufault; // Enable User Faults
+     Bitfield<18> osxsave; // Enable XSAVE and Proc Extended States
+     Bitfield<17> pcide; // PCID Enable
+     Bitfield<16> fsgsbase; // Enable RDFSBASE, RDGSBASE, WRFSBASE,
 diff --git a/src/arch/x86/tlb.cc b/src/arch/x86/tlb.cc
-index 270af19863..11293e10d6 100644
+index 270af19863..4679f7d02e 100644
 --- a/src/arch/x86/tlb.cc
 +++ b/src/arch/x86/tlb.cc
 @@ -486,19 +486,26 @@ TLB::translate(const RequestPtr &req,
              bool inUser = m5Reg.cpl == 3 && !(flags & CPL0FlagBit);
              CR0 cr0 = tc->readMiscRegNoEffect(misc_reg::Cr0);
              bool badWrite = (!entry->writable && (inUser || cr0.wp));
-+            bool userFault = inUser && tc->readMiscRegNoEffect(X86ISA::misc_reg::UserFaultEnabled);
++            bool userFault = inUser && cr4.ufault && tc->readMiscRegNoEffect(X86ISA::misc_reg::Uif);
              if ((inUser && !entry->user) ||
                  (mode == BaseMMU::Write && badWrite)) {
                  // The page must have been present to get into the TLB in

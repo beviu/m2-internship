@@ -1,0 +1,38 @@
+From 29d009748e5a0db75907d91b86a1ccb4b22fc60e Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Mon, 5 Jan 2026 14:37:33 +0100
+Subject: [PATCH 15/17] arch-x86: Add IA32_UFAULT_HANDLER MSR
+
+This MSR lets the OS set the User Fault handler.
+---
+ src/arch/x86/regs/misc.hh | 1 +
+ src/arch/x86/regs/msr.cc  | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/src/arch/x86/regs/misc.hh b/src/arch/x86/regs/misc.hh
+index d6e59c2d36..0d49bfe9da 100644
+--- a/src/arch/x86/regs/misc.hh
++++ b/src/arch/x86/regs/misc.hh
+@@ -151,6 +151,7 @@ enum : RegIndex
+     Uihandler,
+ 
+     Uff,
++    Ufhandler,
+ 
+     /*
+      * Model Specific Registers
+diff --git a/src/arch/x86/regs/msr.cc b/src/arch/x86/regs/msr.cc
+index 40ee08cedb..8d947f2107 100644
+--- a/src/arch/x86/regs/msr.cc
++++ b/src/arch/x86/regs/msr.cc
+@@ -115,6 +115,7 @@ const MsrMap::value_type msrMapData[] = {
+     MsrVal(0x986, misc_reg::Uihandler),
+     MsrVal(0x988, misc_reg::UintrMisc),
+     MsrVal(0x98A, misc_reg::UintrTT),
++    MsrVal(0x99E, misc_reg::Ufhandler),
+     MsrVal(0xC0000080, misc_reg::Efer),
+     MsrVal(0xC0000081, misc_reg::Star),
+     MsrVal(0xC0000082, misc_reg::Lstar),
+-- 
+2.52.0
+

@@ -1,0 +1,137 @@
+From ad1da244f582ceaacedff35f9bd708d168f4d0d1 Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Thu, 15 Jan 2026 15:10:19 +0100
+Subject: [PATCH 10/17] arch-x86: Add SENDUIPI instruction
+
+The implementation was written by Berk.
+---
+ src/arch/x86/isa/decoder/two_byte_opcodes.isa |  5 +-
+ .../interrupts_and_exceptions.py              | 96 +++++++++++++++++++
+ 2 files changed, 100 insertions(+), 1 deletion(-)
+
+diff --git a/src/arch/x86/isa/decoder/two_byte_opcodes.isa b/src/arch/x86/isa/decoder/two_byte_opcodes.isa
+index 20fd0ccab3..c50d816a31 100644
+--- a/src/arch/x86/isa/decoder/two_byte_opcodes.isa
++++ b/src/arch/x86/isa/decoder/two_byte_opcodes.isa
+@@ -828,7 +828,10 @@
+                     0x6: decode LEGACY_OP {
+                         0x1: WarnUnimpl::vmclear_Mq();
+                         default: decode LEGACY_REP {
+-                            0x1: WarnUnimpl::vmxon_Mq();
++                            0x1: decode MODRM_MOD {
++                                0x3: SENDUIPI(Rq);
++                                default: WarnUnimpl::vmxon_Mq();
++                            }
+                             0x0: WarnUnimpl::vmptrld_Mq();
+                         }
+                     }
+diff --git a/src/arch/x86/isa/insts/general_purpose/control_transfer/interrupts_and_exceptions.py b/src/arch/x86/isa/insts/general_purpose/control_transfer/interrupts_and_exceptions.py
+index b665855323..dbc3c339f7 100644
+--- a/src/arch/x86/isa/insts/general_purpose/control_transfer/interrupts_and_exceptions.py
++++ b/src/arch/x86/isa/insts/general_purpose/control_transfer/interrupts_and_exceptions.py
+@@ -388,6 +388,102 @@ canonical:
+     limm t1, 1, dataSize=8
+     wrval ctrlRegIdx("misc_reg::Uif"), t1, dataSize=8
+ };
++
++def macroop SENDUIPI_R {
++    # IF reg > UITTSZ;
++    #     THEN #GP(O);
++    # FI;
++    rdval t1, ctrlRegIdx("misc_reg::UintrMisc"), dataSize=4
++    sub t0, reg, t1, dataSize=8, flags=(OF, SF, ZF,)
++    fault "std::make_shared<GeneralProtection>(0)", flags=(nCSxOvZF,)
++
++    # read tempUITTE from 16 bytes at UITTADDR+ (reg « 4);
++    rdval t1, ctrlRegIdx("misc_reg::UintrTT"), dataSize=8
++    limm t2, "~(uint64_t)15", dataSize=8
++    and t1, t1, t2, dataSize=8
++    slli t2, reg, 4, dataSize=8
++    add t1, t1, t2, dataSize=8
++    ld t2, seg, [1, t0, t1], dataSize=8, atCPL0=True
++    ld t3, seg, [1, t0, t1], 8, dataSize=8, atCPL0=True
++
++    # IF tempUITTE.V = 0 or tempUITTE sets any reserved bit
++    #     THEN #GP(0);
++    # FI;
++    andi t0, t2, 1, dataSize=1, flags=(ZF,)
++    fault "std::make_shared<GeneralProtection>(0)", flags=(CZF,)
++    andi t0, t2, 0x7FFFFFFFFFFFE07F, dataSize=8, flags=(ZF,)
++    fault "std::make_shared<GeneralProtection>(0)", flags=(nCZF,)
++
++    # read tempUPID from 16 bytes at tempUITTE.UPIDADDR;// under lock
++    # Note: We don't implement the locking.
++    ld t4, seg, [1, t0, t3], dataSize=8, atCPL0=True
++    ld t5, seg, [1, t0, t3], 8, dataSize=8, atCPL0=True
++
++    # IF tempUPID sets any reserved bits or bits that must be zero
++    #     THEN #GP(0); // release lock
++    # FI;
++    andi t0, t4, 0xFF00FFFC, dataSize=4, flags=(ZF,)
++    fault "std::make_shared<GeneralProtection>(0)", flags=(nCZF,)
++
++    # tempUPID.PIR[tempUITTE.UV] := 1;
++    srli t6, t2, 8, dataSize=2
++    limm t7, 1, dataSize=8
++    sll t7, t7, t6, dataSize=8
++    or t5, t5, t7, dataSize=8
++
++    # IF tempUPID.SN = tempUPID.ON = 0
++    #     THEN
++    #         tempUPID.ON := 1;
++    #         sendNotify := 1;
++    #     ELSE sendNotify := 0;
++    # FI;
++    andi t0, t4, 3, dataSize=1, flags=(ZF,)
++    br label("skipOn"), flags=(nCZF,)
++    ori t4, t4, 1, dataSize=8
++skipOn:
++
++    # write tempUPID to 16 bytes at tempUITTE.UPIDADDR;// release lock
++    st t4, seg, [1, t0, t3], dataSize=8, atCPL0=True
++    st t5, seg, [1, t0, t3], 8, dataSize=8, atCPL0=True
++
++    # IF sendNotify = 1
++    #     THEN
++    #         IF local APIC is in x2APIC mode
++    #             THEN send ordinary IPI with vector tempUPID.NV
++    #                 to 32-bit physical APIC ID tempUPID.NDST;
++    #         ELSE send ordinary IPI with vector tempUPID.NV
++    #             to 8-bit physical APIC ID tempUPID.NDST[15:8];
++    #     FI;
++    # FI;
++
++    eret flags=(nCZF,)
++
++    rdval t6, ctrlRegIdx("misc_reg::ApicBase")
++    andi t0, t6, (1 << 10), dataSize=8, flags=(ZF,)
++    panic "x2APIC is not supported yet", flags=(nCZF,)
++
++    # Put APIC base physical address in t6.
++    andi t6, t6, 0xFFFFFF000, dataSize=8
++
++    # Put the target physical APIC ID in t8.
++    srli t8, t4, 40, dataSize=8
++    andi t8, t8, 0xFF, dataSize=1
++
++    # Write the target physical APIC ID to 0x310.
++    slli t8, t8, 24, dataSize=4
++    st t8, seg, [1, t0, t6], 0x310, dataSize=4, physical=True, uncacheable=True, atCPL0=True
++
++    # Put the vector number in t8.
++    srli t8, t4, 16, dataSize=8
++    andi t8, t8, 0xFF, dataSize=1
++
++    # Send the interrupt.
++    ld t9, seg, [1, t0, t6], 0x300, dataSize=4, physical=True, uncacheable=True, atCPL0=True
++    andi t9, t9, (1 << 12), dataSize=4
++    ori t9, t9, (1 << 14), dataSize=4
++    or t9, t9, t8, dataSize=4
++    st t9, seg, [1, t0, t6], 0x300, dataSize=4, physical=True, uncacheable=True, atCPL0=True
++};
+ """
+ # let {{
+ #    class INT(Inst):
+-- 
+2.52.0
+

@@ -1,7 +1,7 @@
 From 4a6a66a6b38fbd7ea0294ba262ad65c81dc63325 Mon Sep 17 00:00:00 2001
 From: Sohil Mehta <sohil.mehta@intel.com>
 Date: Thu, 8 Sep 2022 13:32:59 -0700
-Subject: [PATCH 09/29] x86/process/64: Clean up uintr task fork and exit paths
+Subject: [PATCH 09/28] x86/process/64: Clean up uintr task fork and exit paths
 
 The user interrupt MSRs and the user interrupt state is task specific.
 During task fork and exit clear the task state, clear the MSRs and

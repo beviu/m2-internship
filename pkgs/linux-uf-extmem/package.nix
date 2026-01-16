@@ -34,15 +34,14 @@ linuxManualConfig rec {
     ./patches/0018-selftests-x86-Add-basic-tests-for-User-IPI.patch
     ./patches/0019-selftests-x86-uintr-Add-a-test-suite-for-UINTR.patch
     ./patches/0020-archive-repository.patch
-    ./patches/0021-x86-Add-X86_FEATURE_UFAULT.patch
-    ./patches/0022-x86-Add-User-Fault-MSR-definitions.patch
-    ./patches/0023-x86-Add-CONFIG_X86_USER_FAULTS.patch
-    ./patches/0024-x86-Add-ufault_register_handler-system-call.patch
-    ./patches/0025-uffd-dax-patch.patch
-    ./patches/0026-dma-request-chans-multi-process-simple.patch
-    ./patches/0027-less-locking-when-copy.patch
-    ./patches/0028-attempt-showing-upcall-path.patch
-    ./patches/0029-attempt-at-showing-full-upcall-path.patch
+    ./patches/0021-x86-cpu-Enumerate-User-Fault-support.patch
+    ./patches/0022-x86-process-64-Add-User-Fault-task-context-switch-su.patch
+    ./patches/0023-x86-ufault-Introduce-ufault_register_handler-syscall.patch
+    ./patches/0024-uffd-dax-patch.patch
+    ./patches/0025-dma-request-chans-multi-process-simple.patch
+    ./patches/0026-less-locking-when-copy.patch
+    ./patches/0027-attempt-showing-upcall-path.patch
+    ./patches/0028-attempt-at-showing-full-upcall-path.patch
   ];
 
   configfile = ./config;

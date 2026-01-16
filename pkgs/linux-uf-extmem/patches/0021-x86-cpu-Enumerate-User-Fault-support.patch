@@ -1,0 +1,180 @@
+From 622b17db0f7259b3a2391ee8ebcc6b7d80509eaa Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Fri, 14 Nov 2025 11:36:18 +0100
+Subject: [PATCH 21/28] x86/cpu: Enumerate User Fault support
+
+---
+ .../admin-guide/kernel-parameters.txt         |  2 +
+ arch/x86/Kconfig                              |  5 +++
+ arch/x86/include/asm/cpufeatures.h            |  1 +
+ arch/x86/include/asm/msr-index.h              |  2 +
+ arch/x86/include/asm/ufault.h                 | 27 ++++++++++++
+ arch/x86/include/uapi/asm/processor-flags.h   |  2 +
+ arch/x86/kernel/cpu/common.c                  | 43 +++++++++++++++++++
+ 7 files changed, 82 insertions(+)
+ create mode 100644 arch/x86/include/asm/ufault.h
+
+diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
+index 37ae1d678a83..6b70078a947c 100644
+--- a/Documentation/admin-guide/kernel-parameters.txt
++++ b/Documentation/admin-guide/kernel-parameters.txt
+@@ -3540,6 +3540,8 @@
+ 
+ 	nofsgsbase	[X86] Disables FSGSBASE instructions.
+ 
++	noufault	[X86-64] Disables User Fault support.
++
+ 	nouintr		[X86-64] Disables User Interrupts support.
+ 
+ 	no_console_suspend
+diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
+index 7cb9155ae9b5..6ee0679789ae 100644
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -1901,6 +1901,11 @@ config X86_UINTR_BLOCKING
+ 	  experimental and flaky. Enable this only if you are specifically
+ 	  testing this. Failures can happen when stressed.
+ 
++config X86_USER_FAULTS
++	bool "User Faults (UFAULT)"
++	depends on X86_64
++	depends on CPU_SUP_INTEL
++
+ choice
+ 	prompt "TSX enable mode"
+ 	depends on CPU_SUP_INTEL
+diff --git a/arch/x86/include/asm/cpufeatures.h b/arch/x86/include/asm/cpufeatures.h
+index a970819bf77e..2f2c0a828554 100644
+--- a/arch/x86/include/asm/cpufeatures.h
++++ b/arch/x86/include/asm/cpufeatures.h
+@@ -391,6 +391,7 @@
+ #define X86_FEATURE_AVX512_4FMAPS	(18*32+ 3) /* AVX-512 Multiply Accumulation Single precision */
+ #define X86_FEATURE_FSRM		(18*32+ 4) /* Fast Short Rep Mov */
+ #define X86_FEATURE_UINTR		(18*32+ 5) /* User Interrupts support */
++#define X86_FEATURE_UFAULT		(18*32+ 6) /* User Faults support */
+ #define X86_FEATURE_AVX512_VP2INTERSECT (18*32+ 8) /* AVX-512 Intersect for D/Q */
+ #define X86_FEATURE_SRBDS_CTRL		(18*32+ 9) /* "" SRBDS mitigation MSR available */
+ #define X86_FEATURE_MD_CLEAR		(18*32+10) /* VERW clears CPU buffers */
+diff --git a/arch/x86/include/asm/msr-index.h b/arch/x86/include/asm/msr-index.h
+index a419fc76b4fc..d4a761d42e9e 100644
+--- a/arch/x86/include/asm/msr-index.h
++++ b/arch/x86/include/asm/msr-index.h
+@@ -458,6 +458,8 @@
+ #define MSR_IA32_UINTR_PD		0x989
+ #define MSR_IA32_UINTR_TT		0x98a
+ 
++#define MSR_IA32_UFAULT_HANDLER	0x99e
++
+ /* CPUID.6.EAX */
+ #define HWP_BASE_BIT			(1<<7)
+ #define HWP_NOTIFICATIONS_BIT		(1<<8)
+diff --git a/arch/x86/include/asm/ufault.h b/arch/x86/include/asm/ufault.h
+new file mode 100644
+index 000000000000..96fb6f796d82
+--- /dev/null
++++ b/arch/x86/include/asm/ufault.h
+@@ -0,0 +1,27 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#ifndef _ASM_X86_UFAULT_H
++#define _ASM_X86_UFAULT_H
++
++#include <linux/types.h>
++
++#ifdef CONFIG_X86_USER_FAULTS
++
++static __always_inline bool testuf(void) {
++	bool uff;
++
++	asm volatile(".long 0xe9010ff3" : "=@ccc"(uff) :: "cc");
++
++	return uff;
++}
++
++static __always_inline void cluf(void) {
++	asm volatile(".long 0xea010ff3" ::: "memory");
++}
++
++static __always_inline void stuf(void) {
++	asm volatile(".long 0xea010ff3" ::: "memory");
++}
++
++#endif /* CONFIG_X86_USER_FAULTS */
++
++#endif /* _ASM_X86_UFAULT_H */
+diff --git a/arch/x86/include/uapi/asm/processor-flags.h b/arch/x86/include/uapi/asm/processor-flags.h
+index c1cb1e39f561..48bf59cea565 100644
+--- a/arch/x86/include/uapi/asm/processor-flags.h
++++ b/arch/x86/include/uapi/asm/processor-flags.h
+@@ -134,6 +134,8 @@
+ #define X86_CR4_CET		_BITUL(X86_CR4_CET_BIT)
+ #define X86_CR4_UINTR_BIT	25 /* enable User Interrupts support */
+ #define X86_CR4_UINTR		_BITUL(X86_CR4_UINTR_BIT)
++#define X86_CR4_UFAULT_BIT	26 /* enable User Fault support */
++#define X86_CR4_UFAULT		_BITUL(X86_CR4_UFAULT_BIT)
+ 
+ /*
+  * x86-64 Task Priority Register, CR8
+diff --git a/arch/x86/kernel/cpu/common.c b/arch/x86/kernel/cpu/common.c
+index 7d61b9260a7b..8c62e7d67c4e 100644
+--- a/arch/x86/kernel/cpu/common.c
++++ b/arch/x86/kernel/cpu/common.c
+@@ -434,6 +434,46 @@ static void setup_uintr(struct cpuinfo_x86 *c)
+ 	cr4_clear_bits(X86_CR4_UINTR);
+ }
+ 
++static __init int setup_disable_ufault(char *arg)
++{
++	/* No additional arguments expected */
++	if (strlen(arg))
++		return 0;
++
++	/* Do not emit a message if the feature is not present. */
++	if (!boot_cpu_has(X86_FEATURE_UFAULT))
++		return 1;
++
++	setup_clear_cpu_cap(X86_FEATURE_UFAULT);
++	pr_info_once("x86: 'noufault' specified, User Fault support disabled\n");
++	return 1;
++}
++__setup("noufault", setup_disable_ufault);
++
++
++static void setup_ufault(struct cpuinfo_x86 *c)
++{
++	/* check the boot processor, plus compile options for UFAULT. */
++	if (!cpu_feature_enabled(X86_FEATURE_UFAULT))
++		goto disable_uintr;
++
++	/* checks the current processor's cpuid bits: */
++	if (!cpu_has(c, X86_FEATURE_UFAULT))
++		goto disable_uintr;
++
++	cr4_set_bits(X86_CR4_UFAULT);
++	pr_info_once("x86: User Faults (UFAULT) enabled\n");
++
++	return;
++
++disable_uintr:
++	/*
++	 * Make sure UFAULT is disabled in case it was enabled in a
++	 * previous boot (e.g., via kexec).
++	 */
++	cr4_clear_bits(X86_CR4_UFAULT);
++}
++
+ static __always_inline void setup_smap(struct cpuinfo_x86 *c)
+ {
+ 	unsigned long eflags = native_save_fl();
+@@ -1889,6 +1929,9 @@ static void identify_cpu(struct cpuinfo_x86 *c)
+ 	/* Set up User Interrupts */
+ 	setup_uintr(c);
+ 
++	/* Set up User Faults */
++	setup_ufault(c);
++
+ 	/* Enable FSGSBASE instructions if available. */
+ 	if (cpu_has(c, X86_FEATURE_FSGSBASE)) {
+ 		cr4_set_bits(X86_CR4_FSGSBASE);
+-- 
+2.52.0
+
