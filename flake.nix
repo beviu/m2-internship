@@ -63,7 +63,7 @@
               linux-uf-extmem
               mmapbench
               simple-mmap-test
-              userfault-test
+              test-user-faults
               ;
           };
           extmem = pkgs.callPackage ./pkgs/extmem/package.nix { inherit m5ops; };
@@ -80,7 +80,7 @@
             inherit m5ops;
           };
           twitter-dataset = pkgs.callPackage ./pkgs/twitter-dataset/package.nix { };
-          userfault-test = pkgs.callPackage ./pkgs/userfault-test/package.nix { };
+          test-user-faults = pkgs.callPackage ./pkgs/test-user-faults/package.nix { };
         }
       );
 

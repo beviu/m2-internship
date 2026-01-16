@@ -13,7 +13,7 @@
   perl,
   runCommand,
   simple-mmap-test,
-  userfault-test,
+  test-user-faults,
   util-linux,
   writeClosure,
   writeScript,
@@ -32,7 +32,7 @@ let
         mmapbench
         perl
         simple-mmap-test
-        userfault-test
+        test-user-faults
         util-linux
       ]
     }
