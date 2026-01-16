@@ -1,22 +1,22 @@
-From de0f8d07cd05c316b2b29a153848261d1a2f3027 Mon Sep 17 00:00:00 2001
+From b1fd9d4b38f89727a9014d8af36a07ffca96100e Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Mon, 5 Jan 2026 14:37:33 +0100
 Subject: [PATCH 16/17] arch-x86: Implement User Fault delivery
 
 Code was written by Berk.
 ---
- src/arch/x86/faults.cc            | 28 ++++++++++++++++++++
+ src/arch/x86/faults.cc            | 31 ++++++++++++++++++++++
  src/arch/x86/faults.hh            | 32 ++++++++++++++++++++++
  src/arch/x86/isa/insts/romutil.py | 44 +++++++++++++++++++++++++++++++
  src/arch/x86/regs/misc.hh         |  1 +
  src/arch/x86/tlb.cc               | 15 ++++++++---
- 5 files changed, 116 insertions(+), 4 deletions(-)
+ 5 files changed, 119 insertions(+), 4 deletions(-)
 
 diff --git a/src/arch/x86/faults.cc b/src/arch/x86/faults.cc
-index fce92b1fb4..f0a428ce7c 100644
+index fce92b1fb4..f06699ad62 100644
 --- a/src/arch/x86/faults.cc
 +++ b/src/arch/x86/faults.cc
-@@ -179,6 +179,34 @@ PageFault::describe() const
+@@ -179,6 +179,37 @@ PageFault::describe() const
      return ss.str();
  }
  
@@ -39,6 +39,9 @@ index fce92b1fb4..f0a428ce7c 100644
 +
 +    Addr cs_base = tc->readMiscRegNoEffect(misc_reg::CsEffBase);
 +    tc->setReg(intRegMicro(7), pc.pc() - cs_base);
++
++    RegVal params = ((uint64_t)code << 60) | ((addr >> 3) << 3);
++    tc->setReg(intRegMicro(15), params);
 +
 +    MicroPC entry = X86ISAInst::rom_labels::extern_label_userFault;
 +    pc.upc(romMicroPC(entry));

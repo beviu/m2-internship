@@ -1,4 +1,4 @@
-From c90cd61a4cd71cbec49e3a0cd7ddae2ec6b2de11 Mon Sep 17 00:00:00 2001
+From 5c15e01344a7056f66a9b4760524b567933e1665 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Mon, 5 Jan 2026 14:50:34 +0100
 Subject: [PATCH 17/17] arch-x86: Advertise User Fault support in CPUID
