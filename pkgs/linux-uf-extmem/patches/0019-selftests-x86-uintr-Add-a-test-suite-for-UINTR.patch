@@ -1,7 +1,7 @@
-From 9a56ee83edfc42c8df41f6983096e8ab1a890ecd Mon Sep 17 00:00:00 2001
+From 337239b653d4a2e205990bbc2784c87c2a6a673b Mon Sep 17 00:00:00 2001
 From: Sohil Mehta <sohil.mehta@intel.com>
 Date: Wed, 7 Sep 2022 12:09:51 -0700
-Subject: [PATCH 19/28] selftests/x86/uintr: Add a test suite for UINTR
+Subject: [PATCH 19/29] selftests/x86/uintr: Add a test suite for UINTR
 
 The test suite currently covers:
 

@@ -1,7 +1,7 @@
-From 5f98356e78b8c545c1dc050513a8d81f3b3ec3e5 Mon Sep 17 00:00:00 2001
+From 4e0814111d0e14cf9dc9742e1179dcc9865cb2d4 Mon Sep 17 00:00:00 2001
 From: Sohil Mehta <sohil.mehta@intel.com>
 Date: Wed, 31 Aug 2022 17:00:43 -0700
-Subject: [PATCH 04/28] x86/cpu: Enumerate User Interrupts support
+Subject: [PATCH 04/29] x86/cpu: Enumerate User Interrupts support
 
 User Interrupts support including user IPIs is enumerated through cpuid.
 The 'uintr' flag in /proc/cpuinfo can be used to identify it. The

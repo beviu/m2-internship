@@ -1,7 +1,7 @@
-From dcaa45afe652b9eb11112cb5a6ca2808b91b8a7e Mon Sep 17 00:00:00 2001
+From 182993f25c27524c555cc694e3d3adf067f7d715 Mon Sep 17 00:00:00 2001
 From: Sohil Mehta <sohil.mehta@intel.com>
 Date: Thu, 8 Sep 2022 15:58:30 -0700
-Subject: [PATCH 15/28] x86/uintr: Wire up the user interrupt syscalls
+Subject: [PATCH 15/29] x86/uintr: Wire up the user interrupt syscalls
 
 Wire up the user interrupt receiver and sender related syscalls for
 x86_64.

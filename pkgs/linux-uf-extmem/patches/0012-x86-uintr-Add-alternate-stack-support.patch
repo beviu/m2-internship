@@ -1,7 +1,7 @@
-From 7e5d7cc89abf027e0f0f402a34b6c47152a1125f Mon Sep 17 00:00:00 2001
+From 80f29fd2ad72546cbe61a421069676c390d57055 Mon Sep 17 00:00:00 2001
 From: Sohil Mehta <sohil.mehta@intel.com>
 Date: Thu, 8 Sep 2022 15:30:43 -0700
-Subject: [PATCH 12/28] x86/uintr: Add alternate stack support
+Subject: [PATCH 12/29] x86/uintr: Add alternate stack support
 
 Alternate stack support is needed when a task want to
 handle the interrupt on an different stack rather than the current one.

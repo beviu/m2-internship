@@ -1,7 +1,7 @@
-From 2d5d5d870f8eb9d0e4f7402d3d4492bcaac2d276 Mon Sep 17 00:00:00 2001
+From b1d435b67211e718fd5487012fe1c09fd4e7156f Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 25 Jul 2025 13:33:10 +0200
-Subject: [PATCH 23/28] x86/ufault: Introduce ufault_register_handler() syscall
+Subject: [PATCH 23/29] x86/ufault: Introduce ufault_register_handler() syscall
 
 ---
  arch/x86/entry/syscalls/syscall_64.tbl |  1 +

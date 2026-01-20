@@ -1,7 +1,7 @@
-From 622b17db0f7259b3a2391ee8ebcc6b7d80509eaa Mon Sep 17 00:00:00 2001
+From 88749f2c03f0876c4203e078a12b2035ce94a5b7 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 14 Nov 2025 11:36:18 +0100
-Subject: [PATCH 21/28] x86/cpu: Enumerate User Fault support
+Subject: [PATCH 21/29] x86/cpu: Enumerate User Fault support
 
 ---
  .../admin-guide/kernel-parameters.txt         |  2 +
