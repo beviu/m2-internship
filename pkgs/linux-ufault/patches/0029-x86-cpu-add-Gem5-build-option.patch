@@ -1,7 +1,7 @@
 From bea2a8195daf025cc6550d22a6fd522532971ea6 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Tue, 20 Jan 2026 13:04:10 +0100
-Subject: [PATCH 29/34] x86/cpu: add Gem5 build option
+Subject: [PATCH 29/29] x86/cpu: add Gem5 build option
 
 ---
  arch/x86/Kconfig.cpu         | 5 +++++

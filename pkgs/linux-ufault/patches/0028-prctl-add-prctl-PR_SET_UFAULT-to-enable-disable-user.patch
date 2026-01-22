@@ -1,7 +1,7 @@
 From b271995347681b02e52e8e5e3e039c7ad5234b4a Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 25 Jul 2025 13:33:10 +0200
-Subject: [PATCH 28/34] prctl: add prctl(PR_SET_UFAULT) to enable/disable user
+Subject: [PATCH 28/29] prctl: add prctl(PR_SET_UFAULT) to enable/disable user
  faults
 
 ---

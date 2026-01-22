@@ -1,7 +1,7 @@
 From 969e42c2657ca86e4ca3beaf1c220e29754af9a6 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Thu, 22 Jan 2026 10:29:47 +0100
-Subject: [PATCH 23/34] x86/process: add lockdep assert to
+Subject: [PATCH 23/29] x86/process: add lockdep assert to
  cr4_toggle_bits_irqoff
 
 ---

@@ -43,11 +43,6 @@ linuxManualConfig rec {
     ./patches/0027-x86-process-add-thread_info-ufault_handler-and-resto.patch
     ./patches/0028-prctl-add-prctl-PR_SET_UFAULT-to-enable-disable-user.patch
     ./patches/0029-x86-cpu-add-Gem5-build-option.patch
-    ./patches/0030-uffd-dax-patch.patch
-    ./patches/0031-dma-request-chans-multi-process-simple.patch
-    ./patches/0032-less-locking-when-copy.patch
-    ./patches/0033-attempt-showing-upcall-path.patch
-    ./patches/0034-attempt-at-showing-full-upcall-path.patch
   ];
 
   configfile = ./config;

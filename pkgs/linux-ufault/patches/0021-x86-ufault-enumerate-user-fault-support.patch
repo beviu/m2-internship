@@ -1,7 +1,7 @@
 From ed10d459e506bb89340dd36813593d81d63e087f Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 14 Nov 2025 11:36:18 +0100
-Subject: [PATCH 21/34] x86/ufault: enumerate user fault support
+Subject: [PATCH 21/29] x86/ufault: enumerate user fault support
 
 ---
  arch/x86/Kconfig                         |  5 +++++

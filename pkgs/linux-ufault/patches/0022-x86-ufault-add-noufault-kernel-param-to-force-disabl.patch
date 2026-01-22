@@ -1,7 +1,7 @@
 From 8a9f2176cafa0f2d11c9c53d5917deed8462f007 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 14 Nov 2025 11:36:18 +0100
-Subject: [PATCH 22/34] x86/ufault: add "noufault" kernel param to force
+Subject: [PATCH 22/29] x86/ufault: add "noufault" kernel param to force
  disable user faults
 
 ---
