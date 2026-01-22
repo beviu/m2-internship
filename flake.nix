@@ -30,7 +30,7 @@
               let
                 gem5-config = pkgs.replaceVars ./gem5-config.py {
                   defaultDiskImage = self.packages.${system}.gem5-disk-image;
-                  defaultKernel = "${self.packages.${system}.linux-uf-extmem.dev}/vmlinux";
+                  defaultKernel = "${self.packages.${system}.linux-ufault.dev}/vmlinux";
                 };
                 script = pkgs.writeShellScript "gem5.sh" ''
                   exec ${lib.getExe self.packages.${system}.gem5} ${gem5-config} "$@"
@@ -49,9 +49,9 @@
         rec {
           gem5 = pkgs.callPackage ./pkgs/gem5/package.nix { };
           gem5-bridge = pkgs.callPackage ./pkgs/gem5-bridge/package.nix {
-            kernel = linux-uf-extmem;
-            kernelModuleMakeFlags = linux-uf-extmem.commonMakeFlags ++ [
-              "KBUILD_OUTPUT=${linux-uf-extmem.dev}/lib/modules/${linux-uf-extmem.modDirVersion}/build"
+            kernel = linux-ufault;
+            kernelModuleMakeFlags = linux-ufault.commonMakeFlags ++ [
+              "KBUILD_OUTPUT=${linux-ufault.dev}/lib/modules/${linux-ufault.modDirVersion}/build"
             ];
           };
           gem5-disk-image = pkgs.callPackage ./pkgs/gem5-disk-image/package.nix {
@@ -60,7 +60,7 @@
               extmem-ufault
               gem5-bridge
               m5ops
-              linux-uf-extmem
+              linux-ufault
               mmapbench
               simple-mmap-test
               test-user-faults
@@ -73,7 +73,7 @@
             withUserFaults = true;
           };
           gapbs = pkgs.callPackage ./pkgs/gapbs/package.nix { };
-          linux-uf-extmem = pkgs.callPackage ./pkgs/linux-uf-extmem/package.nix { };
+          linux-ufault = pkgs.callPackage ./pkgs/linux-ufault/package.nix { };
           m5ops = pkgs.callPackage ./pkgs/m5ops/package.nix { };
           mmapbench = pkgs.callPackage ./pkgs/mmapbench/package.nix { };
           simple-mmap-test = pkgs.callPackage ./pkgs/simple-mmap-test/package.nix {

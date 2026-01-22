@@ -6,7 +6,7 @@
   extmem-ufault,
   gem5-bridge,
   kmod,
-  linux-uf-extmem,
+  linux-ufault,
   lib,
   m5ops,
   mmapbench,
@@ -39,7 +39,7 @@ let
 
     # Load the module that provides /dev/gem5_bridge. It will be used both by
     # the m5 binary and the libm5.a library.
-    insmod ${gem5-bridge}/lib/modules/${linux-uf-extmem.modDirVersion}/gem5/gem5_bridge.ko \
+    insmod ${gem5-bridge}/lib/modules/${linux-ufault.modDirVersion}/gem5/gem5_bridge.ko \
       gem5_bridge_baseaddr=0xffff0000 \
       gem5_bridge_rangesize=0x10000
 

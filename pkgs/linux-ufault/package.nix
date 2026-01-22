@@ -5,7 +5,7 @@
 }:
 
 linuxManualConfig rec {
-  pname = "linux-uf-extmem";
+  pname = "linux-ufault";
   version = "6.0";
 
   src = fetchurl {
