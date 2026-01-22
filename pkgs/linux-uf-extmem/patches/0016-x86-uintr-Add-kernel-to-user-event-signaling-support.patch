@@ -1,7 +1,7 @@
 From 174163b735c38b271defd3a90e27975db32a8a24 Mon Sep 17 00:00:00 2001
 From: Sohil Mehta <sohil.mehta@intel.com>
 Date: Thu, 8 Sep 2022 16:00:36 -0700
-Subject: [PATCH 16/29] x86/uintr: Add kernel to user event signaling support
+Subject: [PATCH 16/34] x86/uintr: Add kernel to user event signaling support
 
 The kernel can use User Interrupts instead of eventfd or signals to
 delivery event notifications in certain cases. Provide a in-kernel

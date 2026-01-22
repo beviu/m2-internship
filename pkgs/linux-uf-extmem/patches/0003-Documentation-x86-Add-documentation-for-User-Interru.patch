@@ -1,7 +1,7 @@
 From 1f12147729ec8eae3453a45db8fbf3bd5831b237 Mon Sep 17 00:00:00 2001
 From: Sohil Mehta <sohil.mehta@intel.com>
 Date: Tue, 25 May 2021 16:57:37 -0700
-Subject: [PATCH 03/29] Documentation/x86: Add documentation for User
+Subject: [PATCH 03/34] Documentation/x86: Add documentation for User
  Interrupts
 
 For now, include just the hardware and software architecture summary.

@@ -1,7 +1,7 @@
 From f25d3f4aad311fa1c954a0961afe7985b7fc2e54 Mon Sep 17 00:00:00 2001
 From: Sohil Mehta <sohil.mehta@intel.com>
 Date: Thu, 8 Sep 2022 15:00:32 -0700
-Subject: [PATCH 10/29] x86/uintr: Introduce vector registration and uvec_fd
+Subject: [PATCH 10/34] x86/uintr: Introduce vector registration and uvec_fd
  syscall
 
 Each receiving task has its own interrupt vector space of 64 vectors.

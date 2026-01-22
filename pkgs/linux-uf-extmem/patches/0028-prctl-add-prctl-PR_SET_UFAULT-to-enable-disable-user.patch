@@ -1,0 +1,154 @@
+From b271995347681b02e52e8e5e3e039c7ad5234b4a Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Fri, 25 Jul 2025 13:33:10 +0200
+Subject: [PATCH 28/34] prctl: add prctl(PR_SET_UFAULT) to enable/disable user
+ faults
+
+---
+ arch/x86/include/asm/ufault.h |  8 ++++++
+ arch/x86/kernel/ufault.c      | 50 +++++++++++++++++++++++++++++++++++
+ include/uapi/linux/prctl.h    |  5 ++++
+ kernel/sys.c                  |  6 +++++
+ 4 files changed, 69 insertions(+)
+
+diff --git a/arch/x86/include/asm/ufault.h b/arch/x86/include/asm/ufault.h
+index b320f575e0e1..d40a776f0fa2 100644
+--- a/arch/x86/include/asm/ufault.h
++++ b/arch/x86/include/asm/ufault.h
+@@ -2,6 +2,7 @@
+ #ifndef _ASM_X86_UFAULT_H
+ #define _ASM_X86_UFAULT_H
+ 
++#include <linux/errno.h>
+ #include <linux/sched.h>
+ #include <linux/types.h>
+ 
+@@ -29,11 +30,18 @@ static __always_inline void stuf(void)
+ void switch_ufault(struct task_struct *prev, struct task_struct *next);
+ void clear_ufault(struct task_struct *task);
+ 
++int prctl_ufault(unsigned long opt, unsigned long arg);
++
+ #else /* !CONFIG_X86_USER_FAULTS */
+ 
+ static inline void switch_ufault(struct task_struct *prev, struct task_struct *next) {}
+ static inline void clear_ufault(struct task_struct *task) {}
+ 
++static inline int prctl_ufault(unsigned long opt, unsigned long arg)
++{
++	return -EINVAL;
++}
++
+ #endif /* CONFIG_X86_USER_FAULTS */
+ 
+ #endif /* _ASM_X86_UFAULT_H */
+diff --git a/arch/x86/kernel/ufault.c b/arch/x86/kernel/ufault.c
+index 1053b15d54e5..ecb67ec61b49 100644
+--- a/arch/x86/kernel/ufault.c
++++ b/arch/x86/kernel/ufault.c
+@@ -1,8 +1,11 @@
+ // SPDX-License-Identifier: GPL-2.0
+ 
++#include <linux/preempt.h>
++#include <linux/prctl.h>
+ #include <linux/sched.h>
+ 
+ #include <asm/cpufeature.h>
++#include <asm/processor-flags.h>
+ #include <asm/tlbflush.h>
+ #include <asm/ufault.h>
+ 
+@@ -39,3 +42,50 @@ void clear_ufault(struct task_struct *task)
+ 	task->thread.ufault_handler = 0;
+ 	task->thread.uff = 0;
+ }
++
++static void disable_ufault(void)
++{
++	preempt_disable();
++	if (test_and_clear_thread_flag(TIF_UFAULT))
++		cr4_clear_bits(X86_CR4_UFAULT);
++	preempt_enable();
++}
++
++static void enable_ufault(void)
++{
++	preempt_disable();
++	if (!test_and_set_thread_flag(TIF_UFAULT))
++		cr4_set_bits(X86_CR4_UFAULT);
++	preempt_enable();
++}
++
++static void set_ufault_handler(unsigned long handler)
++{
++	wrmsrl(MSR_IA32_UFAULT_HANDLER, handler);
++
++	current->thread.ufault_handler = handler;
++}
++
++int prctl_ufault(unsigned long opt, unsigned long arg)
++{
++	if (!cpu_feature_enabled(X86_FEATURE_UFAULT))
++		return -EINVAL;
++
++	switch (opt) {
++	case PR_UFAULT_DISABLE:
++		if (arg)
++			return -EINVAL;
++		disable_ufault();
++		return 0;
++	case PR_UFAULT_ENABLE:
++		set_ufault_handler(arg);
++		enable_ufault();
++		return 0;
++	case PR_UFAULT_STATUS:
++		if (arg)
++			return -EINVAL;
++		return test_tsk_thread_flag(current, TIF_UFAULT);
++	default:
++		return -EINVAL;
++	}
++}
+diff --git a/include/uapi/linux/prctl.h b/include/uapi/linux/prctl.h
+index a5e06dcbba13..ecde56e510ea 100644
+--- a/include/uapi/linux/prctl.h
++++ b/include/uapi/linux/prctl.h
+@@ -281,6 +281,11 @@ struct prctl_mm_map {
+ # define PR_SME_VL_LEN_MASK		0xffff
+ # define PR_SME_VL_INHERIT		(1 << 17) /* inherit across exec */
+ 
++#define PR_UFAULT			65
++# define PR_UFAULT_DISABLE		0
++# define PR_UFAULT_ENABLE		1
++# define PR_UFAULT_STATUS		2
++
+ #define PR_SET_VMA		0x53564d41
+ # define PR_SET_VMA_ANON_NAME		0
+ 
+diff --git a/kernel/sys.c b/kernel/sys.c
+index b911fa6d81ab..37d91cf51a5e 100644
+--- a/kernel/sys.c
++++ b/kernel/sys.c
+@@ -71,6 +71,7 @@
+ 
+ #include <linux/uaccess.h>
+ #include <asm/io.h>
++#include <asm/ufault.h>
+ #include <asm/unistd.h>
+ 
+ #include "uid16.h"
+@@ -2620,6 +2621,11 @@ SYSCALL_DEFINE5(prctl, int, option, unsigned long, arg2, unsigned long, arg3,
+ 		error = sched_core_share_pid(arg2, arg3, arg4, arg5);
+ 		break;
+ #endif
++	case PR_UFAULT:
++		if (arg4 || arg5)
++			return -EINVAL;
++		error = prctl_ufault(arg2, arg3);
++		break;
+ 	case PR_SET_VMA:
+ 		error = prctl_set_vma(arg2, arg3, arg4, arg5);
+ 		break;
+-- 
+2.52.0
+

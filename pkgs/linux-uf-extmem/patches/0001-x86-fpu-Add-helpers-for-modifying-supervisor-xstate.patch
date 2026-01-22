@@ -1,7 +1,7 @@
 From 2e265180a1b1d38bae2b198220bd187bcb438da2 Mon Sep 17 00:00:00 2001
 From: Rick Edgecombe <rick.p.edgecombe@intel.com>
 Date: Fri, 29 Oct 2021 16:11:39 -0700
-Subject: [PATCH 01/29] x86/fpu: Add helpers for modifying supervisor xstate
+Subject: [PATCH 01/34] x86/fpu: Add helpers for modifying supervisor xstate
 
 Add helpers that can be used to modify supervisor xstate safely for the
 current task.

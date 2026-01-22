@@ -1,12 +1,12 @@
-From da426522c367d75ec0f3deedb3535c38a0f49c0f Mon Sep 17 00:00:00 2001
+From bea2a8195daf025cc6550d22a6fd522532971ea6 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Tue, 20 Jan 2026 13:04:10 +0100
-Subject: [PATCH 24/29] x86: Add Gem5-specific changes
+Subject: [PATCH 29/34] x86/cpu: add Gem5 build option
 
 ---
  arch/x86/Kconfig.cpu         | 5 +++++
- arch/x86/kernel/cpu/common.c | 8 ++++++--
- 2 files changed, 11 insertions(+), 2 deletions(-)
+ arch/x86/kernel/cpu/common.c | 4 +++-
+ 2 files changed, 8 insertions(+), 1 deletion(-)
 
 diff --git a/arch/x86/Kconfig.cpu b/arch/x86/Kconfig.cpu
 index 542377cd419d..eaf69595bd37 100644
@@ -25,7 +25,7 @@ index 542377cd419d..eaf69595bd37 100644
  # Define implied options from the CPU selection here
  config X86_INTERNODE_CACHE_SHIFT
 diff --git a/arch/x86/kernel/cpu/common.c b/arch/x86/kernel/cpu/common.c
-index 8c62e7d67c4e..758a87dc7796 100644
+index 85473921989c..8e66f8078237 100644
 --- a/arch/x86/kernel/cpu/common.c
 +++ b/arch/x86/kernel/cpu/common.c
 @@ -418,7 +418,9 @@ static void setup_uintr(struct cpuinfo_x86 *c)
@@ -33,21 +33,10 @@ index 8c62e7d67c4e..758a87dc7796 100644
  	}
  
 -	cr4_set_bits(X86_CR4_UINTR);
-+	/* Gem5 boot the kernel under KVM, and KVM does not know about this bit. */
++	/* Gem5 boots the kernel under KVM, and KVM does not know about this bit. */
 +	if (!IS_ENABLED(CONFIG_X86_GEM5))
 +		cr4_set_bits(X86_CR4_UINTR);
  	pr_info_once("x86: User Interrupts (UINTR) enabled\n");
- 
- 	return;
-@@ -461,7 +463,9 @@ static void setup_ufault(struct cpuinfo_x86 *c)
- 	if (!cpu_has(c, X86_FEATURE_UFAULT))
- 		goto disable_uintr;
- 
--	cr4_set_bits(X86_CR4_UFAULT);
-+	/* Gem5 boot the kernel under KVM, and KVM does not know about this bit. */
-+	if (!IS_ENABLED(CONFIG_X86_GEM5))
-+		cr4_set_bits(X86_CR4_UFAULT);
- 	pr_info_once("x86: User Faults (UFAULT) enabled\n");
  
  	return;
 -- 

@@ -1,0 +1,152 @@
+From 7a3ab7857d69f1a0457fb5d87d5136938886e0d6 Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Fri, 25 Jul 2025 13:33:10 +0200
+Subject: [PATCH 25/34] x86/process: add TIF_UFAULT to track task user fault
+ status
+
+---
+ arch/x86/include/asm/thread_info.h |  2 ++
+ arch/x86/include/asm/ufault.h      | 13 +++++++++++++
+ arch/x86/kernel/Makefile           |  1 +
+ arch/x86/kernel/process.c          |  3 +++
+ arch/x86/kernel/process_64.c       |  3 +++
+ arch/x86/kernel/ufault.c           | 24 ++++++++++++++++++++++++
+ 6 files changed, 46 insertions(+)
+ create mode 100644 arch/x86/kernel/ufault.c
+
+diff --git a/arch/x86/include/asm/thread_info.h b/arch/x86/include/asm/thread_info.h
+index f0cb881c1d69..e3e29dea4a5c 100644
+--- a/arch/x86/include/asm/thread_info.h
++++ b/arch/x86/include/asm/thread_info.h
+@@ -100,6 +100,7 @@ struct thread_info {
+ #define TIF_BLOCKSTEP		25	/* set when we want DEBUGCTLMSR_BTF */
+ #define TIF_LAZY_MMU_UPDATES	27	/* task is updating the mmu lazily */
+ #define TIF_ADDR32		29	/* 32-bit address space on 64 bits */
++#define TIF_UFAULT		30	/* User Faults enabled */
+ 
+ #define _TIF_NOTIFY_RESUME	(1 << TIF_NOTIFY_RESUME)
+ #define _TIF_SIGPENDING		(1 << TIF_SIGPENDING)
+@@ -122,6 +123,7 @@ struct thread_info {
+ #define _TIF_BLOCKSTEP		(1 << TIF_BLOCKSTEP)
+ #define _TIF_LAZY_MMU_UPDATES	(1 << TIF_LAZY_MMU_UPDATES)
+ #define _TIF_ADDR32		(1 << TIF_ADDR32)
++#define _TIF_UFAULT		(1 << TIF_UFAULT)
+ 
+ /* flags to check in __switch_to() */
+ #define _TIF_WORK_CTXSW_BASE					\
+diff --git a/arch/x86/include/asm/ufault.h b/arch/x86/include/asm/ufault.h
+index 9752e79f7a77..b320f575e0e1 100644
+--- a/arch/x86/include/asm/ufault.h
++++ b/arch/x86/include/asm/ufault.h
+@@ -2,6 +2,7 @@
+ #ifndef _ASM_X86_UFAULT_H
+ #define _ASM_X86_UFAULT_H
+ 
++#include <linux/sched.h>
+ #include <linux/types.h>
+ 
+ static __always_inline bool testuf(void)
+@@ -23,4 +24,16 @@ static __always_inline void stuf(void)
+ 	asm volatile(".long 0xea010ff3" ::: "memory");
+ }
+ 
++#ifdef CONFIG_X86_USER_FAULTS
++
++void switch_ufault(struct task_struct *prev, struct task_struct *next);
++void clear_ufault(struct task_struct *task);
++
++#else /* !CONFIG_X86_USER_FAULTS */
++
++static inline void switch_ufault(struct task_struct *prev, struct task_struct *next) {}
++static inline void clear_ufault(struct task_struct *task) {}
++
++#endif /* CONFIG_X86_USER_FAULTS */
++
+ #endif /* _ASM_X86_UFAULT_H */
+diff --git a/arch/x86/kernel/Makefile b/arch/x86/kernel/Makefile
+index 796db2497075..d2b425b2e35f 100644
+--- a/arch/x86/kernel/Makefile
++++ b/arch/x86/kernel/Makefile
+@@ -132,6 +132,7 @@ obj-$(CONFIG_PERF_EVENTS)		+= perf_regs.o
+ obj-$(CONFIG_TRACING)			+= tracepoint.o
+ obj-$(CONFIG_SCHED_MC_PRIO)		+= itmt.o
+ obj-$(CONFIG_X86_USER_INTERRUPTS)	+= uintr.o
++obj-$(CONFIG_X86_USER_FAULTS)	+= ufault.o
+ obj-$(CONFIG_X86_UMIP)			+= umip.o
+ 
+ obj-$(CONFIG_UNWINDER_ORC)		+= unwind_orc.o
+diff --git a/arch/x86/kernel/process.c b/arch/x86/kernel/process.c
+index e006d6fd73bd..c730e2f8fbd4 100644
+--- a/arch/x86/kernel/process.c
++++ b/arch/x86/kernel/process.c
+@@ -27,6 +27,7 @@
+ #include <trace/events/power.h>
+ #include <linux/hw_breakpoint.h>
+ #include <asm/uintr.h>
++#include <asm/ufault.h>
+ #include <asm/cpu.h>
+ #include <asm/apic.h>
+ #include <linux/uaccess.h>
+@@ -106,6 +107,8 @@ int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
+ 	dst->thread.uitt_activated = false;
+ #endif
+ 
++	clear_ufault(dst);
++
+ 	/* Drop the copied pointer to current's fpstate */
+ 	dst->thread.fpu.fpstate = NULL;
+ 
+diff --git a/arch/x86/kernel/process_64.c b/arch/x86/kernel/process_64.c
+index 28d4c3ec3f82..d86ce3f46a51 100644
+--- a/arch/x86/kernel/process_64.c
++++ b/arch/x86/kernel/process_64.c
+@@ -53,6 +53,7 @@
+ #include <asm/xen/hypervisor.h>
+ #include <asm/vdso.h>
+ #include <asm/resctrl.h>
++#include <asm/ufault.h>
+ #include <asm/uintr.h>
+ #include <asm/unistd.h>
+ #include <asm/fsgsbase.h>
+@@ -631,6 +632,8 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
+ 	if (cpu_feature_enabled(X86_FEATURE_UINTR))
+ 		switch_uintr_finish(next_p);
+ 
++	switch_ufault(prev_p, next_p);
++
+ 	switch_to_extra(prev_p, next_p);
+ 
+ 	if (static_cpu_has_bug(X86_BUG_SYSRET_SS_ATTRS)) {
+diff --git a/arch/x86/kernel/ufault.c b/arch/x86/kernel/ufault.c
+new file mode 100644
+index 000000000000..8133e90495a7
+--- /dev/null
++++ b/arch/x86/kernel/ufault.c
+@@ -0,0 +1,24 @@
++// SPDX-License-Identifier: GPL-2.0
++
++#include <linux/sched.h>
++
++#include <asm/cpufeature.h>
++#include <asm/tlbflush.h>
++#include <asm/ufault.h>
++
++void switch_ufault(struct task_struct *prev, struct task_struct *next)
++{
++	bool prev_ufault = test_tsk_thread_flag(prev, TIF_UFAULT);
++	bool next_ufault = test_tsk_thread_flag(next, TIF_UFAULT);
++
++	if (!cpu_feature_enabled(X86_FEATURE_UFAULT))
++		return;
++
++	if (next_ufault != prev_ufault)
++		cr4_toggle_bits_irqsoff(X86_CR4_UFAULT);
++}
++
++void clear_ufault(struct task_struct *task)
++{
++	clear_tsk_thread_flag(task, TIF_UFAULT);
++}
+-- 
+2.52.0
+

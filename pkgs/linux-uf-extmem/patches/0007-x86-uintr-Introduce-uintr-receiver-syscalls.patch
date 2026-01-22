@@ -1,7 +1,7 @@
 From b3aaa7224049123df4ce3c30e6994466ac517408 Mon Sep 17 00:00:00 2001
 From: Sohil Mehta <sohil.mehta@intel.com>
 Date: Tue, 6 Sep 2022 23:10:15 -0700
-Subject: [PATCH 07/29] x86/uintr: Introduce uintr receiver syscalls
+Subject: [PATCH 07/34] x86/uintr: Introduce uintr receiver syscalls
 
 Any application that wants to receive a user interrupt needs to register
 an interrupt handler with the kernel. Add a registration syscall that

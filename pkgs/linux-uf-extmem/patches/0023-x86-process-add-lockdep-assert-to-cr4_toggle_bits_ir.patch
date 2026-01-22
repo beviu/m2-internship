@@ -1,0 +1,26 @@
+From 969e42c2657ca86e4ca3beaf1c220e29754af9a6 Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Thu, 22 Jan 2026 10:29:47 +0100
+Subject: [PATCH 23/34] x86/process: add lockdep assert to
+ cr4_toggle_bits_irqoff
+
+---
+ arch/x86/kernel/process.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/arch/x86/kernel/process.c b/arch/x86/kernel/process.c
+index 0b31c5ebab6e..c5a04f647271 100644
+--- a/arch/x86/kernel/process.c
++++ b/arch/x86/kernel/process.c
+@@ -659,6 +659,8 @@ static inline void cr4_toggle_bits_irqsoff(unsigned long mask)
+ {
+ 	unsigned long newval, cr4 = this_cpu_read(cpu_tlbstate.cr4);
+ 
++	lockdep_assert_irqs_disabled();
++
+ 	newval = cr4 ^ mask;
+ 	if (newval != cr4) {
+ 		this_cpu_write(cpu_tlbstate.cr4, newval);
+-- 
+2.52.0
+

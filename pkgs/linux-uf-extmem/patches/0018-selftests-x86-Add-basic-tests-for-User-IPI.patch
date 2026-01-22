@@ -1,7 +1,7 @@
 From 20752410cea79fb068bf5f495e4f6a771016ecae Mon Sep 17 00:00:00 2001
 From: Sohil Mehta <sohil.mehta@intel.com>
 Date: Wed, 7 Sep 2022 11:58:14 -0700
-Subject: [PATCH 18/29] selftests/x86: Add basic tests for User IPI
+Subject: [PATCH 18/34] selftests/x86: Add basic tests for User IPI
 
 Include 2 basic tests for receiving a User IPI:
 1. Receiver is spinning in userspace.

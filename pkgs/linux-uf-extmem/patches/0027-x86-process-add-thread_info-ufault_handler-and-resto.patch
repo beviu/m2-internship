@@ -1,0 +1,61 @@
+From ab1d67e4bdc34a590d404d945568f9f142e06ac8 Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Thu, 22 Jan 2026 11:46:46 +0100
+Subject: [PATCH 27/34] x86/process: add thread_info::ufault_handler and
+ restore during context switch
+
+---
+ arch/x86/include/asm/processor.h |  4 ++++
+ arch/x86/kernel/ufault.c         | 15 ++++++++++-----
+ 2 files changed, 14 insertions(+), 5 deletions(-)
+
+diff --git a/arch/x86/include/asm/processor.h b/arch/x86/include/asm/processor.h
+index 37b83132b44e..c07dbf5905da 100644
+--- a/arch/x86/include/asm/processor.h
++++ b/arch/x86/include/asm/processor.h
+@@ -495,6 +495,10 @@ struct thread_struct {
+ 	unsigned long gs;
+ #endif
+ 
++#ifdef CONFIG_X86_USER_FAULTS
++	unsigned long		ufault_handler;
++#endif
++
+ 	/* Save middle states of ptrace breakpoints */
+ 	struct perf_event	*ptrace_bps[HBP_NUM];
+ 	/* Debug status used for traps, single steps, etc... */
+diff --git a/arch/x86/kernel/ufault.c b/arch/x86/kernel/ufault.c
+index db6854c9fea5..1053b15d54e5 100644
+--- a/arch/x86/kernel/ufault.c
++++ b/arch/x86/kernel/ufault.c
+@@ -20,11 +20,15 @@ void switch_ufault(struct task_struct *prev, struct task_struct *next)
+ 	if (prev_ufault)
+ 		prev->thread.uff = testuf();
+ 
+-	if (next_ufault && next->thread.uff != prev->thread.uff) {
+-		if (next->thread.uff)
+-			stuf();
+-		else
+-			cluf();
++	if (next_ufault) {
++		wrmsrl(MSR_IA32_UFAULT_HANDLER, next->thread.ufault_handler);
++
++		if (next->thread.uff != prev->thread.uff) {
++			if (next->thread.uff)
++				stuf();
++			else
++				cluf();
++		}
+ 	}
+ }
+ 
+@@ -32,5 +36,6 @@ void clear_ufault(struct task_struct *task)
+ {
+ 	clear_tsk_thread_flag(task, TIF_UFAULT);
+ 
++	task->thread.ufault_handler = 0;
+ 	task->thread.uff = 0;
+ }
+-- 
+2.52.0
+

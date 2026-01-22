@@ -1,0 +1,74 @@
+From 20db690275c30f88fb63f0438eaa2e8ecaca7801 Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Fri, 25 Jul 2025 13:33:10 +0200
+Subject: [PATCH 24/34] x86/cpu: move cr4_toggle_bits_irqoffs to asm/tlbflush.h
+
+---
+ arch/x86/include/asm/tlbflush.h |  1 +
+ arch/x86/kernel/cpu/common.c    | 13 +++++++++++++
+ arch/x86/kernel/process.c       | 13 -------------
+ 3 files changed, 14 insertions(+), 13 deletions(-)
+
+diff --git a/arch/x86/include/asm/tlbflush.h b/arch/x86/include/asm/tlbflush.h
+index cda3118f3b27..fc8708e65b0a 100644
+--- a/arch/x86/include/asm/tlbflush.h
++++ b/arch/x86/include/asm/tlbflush.h
+@@ -19,6 +19,7 @@ void __flush_tlb_all(void);
+ #define TLB_GENERATION_INVALID	0
+ 
+ void cr4_update_irqsoff(unsigned long set, unsigned long clear);
++void cr4_toggle_bits_irqsoff(unsigned long mask);
+ unsigned long cr4_read_shadow(void);
+ 
+ /* Set in this cpu's CR4. */
+diff --git a/arch/x86/kernel/cpu/common.c b/arch/x86/kernel/cpu/common.c
+index 4815405a8da2..85473921989c 100644
+--- a/arch/x86/kernel/cpu/common.c
++++ b/arch/x86/kernel/cpu/common.c
+@@ -559,6 +559,19 @@ void cr4_update_irqsoff(unsigned long set, unsigned long clear)
+ }
+ EXPORT_SYMBOL(cr4_update_irqsoff);
+ 
++void cr4_toggle_bits_irqsoff(unsigned long mask)
++{
++	unsigned long newval, cr4 = this_cpu_read(cpu_tlbstate.cr4);
++
++	lockdep_assert_irqs_disabled();
++
++	newval = cr4 ^ mask;
++	if (newval != cr4) {
++		this_cpu_write(cpu_tlbstate.cr4, newval);
++		__write_cr4(newval);
++	}
++}
++
+ /* Read the CR4 shadow. */
+ unsigned long cr4_read_shadow(void)
+ {
+diff --git a/arch/x86/kernel/process.c b/arch/x86/kernel/process.c
+index c5a04f647271..e006d6fd73bd 100644
+--- a/arch/x86/kernel/process.c
++++ b/arch/x86/kernel/process.c
+@@ -655,19 +655,6 @@ void speculation_ctrl_update_current(void)
+ 	preempt_enable();
+ }
+ 
+-static inline void cr4_toggle_bits_irqsoff(unsigned long mask)
+-{
+-	unsigned long newval, cr4 = this_cpu_read(cpu_tlbstate.cr4);
+-
+-	lockdep_assert_irqs_disabled();
+-
+-	newval = cr4 ^ mask;
+-	if (newval != cr4) {
+-		this_cpu_write(cpu_tlbstate.cr4, newval);
+-		__write_cr4(newval);
+-	}
+-}
+-
+ void __switch_to_xtra(struct task_struct *prev_p, struct task_struct *next_p)
+ {
+ 	unsigned long tifp, tifn;
+-- 
+2.52.0
+

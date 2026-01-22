@@ -1,0 +1,56 @@
+From 0e478a8cb9cc8b8f956a26259c733ff440ab8bb0 Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Fri, 25 Jul 2025 13:33:10 +0200
+Subject: [PATCH 26/34] x86/process: save and restore UFF during context switch
+
+---
+ arch/x86/include/asm/processor.h |  6 ++++++
+ arch/x86/kernel/ufault.c         | 12 ++++++++++++
+ 2 files changed, 18 insertions(+)
+
+diff --git a/arch/x86/include/asm/processor.h b/arch/x86/include/asm/processor.h
+index 0859583f7192..37b83132b44e 100644
+--- a/arch/x86/include/asm/processor.h
++++ b/arch/x86/include/asm/processor.h
+@@ -522,6 +522,12 @@ struct thread_struct {
+ 	unsigned int		iopl_warn:1;
+ 	unsigned int		sig_on_uaccess_err:1;
+ 
++#ifdef CONFIG_X86_USER_FAULTS
++	/* The User Fault Flag is a user-space flag that needs to be set in addition
++	   to the CR4.UFAULT bit to enable User Faults. */
++	unsigned int		uff:1;
++#endif
++
+ #ifdef CONFIG_X86_USER_INTERRUPTS
+ 	/* User Interrupt state*/
+ 
+diff --git a/arch/x86/kernel/ufault.c b/arch/x86/kernel/ufault.c
+index 8133e90495a7..db6854c9fea5 100644
+--- a/arch/x86/kernel/ufault.c
++++ b/arch/x86/kernel/ufault.c
+@@ -16,9 +16,21 @@ void switch_ufault(struct task_struct *prev, struct task_struct *next)
+ 
+ 	if (next_ufault != prev_ufault)
+ 		cr4_toggle_bits_irqsoff(X86_CR4_UFAULT);
++
++	if (prev_ufault)
++		prev->thread.uff = testuf();
++
++	if (next_ufault && next->thread.uff != prev->thread.uff) {
++		if (next->thread.uff)
++			stuf();
++		else
++			cluf();
++	}
+ }
+ 
+ void clear_ufault(struct task_struct *task)
+ {
+ 	clear_tsk_thread_flag(task, TIF_UFAULT);
++
++	task->thread.uff = 0;
+ }
+-- 
+2.52.0
+

@@ -1,7 +1,7 @@
 From 6df1a1184e87f1615b40799f6f2cf99420565d7c Mon Sep 17 00:00:00 2001
 From: Sohil Mehta <sohil.mehta@intel.com>
 Date: Wed, 7 Sep 2022 12:22:31 -0700
-Subject: [PATCH 08/29] x86/process/64: Add uintr task context switch support
+Subject: [PATCH 08/34] x86/process/64: Add uintr task context switch support
 
 User interrupt state is saved and restored using xstate supervisor
 feature support. This includes the MSR state and the User Interrupt Flag

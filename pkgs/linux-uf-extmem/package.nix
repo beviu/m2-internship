@@ -33,16 +33,21 @@ linuxManualConfig rec {
     ./patches/0017-io_uring-add-x86-uintr-support-to-io_uring.patch
     ./patches/0018-selftests-x86-Add-basic-tests-for-User-IPI.patch
     ./patches/0019-selftests-x86-uintr-Add-a-test-suite-for-UINTR.patch
-    ./patches/0020-archive-repository.patch
-    ./patches/0021-x86-cpu-Enumerate-User-Fault-support.patch
-    ./patches/0022-x86-process-64-Add-User-Fault-task-context-switch-su.patch
-    ./patches/0023-x86-ufault-Introduce-ufault_register_handler-syscall.patch
-    ./patches/0024-x86-Add-Gem5-specific-changes.patch
-    ./patches/0025-uffd-dax-patch.patch
-    ./patches/0026-dma-request-chans-multi-process-simple.patch
-    ./patches/0027-less-locking-when-copy.patch
-    ./patches/0028-attempt-showing-upcall-path.patch
-    ./patches/0029-attempt-at-showing-full-upcall-path.patch
+    ./patches/0020-x86-ufault-add-user-fault-defines-and-instructions.patch
+    ./patches/0021-x86-ufault-enumerate-user-fault-support.patch
+    ./patches/0022-x86-ufault-add-noufault-kernel-param-to-force-disabl.patch
+    ./patches/0023-x86-process-add-lockdep-assert-to-cr4_toggle_bits_ir.patch
+    ./patches/0024-x86-cpu-move-cr4_toggle_bits_irqoffs-to-asm-tlbflush.patch
+    ./patches/0025-x86-process-add-TIF_UFAULT-to-track-task-user-fault-.patch
+    ./patches/0026-x86-process-save-and-restore-UFF-during-context-swit.patch
+    ./patches/0027-x86-process-add-thread_info-ufault_handler-and-resto.patch
+    ./patches/0028-prctl-add-prctl-PR_SET_UFAULT-to-enable-disable-user.patch
+    ./patches/0029-x86-cpu-add-Gem5-build-option.patch
+    ./patches/0030-uffd-dax-patch.patch
+    ./patches/0031-dma-request-chans-multi-process-simple.patch
+    ./patches/0032-less-locking-when-copy.patch
+    ./patches/0033-attempt-showing-upcall-path.patch
+    ./patches/0034-attempt-at-showing-full-upcall-path.patch
   ];
 
   configfile = ./config;
