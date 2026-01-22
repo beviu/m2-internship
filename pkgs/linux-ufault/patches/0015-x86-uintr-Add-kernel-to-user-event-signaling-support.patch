@@ -1,7 +1,7 @@
-From 174163b735c38b271defd3a90e27975db32a8a24 Mon Sep 17 00:00:00 2001
+From 7544d69c930f090493b725c245408ebcc1032e28 Mon Sep 17 00:00:00 2001
 From: Sohil Mehta <sohil.mehta@intel.com>
 Date: Thu, 8 Sep 2022 16:00:36 -0700
-Subject: [PATCH 16/29] x86/uintr: Add kernel to user event signaling support
+Subject: [PATCH 15/28] x86/uintr: Add kernel to user event signaling support
 
 The kernel can use User Interrupts instead of eventfd or signals to
 delivery event notifications in certain cases. Provide a in-kernel
@@ -26,23 +26,22 @@ Signed-off-by: Sohil Mehta <sohil.mehta@intel.com>
 ---
  arch/x86/include/asm/apic.h           |   4 +
  arch/x86/include/asm/uintr.h          |   8 ++
- arch/x86/kernel/apic/apic_flat_64.c   |   5 ++
+ arch/x86/kernel/apic/apic_flat_64.c   |   3 +
  arch/x86/kernel/apic/apic_noop.c      |   2 +
  arch/x86/kernel/apic/apic_numachip.c  |   4 +
- arch/x86/kernel/apic/bigsmp_32.c      |   2 +
  arch/x86/kernel/apic/ipi.c            |  11 +++
  arch/x86/kernel/apic/local.h          |   3 +
- arch/x86/kernel/apic/x2apic_cluster.c |  14 +++
- arch/x86/kernel/apic/x2apic_phys.c    |  13 +++
+ arch/x86/kernel/apic/x2apic_cluster.c |  15 ++++
+ arch/x86/kernel/apic/x2apic_phys.c    |  14 +++
  arch/x86/kernel/apic/x2apic_uv_x.c    |   2 +
  arch/x86/kernel/uintr.c               | 121 ++++++++++++++++++++++++++
- 12 files changed, 189 insertions(+)
+ 11 files changed, 187 insertions(+)
 
 diff --git a/arch/x86/include/asm/apic.h b/arch/x86/include/asm/apic.h
-index 3415321c8240..63c6843e7cec 100644
+index a26e66d66444..e1a369a93525 100644
 --- a/arch/x86/include/asm/apic.h
 +++ b/arch/x86/include/asm/apic.h
-@@ -295,6 +295,10 @@ struct apic {
+@@ -289,6 +289,10 @@ struct apic {
  	void	(*send_IPI_all)(int vector);
  	void	(*send_IPI_self)(int vector);
  
@@ -50,9 +49,9 @@ index 3415321c8240..63c6843e7cec 100644
 +	/* Check: Is ndst the right name? */
 +	void	(*send_UINTR)(u32 ndst, int vector);
 +
- 	u32	disable_esr;
- 
- 	enum apic_delivery_modes delivery_mode;
+ 	u32	disable_esr		: 1,
+ 		dest_mode_logical	: 1,
+ 		x2apic_set_max_apicid	: 1,
 diff --git a/arch/x86/include/asm/uintr.h b/arch/x86/include/asm/uintr.h
 index 17a6ddaa58bd..d7b3ce46eb37 100644
 --- a/arch/x86/include/asm/uintr.h
@@ -80,33 +79,24 @@ index 17a6ddaa58bd..d7b3ce46eb37 100644
  static inline void switch_uintr_return(void) {}
  static inline void switch_uintr_finish(struct task_struct *next) {}
 diff --git a/arch/x86/kernel/apic/apic_flat_64.c b/arch/x86/kernel/apic/apic_flat_64.c
-index 8f72b4351c9f..09994da99933 100644
+index e0308d8c4e6c..e738115d7389 100644
 --- a/arch/x86/kernel/apic/apic_flat_64.c
 +++ b/arch/x86/kernel/apic/apic_flat_64.c
-@@ -139,6 +139,9 @@ static struct apic apic_flat __ro_after_init = {
+@@ -52,6 +52,9 @@ static struct apic apic_physflat __ro_after_init = {
+ 	.send_IPI_allbutself		= default_send_IPI_allbutself,
  	.send_IPI_all			= default_send_IPI_all,
  	.send_IPI_self			= default_send_IPI_self,
- 
-+	/* Check: If phys mode can be used even if apic is in flat mode? */
++
 +	.send_UINTR			= default_send_UINTR_single_phys,
 +
- 	.inquire_remote_apic		= default_inquire_remote_apic,
- 
- 	.read				= native_apic_mem_read,
-@@ -230,6 +233,8 @@ static struct apic apic_physflat __ro_after_init = {
- 	.send_IPI_all			= default_send_IPI_all,
- 	.send_IPI_self			= default_send_IPI_self,
- 
-+	.send_UINTR			= default_send_UINTR_single_phys,
-+
- 	.inquire_remote_apic		= default_inquire_remote_apic,
+ 	.nmi_to_offline_cpu		= true,
  
  	.read				= native_apic_mem_read,
 diff --git a/arch/x86/kernel/apic/apic_noop.c b/arch/x86/kernel/apic/apic_noop.c
-index fe78319e0f7a..3b9f5aa46fa4 100644
+index 58abb941c45b..ff35f2dca63f 100644
 --- a/arch/x86/kernel/apic/apic_noop.c
 +++ b/arch/x86/kernel/apic/apic_noop.c
-@@ -123,6 +123,8 @@ struct apic apic_noop __ro_after_init = {
+@@ -70,6 +70,8 @@ struct apic apic_noop __ro_after_init = {
  	.send_IPI_all			= noop_send_IPI_all,
  	.send_IPI_self			= noop_send_IPI_self,
  
@@ -114,48 +104,35 @@ index fe78319e0f7a..3b9f5aa46fa4 100644
 +
  	.wakeup_secondary_cpu		= noop_wakeup_secondary_cpu,
  
- 	.inquire_remote_apic		= NULL,
+ 	.read				= noop_apic_read,
 diff --git a/arch/x86/kernel/apic/apic_numachip.c b/arch/x86/kernel/apic/apic_numachip.c
-index a54d817eb4b6..da11e6bd963f 100644
+index 5c5be2d58242..a842374d5283 100644
 --- a/arch/x86/kernel/apic/apic_numachip.c
 +++ b/arch/x86/kernel/apic/apic_numachip.c
-@@ -272,6 +272,8 @@ static const struct apic apic_numachip1 __refconst = {
+@@ -226,6 +226,8 @@ static const struct apic apic_numachip1 __refconst = {
  	.send_IPI_all			= numachip_send_IPI_all,
  	.send_IPI_self			= numachip_send_IPI_self,
  
 +	.send_UINTR			= NULL,
 +
  	.wakeup_secondary_cpu		= numachip_wakeup_secondary,
- 	.inquire_remote_apic		= NULL, /* REMRD not supported */
  
-@@ -319,6 +321,8 @@ static const struct apic apic_numachip2 __refconst = {
+ 	.read				= native_apic_mem_read,
+@@ -260,6 +262,8 @@ static const struct apic apic_numachip2 __refconst = {
  	.send_IPI_all			= numachip_send_IPI_all,
  	.send_IPI_self			= numachip_send_IPI_self,
  
 +	.send_UINTR			= NULL,
 +
  	.wakeup_secondary_cpu		= numachip_wakeup_secondary,
- 	.inquire_remote_apic		= NULL, /* REMRD not supported */
- 
-diff --git a/arch/x86/kernel/apic/bigsmp_32.c b/arch/x86/kernel/apic/bigsmp_32.c
-index 77555f66c14d..3d73962ffb6d 100644
---- a/arch/x86/kernel/apic/bigsmp_32.c
-+++ b/arch/x86/kernel/apic/bigsmp_32.c
-@@ -153,6 +153,8 @@ static struct apic apic_bigsmp __ro_after_init = {
- 	.send_IPI_all			= bigsmp_send_IPI_all,
- 	.send_IPI_self			= default_send_IPI_self,
- 
-+	.send_UINTR			= NULL,
-+
- 	.inquire_remote_apic		= default_inquire_remote_apic,
  
  	.read				= native_apic_mem_read,
 diff --git a/arch/x86/kernel/apic/ipi.c b/arch/x86/kernel/apic/ipi.c
-index 2a6509e8c840..923cafde7ec5 100644
+index 98a57cb4aa86..9802229e2f02 100644
 --- a/arch/x86/kernel/apic/ipi.c
 +++ b/arch/x86/kernel/apic/ipi.c
-@@ -172,6 +172,17 @@ void __default_send_IPI_dest_field(unsigned int mask, int vector, unsigned int d
- 	native_apic_mem_write(APIC_ICR, cfg);
+@@ -186,6 +186,17 @@ void __default_send_IPI_dest_field(unsigned int dest_mask, int vector,
+ 	native_apic_mem_write(APIC_ICR, __prepare_ICR(0, vector, dest_mode));
  }
  
 +void default_send_UINTR_single_phys(u32 ndst, int vector)
@@ -173,12 +150,12 @@ index 2a6509e8c840..923cafde7ec5 100644
  {
  	unsigned long flags;
 diff --git a/arch/x86/kernel/apic/local.h b/arch/x86/kernel/apic/local.h
-index a997d849509a..38347bce0fb6 100644
+index bdcf609eb283..1b0b41b59b8f 100644
 --- a/arch/x86/kernel/apic/local.h
 +++ b/arch/x86/kernel/apic/local.h
-@@ -26,6 +26,9 @@ int x2apic_phys_pkg_id(int initial_apicid, int index_msb);
+@@ -22,6 +22,9 @@ void x2apic_send_IPI_allbutself(int vector);
  void x2apic_send_IPI_self(int vector);
- void __x2apic_send_IPI_shorthand(int vector, u32 which);
+ extern u32 x2apic_max_apicid;
  
 +/* UINTR */
 +void default_send_UINTR_single_phys(u32 ndst, int vector);
@@ -187,10 +164,10 @@ index a997d849509a..38347bce0fb6 100644
  
  DECLARE_STATIC_KEY_FALSE(apic_use_ipi_shorthand);
 diff --git a/arch/x86/kernel/apic/x2apic_cluster.c b/arch/x86/kernel/apic/x2apic_cluster.c
-index e696e22d0531..3bfad95dd2b2 100644
+index 7db83212effb..7c4d4eeff55f 100644
 --- a/arch/x86/kernel/apic/x2apic_cluster.c
 +++ b/arch/x86/kernel/apic/x2apic_cluster.c
-@@ -31,6 +31,17 @@ static int x2apic_acpi_madt_oem_check(char *oem_id, char *oem_table_id)
+@@ -26,6 +26,17 @@ static int x2apic_acpi_madt_oem_check(char *oem_id, char *oem_table_id)
  	return x2apic_enabled();
  }
  
@@ -208,21 +185,22 @@ index e696e22d0531..3bfad95dd2b2 100644
  static void x2apic_send_IPI(int cpu, int vector)
  {
  	u32 dest = x86_cpu_to_logical_apicid[cpu];
-@@ -227,6 +238,9 @@ static struct apic apic_x2apic_cluster __ro_after_init = {
+@@ -249,6 +260,10 @@ static struct apic apic_x2apic_cluster __ro_after_init = {
+ 	.send_IPI_allbutself		= x2apic_send_IPI_allbutself,
  	.send_IPI_all			= x2apic_send_IPI_all,
  	.send_IPI_self			= x2apic_send_IPI_self,
- 
++
 +	/* Check: If phys mode can be used even if apic is in flat mode? */
 +	.send_UINTR			= x2apic_send_UINTR,
 +
- 	.inquire_remote_apic		= NULL,
+ 	.nmi_to_offline_cpu		= true,
  
  	.read				= native_apic_msr_read,
 diff --git a/arch/x86/kernel/apic/x2apic_phys.c b/arch/x86/kernel/apic/x2apic_phys.c
-index 6bde05a86b4e..72a6a801ec54 100644
+index 12d4c35547a6..fe7631db7046 100644
 --- a/arch/x86/kernel/apic/x2apic_phys.c
 +++ b/arch/x86/kernel/apic/x2apic_phys.c
-@@ -39,6 +39,17 @@ static int x2apic_acpi_madt_oem_check(char *oem_id, char *oem_table_id)
+@@ -41,6 +41,17 @@ static int x2apic_acpi_madt_oem_check(char *oem_id, char *oem_table_id)
  	return x2apic_enabled() && (x2apic_phys || x2apic_fadt_phys());
  }
  
@@ -240,33 +218,34 @@ index 6bde05a86b4e..72a6a801ec54 100644
  static void x2apic_send_IPI(int cpu, int vector)
  {
  	u32 dest = per_cpu(x86_cpu_to_apicid, cpu);
-@@ -186,6 +197,8 @@ static struct apic apic_x2apic_phys __ro_after_init = {
+@@ -153,6 +164,9 @@ static struct apic apic_x2apic_phys __ro_after_init = {
+ 	.send_IPI_allbutself		= x2apic_send_IPI_allbutself,
  	.send_IPI_all			= x2apic_send_IPI_all,
  	.send_IPI_self			= x2apic_send_IPI_self,
- 
++
 +	.send_UINTR			= x2apic_send_UINTR,
 +
- 	.inquire_remote_apic		= NULL,
+ 	.nmi_to_offline_cpu		= true,
  
  	.read				= native_apic_msr_read,
 diff --git a/arch/x86/kernel/apic/x2apic_uv_x.c b/arch/x86/kernel/apic/x2apic_uv_x.c
-index 482855227964..0bc15ac48400 100644
+index 15209f220e1f..8b7da03cebd1 100644
 --- a/arch/x86/kernel/apic/x2apic_uv_x.c
 +++ b/arch/x86/kernel/apic/x2apic_uv_x.c
-@@ -860,6 +860,8 @@ static struct apic apic_x2apic_uv_x __ro_after_init = {
+@@ -774,6 +774,8 @@ static struct apic apic_x2apic_uv_x __ro_after_init = {
  	.send_IPI_all			= uv_send_IPI_all,
- 	.send_IPI_self			= uv_send_IPI_self,
+ 	.send_IPI_self			= x2apic_send_IPI_self,
  
 +	.send_UINTR			= NULL,
 +
  	.wakeup_secondary_cpu		= uv_wakeup_secondary,
- 	.inquire_remote_apic		= NULL,
  
+ 	.read				= native_apic_msr_read,
 diff --git a/arch/x86/kernel/uintr.c b/arch/x86/kernel/uintr.c
-index 20a800b142bf..ecef63974f68 100644
+index cd9695127161..7f4875993f46 100644
 --- a/arch/x86/kernel/uintr.c
 +++ b/arch/x86/kernel/uintr.c
-@@ -1112,6 +1112,127 @@ SYSCALL_DEFINE3(uintr_alt_stack, void __user *, sp, size_t, size, unsigned int,
+@@ -1108,6 +1108,127 @@ SYSCALL_DEFINE3(uintr_alt_stack, void __user *, sp, size_t, size, unsigned int,
  	return ret;
  }
  

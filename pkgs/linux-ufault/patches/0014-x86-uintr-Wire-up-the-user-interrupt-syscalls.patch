@@ -1,7 +1,7 @@
-From 182993f25c27524c555cc694e3d3adf067f7d715 Mon Sep 17 00:00:00 2001
+From c87c93bc66d488301e3a559148538d6130f4c85c Mon Sep 17 00:00:00 2001
 From: Sohil Mehta <sohil.mehta@intel.com>
 Date: Thu, 8 Sep 2022 15:58:30 -0700
-Subject: [PATCH 15/29] x86/uintr: Wire up the user interrupt syscalls
+Subject: [PATCH 14/28] x86/uintr: Wire up the user interrupt syscalls
 
 Wire up the user interrupt receiver and sender related syscalls for
 x86_64.
@@ -18,22 +18,31 @@ For rest of the architectures the syscalls are not implemented.
 
 Signed-off-by: Sohil Mehta <sohil.mehta@intel.com>
 ---
- arch/x86/entry/syscalls/syscall_32.tbl | 10 ++++++++++
+ arch/x86/entry/syscalls/syscall_32.tbl | 12 ++++++++++++
  arch/x86/entry/syscalls/syscall_64.tbl | 10 ++++++++++
- include/linux/syscalls.h               | 11 +++++++++++
+ include/linux/syscalls.h               | 13 +++++++++----
  include/uapi/asm-generic/unistd.h      | 25 ++++++++++++++++++++++++-
  kernel/sys_ni.c                        | 11 +++++++++++
  scripts/checksyscalls.sh               |  9 +++++++++
- 6 files changed, 75 insertions(+), 1 deletion(-)
+ 6 files changed, 75 insertions(+), 5 deletions(-)
 
 diff --git a/arch/x86/entry/syscalls/syscall_32.tbl b/arch/x86/entry/syscalls/syscall_32.tbl
-index 320480a8db4f..30758a7bb589 100644
+index e979a3eac7a3..38aaae60e0a4 100644
 --- a/arch/x86/entry/syscalls/syscall_32.tbl
 +++ b/arch/x86/entry/syscalls/syscall_32.tbl
-@@ -455,3 +455,13 @@
+@@ -456,6 +456,8 @@
  448	i386	process_mrelease	sys_process_mrelease
  449	i386	futex_waitv		sys_futex_waitv
  450	i386	set_mempolicy_home_node		sys_set_mempolicy_home_node
++<<<<<<< conflict 1 of 1
+++++++++ nynontlr 0968f96c "x86/uintr: Introduce uintr_wait() syscall" (rebased revision)
+ 451	i386	cachestat		sys_cachestat
+ 452	i386	fchmodat2		sys_fchmodat2
+ 453	i386	map_shadow_stack	sys_map_shadow_stack
+@@ -476,3 +478,13 @@
+ 468	i386	file_getattr		sys_file_getattr
+ 469	i386	file_setattr		sys_file_setattr
+ 470	i386	listns			sys_listns
 +# Start UINTR syscalls at 471 to avoid upstream merge conflicts during development
 +471	i386	uintr_register_handler	sys_uintr_register_handler
 +472	i386	uintr_unregister_handler sys_uintr_unregister_handler
@@ -45,13 +54,13 @@ index 320480a8db4f..30758a7bb589 100644
 +488	i386	uintr_alt_stack		sys_uintr_alt_stack
 +489	i386	uintr_ipi_fd		sys_uintr_ipi_fd
 diff --git a/arch/x86/entry/syscalls/syscall_64.tbl b/arch/x86/entry/syscalls/syscall_64.tbl
-index c84d12608cd2..4ca4f4a3d60c 100644
+index 8a4ac4841be6..a4aee92f07ca 100644
 --- a/arch/x86/entry/syscalls/syscall_64.tbl
 +++ b/arch/x86/entry/syscalls/syscall_64.tbl
-@@ -372,6 +372,16 @@
- 448	common	process_mrelease	sys_process_mrelease
- 449	common	futex_waitv		sys_futex_waitv
- 450	common	set_mempolicy_home_node	sys_set_mempolicy_home_node
+@@ -395,6 +395,16 @@
+ 468	common	file_getattr		sys_file_getattr
+ 469	common	file_setattr		sys_file_setattr
+ 470	common	listns			sys_listns
 +# Start UINTR syscalls at 471 to avoid upstream merge conflicts during development
 +471	common	uintr_register_handler	sys_uintr_register_handler
 +472	common	uintr_unregister_handler sys_uintr_unregister_handler
@@ -66,14 +75,17 @@ index c84d12608cd2..4ca4f4a3d60c 100644
  #
  # Due to a historical design error, certain syscalls are numbered differently
 diff --git a/include/linux/syscalls.h b/include/linux/syscalls.h
-index a34b0f9a9972..e886809e80f7 100644
+index cf84d98964b2..1d0bcf63d0a4 100644
 --- a/include/linux/syscalls.h
 +++ b/include/linux/syscalls.h
-@@ -1064,6 +1064,17 @@ asmlinkage long sys_set_mempolicy_home_node(unsigned long start, unsigned long l
- /* arch/x86/kernel/ioport.c */
- asmlinkage long sys_ioperm(unsigned long from, unsigned long num, int on);
+@@ -1006,10 +1006,15 @@ asmlinkage long sys_lsm_list_modules(u64 __user *ids, u32 __user *size, u32 flag
  
-+/* arch/x86/kernel/uintr_fd.c */
+ /* x86 */
+ asmlinkage long sys_ioperm(unsigned long from, unsigned long num, int on);
+-
+-asmlinkage long sys_uretprobe(void);
+-
+-asmlinkage long sys_uprobe(void);
 +asmlinkage long sys_uintr_register_handler(u64 __user *handler, unsigned int flags);
 +asmlinkage long sys_uintr_unregister_handler(unsigned int flags);
 +asmlinkage long sys_uintr_vector_fd(u64 vector, unsigned int flags);
@@ -83,17 +95,16 @@ index a34b0f9a9972..e886809e80f7 100644
 +asmlinkage long sys_uintr_register_self(u64 vector, unsigned int flags);
 +asmlinkage long sys_uintr_alt_stack(void __user *sp, size_t size, unsigned int flags);
 +asmlinkage long sys_uintr_ipi_fd(unsigned int flags);
-+
+ 
  /* pciconfig: alpha, arm, arm64, ia64, sparc */
  asmlinkage long sys_pciconfig_read(unsigned long bus, unsigned long dfn,
- 				unsigned long off, unsigned long len,
 diff --git a/include/uapi/asm-generic/unistd.h b/include/uapi/asm-generic/unistd.h
-index 45fa180cc56a..32b19ee16a8f 100644
+index 942370b3f5d2..f0b9cccf3dc2 100644
 --- a/include/uapi/asm-generic/unistd.h
 +++ b/include/uapi/asm-generic/unistd.h
-@@ -886,8 +886,31 @@ __SYSCALL(__NR_futex_waitv, sys_futex_waitv)
- #define __NR_set_mempolicy_home_node 450
- __SYSCALL(__NR_set_mempolicy_home_node, sys_set_mempolicy_home_node)
+@@ -860,8 +860,31 @@ __SYSCALL(__NR_file_setattr, sys_file_setattr)
+ #define __NR_listns 470
+ __SYSCALL(__NR_listns, sys_listns)
  
 +/*
 + * Skip syscall numbers until 470. Start UINTR syscall numbers at 471 to avoid
@@ -119,16 +130,16 @@ index 45fa180cc56a..32b19ee16a8f 100644
 +__SYSCALL(__NR_uintr_ipi_fd, sys_uintr_ipi_fd)
 +
  #undef __NR_syscalls
--#define __NR_syscalls 451
+-#define __NR_syscalls 471
 +#define __NR_syscalls 480
  
  /*
   * 32 bit systems traditionally used different
 diff --git a/kernel/sys_ni.c b/kernel/sys_ni.c
-index 860b2dcf3ac4..2e420ff90929 100644
+index bf5d05c635ff..180493596542 100644
 --- a/kernel/sys_ni.c
 +++ b/kernel/sys_ni.c
-@@ -360,6 +360,17 @@ COND_SYSCALL(pkey_free);
+@@ -270,6 +270,17 @@ COND_SYSCALL(pkey_free);
  /* memfd_secret */
  COND_SYSCALL(memfd_secret);
  
@@ -147,10 +158,10 @@ index 860b2dcf3ac4..2e420ff90929 100644
   * Architecture specific weak syscall entries.
   */
 diff --git a/scripts/checksyscalls.sh b/scripts/checksyscalls.sh
-index f33e61aca93d..59b86472da55 100755
+index 1e5d2eeb726d..38ca667b9e15 100755
 --- a/scripts/checksyscalls.sh
 +++ b/scripts/checksyscalls.sh
-@@ -202,6 +202,15 @@ cat << EOF
+@@ -201,6 +201,15 @@ cat << EOF
  #define __IGNORE__sysctl
  #define __IGNORE_arch_prctl
  #define __IGNORE_nfsservctl

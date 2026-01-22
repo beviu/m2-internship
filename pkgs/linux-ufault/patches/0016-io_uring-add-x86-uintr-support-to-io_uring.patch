@@ -1,0 +1,190 @@
+From d4c89d815a16a6f4b0db7494499b4e9176c32fb6 Mon Sep 17 00:00:00 2001
+From: Sohil Mehta <sohil.mehta@intel.com>
+Date: Thu, 8 Sep 2022 16:01:25 -0700
+Subject: [PATCH 16/28] io_uring: add x86 uintr support to io_uring
+
+An update to libuintr causes uintr opcodes (IORING_REGISTER_UINTR and
+IORING_UNREGISTER_UINTR) to conflict. Update them to be a little further
+out to prevent future conflicts.
+---
+ include/linux/io_uring_types.h |  3 ++
+ include/uapi/linux/io_uring.h  |  4 +++
+ io_uring/io_uring.c            | 10 +++++++
+ io_uring/io_uring.h            |  4 +--
+ io_uring/register.c            | 54 ++++++++++++++++++++++++++++++++++
+ io_uring/register.h            |  1 +
+ 6 files changed, 74 insertions(+), 2 deletions(-)
+
+diff --git a/include/linux/io_uring_types.h b/include/linux/io_uring_types.h
+index a3e8ddc9b380..e56de365903c 100644
+--- a/include/linux/io_uring_types.h
++++ b/include/linux/io_uring_types.h
+@@ -417,6 +417,9 @@ struct io_ring_ctx {
+ 	u32			pers_next;
+ 	struct xarray		personalities;
+ 
++	/* User Interrupts file descriptor */
++	struct file                     *cq_uintr_f;
++
+ 	/* hashed buffered write serialization */
+ 	struct io_wq_hash		*hash_map;
+ 
+diff --git a/include/uapi/linux/io_uring.h b/include/uapi/linux/io_uring.h
+index b5b23c0d5283..914103fc7dc8 100644
+--- a/include/uapi/linux/io_uring.h
++++ b/include/uapi/linux/io_uring.h
+@@ -700,6 +700,10 @@ enum io_uring_register_op {
+ 	/* auxiliary zcrx configuration, see enum zcrx_ctrl_op */
+ 	IORING_REGISTER_ZCRX_CTRL		= 36,
+ 
++	/* User Interrupts based notification */
++	IORING_REGISTER_UINTR			= 37,
++	IORING_UNREGISTER_UINTR			= 38,
++
+ 	/* this goes last */
+ 	IORING_REGISTER_LAST,
+ 
+diff --git a/io_uring/io_uring.c b/io_uring/io_uring.c
+index b7a077c11c21..0f718b7b2ad7 100644
+--- a/io_uring/io_uring.c
++++ b/io_uring/io_uring.c
+@@ -72,6 +72,10 @@
+ #include <linux/jump_label.h>
+ #include <asm/shmparam.h>
+ 
++#ifdef CONFIG_X86_USER_INTERRUPTS
++#include <asm/uintr.h>
++#endif
++
+ #define CREATE_TRACE_POINTS
+ #include <trace/events/io_uring.h>
+ 
+@@ -544,6 +548,11 @@ void __io_commit_cqring_flush(struct io_ring_ctx *ctx)
+ 		io_flush_timeouts(ctx);
+ 	if (ctx->has_evfd)
+ 		io_eventfd_signal(ctx, true);
++
++#ifdef CONFIG_X86_USER_INTERRUPTS
++	if (ctx->cq_uintr_f)
++		uintr_notify(ctx->cq_uintr_f);
++#endif
+ }
+ 
+ static inline void __io_cq_lock(struct io_ring_ctx *ctx)
+@@ -2849,6 +2858,7 @@ static __cold void io_ring_ctx_free(struct io_ring_ctx *ctx)
+ 	io_unregister_zcrx_ifqs(ctx);
+ 	io_cqring_overflow_kill(ctx);
+ 	io_eventfd_unregister(ctx);
++	io_uintr_unregister(ctx);
+ 	io_free_alloc_caches(ctx);
+ 	io_destroy_buffers(ctx);
+ 	io_free_region(ctx->user, &ctx->param_region);
+diff --git a/io_uring/io_uring.h b/io_uring/io_uring.h
+index a790c16854d3..50aa3e3369b9 100644
+--- a/io_uring/io_uring.h
++++ b/io_uring/io_uring.h
+@@ -526,8 +526,8 @@ static inline void io_req_complete_defer(struct io_kiocb *req)
+ 
+ static inline void io_commit_cqring_flush(struct io_ring_ctx *ctx)
+ {
+-	if (unlikely(ctx->off_timeout_used ||
+-		     ctx->has_evfd || ctx->poll_activated))
++	if (unlikely(ctx->off_timeout_used || ctx->has_evfd || ctx->poll_activated ||
++		     ctx->cq_uintr_f))
+ 		__io_commit_cqring_flush(ctx);
+ }
+ 
+diff --git a/io_uring/register.c b/io_uring/register.c
+index 3d3822ff3fd9..a36eebf52ab6 100644
+--- a/io_uring/register.c
++++ b/io_uring/register.c
+@@ -18,6 +18,10 @@
+ #include <linux/io_uring.h>
+ #include <linux/io_uring_types.h>
+ 
++#ifdef CONFIG_X86_USER_INTERRUPTS
++#include <asm/uintr.h>
++#endif
++
+ #include "filetable.h"
+ #include "io_uring.h"
+ #include "opdef.h"
+@@ -608,6 +612,44 @@ static int io_register_mem_region(struct io_ring_ctx *ctx, void __user *uarg)
+ 	return 0;
+ }
+ 
++#ifdef CONFIG_X86_USER_INTERRUPTS
++static int io_uintr_register(struct io_ring_ctx *ctx, void __user *arg)
++{
++	__s32 __user *fds = arg;
++	int fd;
++
++	if (ctx->cq_uintr_f)
++		return -EBUSY;
++
++	if (copy_from_user(&fd, fds, sizeof(*fds)))
++		return -EFAULT;
++
++	ctx->cq_uintr_f = uvecfd_fget(fd);
++	if (IS_ERR(ctx->cq_uintr_f)) {
++		int ret = PTR_ERR(ctx->cq_uintr_f);
++
++		ctx->cq_uintr_f = NULL;
++		return ret;
++	}
++
++	return 0;
++}
++
++int io_uintr_unregister(struct io_ring_ctx *ctx)
++{
++	if (ctx->cq_uintr_f) {
++		fput(ctx->cq_uintr_f);
++		ctx->cq_uintr_f = NULL;
++		return 0;
++	}
++
++	return -ENXIO;
++}
++#else
++static int io_uintr_register(struct io_ring_ctx *ctx, void __user *arg) { return -EINVAL; }
++int io_uintr_unregister(struct io_ring_ctx *ctx) { return -EINVAL; }
++#endif
++
+ static int __io_uring_register(struct io_ring_ctx *ctx, unsigned opcode,
+ 			       void __user *arg, unsigned nr_args)
+ 	__releases(ctx->uring_lock)
+@@ -820,6 +862,18 @@ static int __io_uring_register(struct io_ring_ctx *ctx, unsigned opcode,
+ 	case IORING_REGISTER_ZCRX_CTRL:
+ 		ret = io_zcrx_ctrl(ctx, arg, nr_args);
+ 		break;
++	case IORING_REGISTER_UINTR:
++		ret = -EINVAL;
++		if (nr_args != 1)
++			break;
++		ret = io_uintr_register(ctx, arg);
++		break;
++	case IORING_UNREGISTER_UINTR:
++		ret = -EINVAL;
++		if (arg || nr_args)
++			break;
++		ret = io_uintr_unregister(ctx);
++		break;
+ 	default:
+ 		ret = -EINVAL;
+ 		break;
+diff --git a/io_uring/register.h b/io_uring/register.h
+index a5f39d5ef9e0..617b97afe82e 100644
+--- a/io_uring/register.h
++++ b/io_uring/register.h
+@@ -3,6 +3,7 @@
+ #define IORING_REGISTER_H
+ 
+ int io_eventfd_unregister(struct io_ring_ctx *ctx);
++int io_uintr_unregister(struct io_ring_ctx *ctx);
+ int io_unregister_personality(struct io_ring_ctx *ctx, unsigned id);
+ struct file *io_uring_register_get_file(unsigned int fd, bool registered);
+ 
+-- 
+2.52.0
+

@@ -1,7 +1,7 @@
-From 6df1a1184e87f1615b40799f6f2cf99420565d7c Mon Sep 17 00:00:00 2001
+From ac9e413b08519f201111ceab1934b69937d8cbe0 Mon Sep 17 00:00:00 2001
 From: Sohil Mehta <sohil.mehta@intel.com>
 Date: Wed, 7 Sep 2022 12:22:31 -0700
-Subject: [PATCH 08/29] x86/process/64: Add uintr task context switch support
+Subject: [PATCH 07/28] x86/process/64: Add uintr task context switch support
 
 User interrupt state is saved and restored using xstate supervisor
 feature support. This includes the MSR state and the User Interrupt Flag
@@ -28,25 +28,25 @@ Signed-off-by: Sohil Mehta <sohil.mehta@intel.com>
  arch/x86/include/asm/entry-common.h |  4 ++
  arch/x86/include/asm/uintr.h        |  9 ++++
  arch/x86/kernel/fpu/core.c          |  8 +++
- arch/x86/kernel/process_64.c        |  4 ++
+ arch/x86/kernel/process_64.c        |  3 ++
  arch/x86/kernel/uintr.c             | 75 +++++++++++++++++++++++++++++
- 5 files changed, 100 insertions(+)
+ 5 files changed, 99 insertions(+)
 
 diff --git a/arch/x86/include/asm/entry-common.h b/arch/x86/include/asm/entry-common.h
-index 674ed46d3ced..cb42f592a8f0 100644
+index ce3eb6d5fdf9..35af41768139 100644
 --- a/arch/x86/include/asm/entry-common.h
 +++ b/arch/x86/include/asm/entry-common.h
-@@ -8,6 +8,7 @@
- #include <asm/nospec-branch.h>
+@@ -9,6 +9,7 @@
  #include <asm/io_bitmap.h>
  #include <asm/fpu/api.h>
+ #include <asm/fred.h>
 +#include <asm/uintr.h>
  
  /* Check that the stack and regs on entry from user mode are sane. */
  static __always_inline void arch_enter_from_user_mode(struct pt_regs *regs)
-@@ -57,6 +58,9 @@ static inline void arch_exit_to_user_mode_prepare(struct pt_regs *regs,
- 	if (unlikely(ti_work & _TIF_NEED_FPU_LOAD))
- 		switch_fpu_return();
+@@ -67,6 +68,9 @@ static inline void arch_exit_to_user_mode_prepare(struct pt_regs *regs,
+ 
+ 	fred_update_rsp0();
  
 +	if (cpu_feature_enabled(X86_FEATURE_UINTR))
 +		switch_uintr_return();
@@ -75,10 +75,10 @@ index ba64d825be9e..2c8156c72cc0 100644
  
  #endif /* _ASM_X86_UINTR_H */
 diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
-index 3b28c5b25e12..03801368d28f 100644
+index 608983806fd7..8a3197adbb4b 100644
 --- a/arch/x86/kernel/fpu/core.c
 +++ b/arch/x86/kernel/fpu/core.c
-@@ -111,6 +111,14 @@ static void update_avx_timestamp(struct fpu *fpu)
+@@ -137,6 +137,14 @@ static void update_avx_timestamp(struct fpu *fpu)
   * over the place.
   *
   * FXSAVE and all XSAVE variants preserve the FPU register state.
@@ -94,32 +94,31 @@ index 3b28c5b25e12..03801368d28f 100644
  void save_fpregs_to_fpstate(struct fpu *fpu)
  {
 diff --git a/arch/x86/kernel/process_64.c b/arch/x86/kernel/process_64.c
-index 1962008fe743..75053dd8ffde 100644
+index 432c0a004c60..b22f49ddcf08 100644
 --- a/arch/x86/kernel/process_64.c
 +++ b/arch/x86/kernel/process_64.c
-@@ -53,6 +53,7 @@
+@@ -55,6 +55,7 @@
  #include <asm/xen/hypervisor.h>
  #include <asm/vdso.h>
  #include <asm/resctrl.h>
 +#include <asm/uintr.h>
  #include <asm/unistd.h>
  #include <asm/fsgsbase.h>
- #ifdef CONFIG_IA32_EMULATION
-@@ -564,6 +565,9 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
- 	WARN_ON_ONCE(IS_ENABLED(CONFIG_DEBUG_ENTRY) &&
+ #include <asm/fred.h>
+@@ -617,6 +618,8 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
  		     this_cpu_read(hardirq_stack_inuse));
  
+ 	switch_fpu(prev_p, cpu);
 +	if (cpu_feature_enabled(X86_FEATURE_UINTR))
 +		switch_uintr_prepare(prev_p);
-+
- 	if (!test_thread_flag(TIF_NEED_FPU_LOAD))
- 		switch_fpu_prepare(prev_fpu, cpu);
  
+ 	/* We must save %fs and %gs before load_TLS() because
+ 	 * %fs and %gs may be cleared by load_TLS().
 diff --git a/arch/x86/kernel/uintr.c b/arch/x86/kernel/uintr.c
-index faff3dd361a5..8455b7a757ea 100644
+index 2906890f1f59..83bfdf338fce 100644
 --- a/arch/x86/kernel/uintr.c
 +++ b/arch/x86/kernel/uintr.c
-@@ -278,3 +278,78 @@ SYSCALL_DEFINE1(uintr_unregister_handler, unsigned int, flags)
+@@ -276,3 +276,78 @@ SYSCALL_DEFINE1(uintr_unregister_handler, unsigned int, flags)
  
  	return ret;
  }

@@ -1,7 +1,7 @@
-From e6886c6355bcf58e6a6d37dac6f1a732f04e1af8 Mon Sep 17 00:00:00 2001
+From b7d0a1865c9a02c61b9ea6e2b37b97e96ad0c12c Mon Sep 17 00:00:00 2001
 From: Sohil Mehta <sohil.mehta@intel.com>
 Date: Thu, 8 Sep 2022 15:52:58 -0700
-Subject: [PATCH 13/29] x86/uintr: Add support for interrupting blocking system
+Subject: [PATCH 12/28] x86/uintr: Add support for interrupting blocking system
  calls
 
 User interrupts are delivered to applications immediately if they are
@@ -41,10 +41,10 @@ Signed-off-by: Sohil Mehta <sohil.mehta@intel.com>
  9 files changed, 392 insertions(+), 1 deletion(-)
 
 diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
-index 931a61ede2f9..7cb9155ae9b5 100644
+index 332c17813fdc..4cb593c93ffe 100644
 --- a/arch/x86/Kconfig
 +++ b/arch/x86/Kconfig
-@@ -1884,6 +1884,23 @@ config X86_USER_INTERRUPTS
+@@ -1821,6 +1821,23 @@ config X86_USER_INTERRUPTS
  
  	  Refer Documentation/x86/user-interrupts.rst for details.
  
@@ -65,9 +65,9 @@ index 931a61ede2f9..7cb9155ae9b5 100644
 +	  experimental and flaky. Enable this only if you are specifically
 +	  testing this. Failures can happen when stressed.
 +
- choice
- 	prompt "TSX enable mode"
- 	depends on CPU_SUP_INTEL
+ config ARCH_PKEY_BITS
+ 	int
+ 	default 4
 diff --git a/arch/x86/include/asm/uintr.h b/arch/x86/include/asm/uintr.h
 index 9726e72ac479..17a6ddaa58bd 100644
 --- a/arch/x86/include/asm/uintr.h
@@ -143,20 +143,20 @@ index 6b306bf0e6eb..6e8623248290 100644
 +
  #endif
 diff --git a/arch/x86/kernel/irq.c b/arch/x86/kernel/irq.c
-index eb21340b2dfe..aed0f81d88e7 100644
+index 1ec311170247..e5b0581d9e2f 100644
 --- a/arch/x86/kernel/irq.c
 +++ b/arch/x86/kernel/irq.c
-@@ -22,6 +22,7 @@
- #include <asm/desc.h>
- #include <asm/traps.h>
+@@ -25,6 +25,7 @@
  #include <asm/thermal.h>
+ #include <asm/posted_intr.h>
+ #include <asm/irq_remapping.h>
 +#include <asm/uintr.h>
  
+ #if defined(CONFIG_X86_LOCAL_APIC) || defined(CONFIG_X86_THERMAL_VECTOR)
  #define CREATE_TRACE_POINTS
- #include <asm/trace/irq_vectors.h>
-@@ -364,6 +365,21 @@ DEFINE_IDTENTRY_SYSVEC(sysvec_uintr_spurious_interrupt)
+@@ -531,6 +532,21 @@ DEFINE_IDTENTRY_SYSVEC(sysvec_uintr_spurious_interrupt)
  	/* TODO: Add entry-exit tracepoints */
- 	ack_APIC_irq();
+ 	apic_eoi();
  	inc_irq_stat(uintr_spurious_count);
 +
 +	/*
@@ -176,9 +176,9 @@ index eb21340b2dfe..aed0f81d88e7 100644
  }
  
  /*
-@@ -374,6 +390,12 @@ DEFINE_IDTENTRY_SYSVEC(sysvec_uintr_kernel_notification)
+@@ -541,6 +557,12 @@ DEFINE_IDTENTRY_SYSVEC(sysvec_uintr_kernel_notification)
  	/* TODO: Add entry-exit tracepoints */
- 	ack_APIC_irq();
+ 	apic_eoi();
  	inc_irq_stat(uintr_kernel_notifications);
 +
 +	pr_debug_ratelimited("uintr: Kernel notification interrupt on %d\n",
@@ -190,10 +190,10 @@ index eb21340b2dfe..aed0f81d88e7 100644
  #endif
  
 diff --git a/arch/x86/kernel/process_64.c b/arch/x86/kernel/process_64.c
-index 75053dd8ffde..28d4c3ec3f82 100644
+index b22f49ddcf08..b5347ed7d949 100644
 --- a/arch/x86/kernel/process_64.c
 +++ b/arch/x86/kernel/process_64.c
-@@ -628,6 +628,9 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
+@@ -676,6 +676,9 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
  	/* Reload sp0. */
  	update_task_stack(next_p);
  
@@ -204,18 +204,18 @@ index 75053dd8ffde..28d4c3ec3f82 100644
  
  	if (static_cpu_has_bug(X86_BUG_SYSRET_SS_ATTRS)) {
 diff --git a/arch/x86/kernel/signal.c b/arch/x86/kernel/signal.c
-index 9c7265b524c7..e095c9017f81 100644
+index 2404233336ab..b74e645b3587 100644
 --- a/arch/x86/kernel/signal.c
 +++ b/arch/x86/kernel/signal.c
-@@ -36,6 +36,7 @@
+@@ -37,6 +37,7 @@
  #include <asm/mce.h>
  #include <asm/sighandling.h>
  #include <asm/vm86.h>
 +#include <asm/uintr.h>
  
- #ifdef CONFIG_X86_64
- #include <linux/compat.h>
-@@ -872,6 +873,31 @@ void arch_do_signal_or_restart(struct pt_regs *regs)
+ #include <asm/syscall.h>
+ #include <asm/sigframe.h>
+@@ -340,6 +341,31 @@ void arch_do_signal_or_restart(struct pt_regs *regs)
  		return;
  	}
  
@@ -248,10 +248,10 @@ index 9c7265b524c7..e095c9017f81 100644
  	if (syscall_get_nr(current, regs) != -1) {
  		/* Restart the system call - no handlers present */
 diff --git a/arch/x86/kernel/traps.c b/arch/x86/kernel/traps.c
-index 8254275c45df..ede815ae1f89 100644
+index be8d3114add3..1a58cc3c15f5 100644
 --- a/arch/x86/kernel/traps.c
 +++ b/arch/x86/kernel/traps.c
-@@ -416,9 +416,150 @@ static bool fixup_senduipi_ud_exception(struct pt_regs *regs)
+@@ -569,9 +569,150 @@ static bool fixup_senduipi_ud_exception(struct pt_regs *regs)
  	return true;
  }
  
@@ -402,7 +402,7 @@ index 8254275c45df..ede815ae1f89 100644
  #endif
  
  DEFINE_IDTENTRY_RAW(exc_invalid_op)
-@@ -836,6 +977,11 @@ DEFINE_IDTENTRY_ERRORCODE(exc_general_protection)
+@@ -1030,6 +1171,11 @@ DEFINE_IDTENTRY_ERRORCODE(exc_general_protection)
  			goto exit;
  	}
  
@@ -415,7 +415,7 @@ index 8254275c45df..ede815ae1f89 100644
  		local_irq_enable();
  		handle_vm86_fault((struct kernel_vm86_regs *) regs, error_code);
 diff --git a/arch/x86/kernel/uintr.c b/arch/x86/kernel/uintr.c
-index 218e30cdecdb..cb0f03baa851 100644
+index da479ec7ca2c..69fa7ecc4a36 100644
 --- a/arch/x86/kernel/uintr.c
 +++ b/arch/x86/kernel/uintr.c
 @@ -39,11 +39,24 @@ struct uvecfd_ctx {
@@ -451,7 +451,7 @@ index 218e30cdecdb..cb0f03baa851 100644
  
  	return upid_ctx;
  }
-@@ -834,6 +848,11 @@ SYSCALL_DEFINE2(uintr_register_self, u64, vector, unsigned int, flags)
+@@ -833,6 +847,11 @@ SYSCALL_DEFINE2(uintr_register_self, u64, vector, unsigned int, flags)
  	return ret;
  }
  
@@ -463,18 +463,18 @@ index 218e30cdecdb..cb0f03baa851 100644
  static int do_uintr_unregister_handler(void)
  {
  	struct task_struct *t = current;
-@@ -876,6 +895,8 @@ static int do_uintr_unregister_handler(void)
+@@ -874,6 +893,8 @@ static int do_uintr_unregister_handler(void)
  	/* Release reference since the removed it from the MSR. */
  	put_upid_ref(upid_ctx);
  
 +	uintr_remove_task_wait(t);
 +
- 	end_update_xsave_msrs();
+ 	fpregs_unlock();
  
  	/*
-@@ -970,6 +991,13 @@ static int do_uintr_register_handler(u64 handler, unsigned int flags)
+@@ -967,6 +988,13 @@ static int do_uintr_register_handler(u64 handler, unsigned int flags)
  
- 	end_update_xsave_msrs();
+ 	fpregs_unlock();
  
 +	if (flags & UINTR_HANDLER_FLAG_WAITING_ANY) {
 +		if (flags & UINTR_HANDLER_FLAG_WAITING_RECEIVER)
@@ -486,7 +486,7 @@ index 218e30cdecdb..cb0f03baa851 100644
  	pr_debug("recv: task=%d register handler=%llx upid %px flags=%d\n",
  		 t->pid, handler, upid, flags);
  
-@@ -989,7 +1017,10 @@ SYSCALL_DEFINE2(uintr_register_handler, u64 __user *, handler, unsigned int, fla
+@@ -986,7 +1014,10 @@ SYSCALL_DEFINE2(uintr_register_handler, u64 __user *, handler, unsigned int, fla
  	pr_debug("recv: requesting register handler task=%d flags %d handler %lx\n",
  		 current->pid, flags, (unsigned long)handler);
  
@@ -498,7 +498,7 @@ index 218e30cdecdb..cb0f03baa851 100644
  		return -EINVAL;
  
  	/* TODO: Validate the handler address */
-@@ -1079,6 +1110,33 @@ SYSCALL_DEFINE3(uintr_alt_stack, void __user *, sp, size_t, size, unsigned int,
+@@ -1075,6 +1106,33 @@ SYSCALL_DEFINE3(uintr_alt_stack, void __user *, sp, size_t, size, unsigned int,
  	return ret;
  }
  
@@ -532,7 +532,7 @@ index 218e30cdecdb..cb0f03baa851 100644
  /* Suppress notifications since this task is being context switched out */
  void switch_uintr_prepare(struct task_struct *prev)
  {
-@@ -1090,6 +1148,22 @@ void switch_uintr_prepare(struct task_struct *prev)
+@@ -1086,6 +1144,22 @@ void switch_uintr_prepare(struct task_struct *prev)
  	/* Check if UIF should be considered here. Do we want to wait for interrupts if UIF is 0? */
  	upid_ctx = prev->thread.upid_ctx;
  
@@ -555,7 +555,7 @@ index 218e30cdecdb..cb0f03baa851 100644
  	set_bit(UINTR_UPID_STATUS_SN, (unsigned long *)&upid_ctx->upid->nc.status);
  }
  
-@@ -1154,6 +1228,53 @@ void switch_uintr_return(void)
+@@ -1150,6 +1224,53 @@ void switch_uintr_return(void)
  		apic->send_IPI_self(UINTR_NOTIFICATION_VECTOR);
  }
  
@@ -609,7 +609,7 @@ index 218e30cdecdb..cb0f03baa851 100644
  /*
   * This should only be called from exit_thread().
   * exit_thread() can happen in current context when the current thread is
-@@ -1186,6 +1307,7 @@ void uintr_free(struct task_struct *t)
+@@ -1181,6 +1302,7 @@ void uintr_free(struct task_struct *t)
  			 * generated based on this UPID.
  			 */
  			set_bit(UINTR_UPID_STATUS_SN, (unsigned long *)&upid_ctx->upid->nc.status);
@@ -617,7 +617,7 @@ index 218e30cdecdb..cb0f03baa851 100644
  			upid_ctx->receiver_active = false;
  			put_upid_ref(upid_ctx);
  		}
-@@ -1217,3 +1339,30 @@ void uintr_free(struct task_struct *t)
+@@ -1212,3 +1334,30 @@ void uintr_free(struct task_struct *t)
  	}
  #endif
  }
@@ -649,10 +649,10 @@ index 218e30cdecdb..cb0f03baa851 100644
 +	spin_unlock_irqrestore(&uintr_wait_lock, flags);
 +}
 diff --git a/include/linux/sched.h b/include/linux/sched.h
-index e7b2f8a5c711..bc26593ab525 100644
+index da0133524d08..1c8e2936290b 100644
 --- a/include/linux/sched.h
 +++ b/include/linux/sched.h
-@@ -123,6 +123,8 @@ struct task_group;
+@@ -153,6 +153,8 @@ struct user_event_mm;
  #define task_is_stopped(task)		((READ_ONCE(task->jobctl) & JOBCTL_STOPPED) != 0)
  #define task_is_stopped_or_traced(task)	((READ_ONCE(task->jobctl) & (JOBCTL_STOPPED | JOBCTL_TRACED)) != 0)
  

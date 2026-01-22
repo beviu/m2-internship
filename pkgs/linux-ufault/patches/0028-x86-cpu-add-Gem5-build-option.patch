@@ -1,7 +1,7 @@
-From bea2a8195daf025cc6550d22a6fd522532971ea6 Mon Sep 17 00:00:00 2001
+From 3b61ffc3ccf479100a3c047198398ba8d0db4cdd Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Tue, 20 Jan 2026 13:04:10 +0100
-Subject: [PATCH 29/29] x86/cpu: add Gem5 build option
+Subject: [PATCH 28/28] x86/cpu: add Gem5 build option
 
 ---
  arch/x86/Kconfig.cpu         | 5 +++++
@@ -9,10 +9,10 @@ Subject: [PATCH 29/29] x86/cpu: add Gem5 build option
  2 files changed, 8 insertions(+), 1 deletion(-)
 
 diff --git a/arch/x86/Kconfig.cpu b/arch/x86/Kconfig.cpu
-index 542377cd419d..eaf69595bd37 100644
+index f928cf6e3252..132257b84dec 100644
 --- a/arch/x86/Kconfig.cpu
 +++ b/arch/x86/Kconfig.cpu
-@@ -308,6 +308,11 @@ config X86_GENERIC
+@@ -281,6 +281,11 @@ config X86_GENERIC
  	  This is really intended for distributors who need more
  	  generic optimizations.
  
@@ -25,10 +25,10 @@ index 542377cd419d..eaf69595bd37 100644
  # Define implied options from the CPU selection here
  config X86_INTERNODE_CACHE_SHIFT
 diff --git a/arch/x86/kernel/cpu/common.c b/arch/x86/kernel/cpu/common.c
-index 85473921989c..8e66f8078237 100644
+index f400ef6a365f..084beefe128e 100644
 --- a/arch/x86/kernel/cpu/common.c
 +++ b/arch/x86/kernel/cpu/common.c
-@@ -418,7 +418,9 @@ static void setup_uintr(struct cpuinfo_x86 *c)
+@@ -413,7 +413,9 @@ static void setup_uintr(struct cpuinfo_x86 *c)
  		goto clear_uintr_cap;
  	}
  

@@ -1,0 +1,75 @@
+From 2a77ba507883786a46d78cfd544b7975161eadde Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Fri, 14 Nov 2025 11:36:18 +0100
+Subject: [PATCH 20/28] x86/ufault: enumerate user fault support
+
+---
+ arch/x86/Kconfig             |  5 +++++
+ arch/x86/Kconfig.cpufeatures |  4 ++++
+ arch/x86/kernel/cpu/common.c | 15 +++++++++++++++
+ 3 files changed, 24 insertions(+)
+
+diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
+index 4cb593c93ffe..331cf926d896 100644
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -1838,6 +1838,11 @@ config X86_UINTR_BLOCKING
+ 	  experimental and flaky. Enable this only if you are specifically
+ 	  testing this. Failures can happen when stressed.
+ 
++config X86_USER_FAULTS
++	bool "User Faults (UFAULT)"
++	depends on X86_64
++	depends on CPU_SUP_INTEL
++
+ config ARCH_PKEY_BITS
+ 	int
+ 	default 4
+diff --git a/arch/x86/Kconfig.cpufeatures b/arch/x86/Kconfig.cpufeatures
+index d88a7b5323a7..5f65e419ca79 100644
+--- a/arch/x86/Kconfig.cpufeatures
++++ b/arch/x86/Kconfig.cpufeatures
+@@ -203,3 +203,7 @@ config X86_DISABLED_FEATURE_INVLPGB
+ config X86_DISABLED_FEATURE_UINTR
+ 	def_bool y
+ 	depends on !X86_USER_INTERRUPTS
++
++config X86_DISABLED_FEATURE_UFAULT
++	def_bool y
++	depends on !X86_USER_FAULTS
+diff --git a/arch/x86/kernel/cpu/common.c b/arch/x86/kernel/cpu/common.c
+index 95592d413a51..2cd9949a7f7f 100644
+--- a/arch/x86/kernel/cpu/common.c
++++ b/arch/x86/kernel/cpu/common.c
+@@ -429,6 +429,18 @@ static void setup_uintr(struct cpuinfo_x86 *c)
+ 	cr4_clear_bits(X86_CR4_UINTR);
+ }
+ 
++static void setup_ufault(struct cpuinfo_x86 *c)
++{
++	if (!cpu_feature_enabled(X86_FEATURE_UFAULT) ||
++	    !cpu_has(c, X86_FEATURE_UFAULT)) {
++		/* In case it was enabled in a previous boot.  */
++		cr4_clear_bits(X86_CR4_UFAULT);
++		return;
++	}
++
++	pr_info_once("x86: User Faults (UFAULT) enabled\n");
++}
++
+ static __always_inline void setup_smap(struct cpuinfo_x86 *c)
+ {
+ 	unsigned long eflags = native_save_fl();
+@@ -2100,6 +2112,9 @@ static void identify_cpu(struct cpuinfo_x86 *c)
+ 	/* Set up User Interrupts */
+ 	setup_uintr(c);
+ 
++	/* Set up User Faults */
++	setup_ufault(c);
++
+ 	/* Enable FSGSBASE instructions if available. */
+ 	if (cpu_has(c, X86_FEATURE_FSGSBASE)) {
+ 		cr4_set_bits(X86_CR4_FSGSBASE);
+-- 
+2.52.0
+

@@ -1,7 +1,7 @@
-From 5f962fd0134d107c02c82eed663453997cca92d5 Mon Sep 17 00:00:00 2001
+From 63f4a53ad9e84455818dc18082d16ec22063ce7f Mon Sep 17 00:00:00 2001
 From: Sohil Mehta <sohil.mehta@intel.com>
 Date: Tue, 6 Sep 2022 13:26:25 -0700
-Subject: [PATCH 06/29] x86/irq: Reserve a user IPI notification and kernel
+Subject: [PATCH 05/28] x86/irq: Reserve a user IPI notification and kernel
  vectors
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
@@ -63,17 +63,17 @@ Cc: Jacob Pan <jacob.jun.pan@linux.intel.com>
 Signed-off-by: Sohil Mehta <sohil.mehta@intel.com>
 ---
  arch/x86/include/asm/hardirq.h     |  4 +++
- arch/x86/include/asm/idtentry.h    |  5 +++
+ arch/x86/include/asm/idtentry.h    |  9 +++--
  arch/x86/include/asm/irq_vectors.h |  6 +++-
  arch/x86/kernel/idt.c              |  4 +++
- arch/x86/kernel/irq.c              | 50 ++++++++++++++++++++++++++++++
- 5 files changed, 68 insertions(+), 1 deletion(-)
+ arch/x86/kernel/irq.c              | 55 ++++++++++++++++++++++++++----
+ 5 files changed, 66 insertions(+), 12 deletions(-)
 
 diff --git a/arch/x86/include/asm/hardirq.h b/arch/x86/include/asm/hardirq.h
-index 275e7fd20310..a4623fdb65a1 100644
+index 6b6d472baa0b..edf729d32b7f 100644
 --- a/arch/x86/include/asm/hardirq.h
 +++ b/arch/x86/include/asm/hardirq.h
-@@ -19,6 +19,10 @@ typedef struct {
+@@ -18,6 +18,10 @@ typedef struct {
  	unsigned int kvm_posted_intr_ipis;
  	unsigned int kvm_posted_intr_wakeup_ipis;
  	unsigned int kvm_posted_intr_nested_ipis;
@@ -85,26 +85,30 @@ index 275e7fd20310..a4623fdb65a1 100644
  	unsigned int x86_platform_ipis;	/* arch dependent */
  	unsigned int apic_perf_irqs;
 diff --git a/arch/x86/include/asm/idtentry.h b/arch/x86/include/asm/idtentry.h
-index 72184b0b2219..a01350b844e9 100644
+index 3218770670d3..f9093da6a488 100644
 --- a/arch/x86/include/asm/idtentry.h
 +++ b/arch/x86/include/asm/idtentry.h
-@@ -682,6 +682,11 @@ DECLARE_IDTENTRY_SYSVEC(POSTED_INTR_WAKEUP_VECTOR,	sysvec_kvm_posted_intr_wakeup
- DECLARE_IDTENTRY_SYSVEC(POSTED_INTR_NESTED_VECTOR,	sysvec_kvm_posted_intr_nested_ipi);
+@@ -746,11 +746,10 @@ DECLARE_IDTENTRY_SYSVEC(POSTED_INTR_NESTED_VECTOR,	sysvec_kvm_posted_intr_nested
+ # define fred_sysvec_kvm_posted_intr_nested_ipi		NULL
  #endif
  
+-# ifdef CONFIG_X86_POSTED_MSI
+-DECLARE_IDTENTRY_SYSVEC(POSTED_MSI_NOTIFICATION_VECTOR,	sysvec_posted_msi_notification);
+-#else
+-# define fred_sysvec_posted_msi_notification		NULL
+-# endif
 +#ifdef CONFIG_X86_USER_INTERRUPTS
 +DECLARE_IDTENTRY_SYSVEC(UINTR_NOTIFICATION_VECTOR,	sysvec_uintr_spurious_interrupt);
 +DECLARE_IDTENTRY_SYSVEC(UINTR_KERNEL_VECTOR,		sysvec_uintr_kernel_notification);
 +#endif
-+
+ 
  #if IS_ENABLED(CONFIG_HYPERV)
  DECLARE_IDTENTRY_SYSVEC(HYPERVISOR_CALLBACK_VECTOR,	sysvec_hyperv_callback);
- DECLARE_IDTENTRY_SYSVEC(HYPERV_REENLIGHTENMENT_VECTOR,	sysvec_hyperv_reenlightenment);
 diff --git a/arch/x86/include/asm/irq_vectors.h b/arch/x86/include/asm/irq_vectors.h
-index 43dcb9284208..1d289b3ee0da 100644
+index 47051871b436..76743c19eb13 100644
 --- a/arch/x86/include/asm/irq_vectors.h
 +++ b/arch/x86/include/asm/irq_vectors.h
-@@ -104,7 +104,11 @@
+@@ -95,7 +95,11 @@
  #define HYPERV_STIMER0_VECTOR		0xed
  #endif
  
@@ -115,13 +119,13 @@ index 43dcb9284208..1d289b3ee0da 100644
 +
 +#define LOCAL_TIMER_VECTOR		0xea
  
- #define NR_VECTORS			 256
- 
+ /*
+  * Posted interrupt notification vector for all device MSIs delivered to
 diff --git a/arch/x86/kernel/idt.c b/arch/x86/kernel/idt.c
-index a58c6bc1cd68..c78146472d40 100644
+index f445bec516a0..af7243290a78 100644
 --- a/arch/x86/kernel/idt.c
 +++ b/arch/x86/kernel/idt.c
-@@ -155,6 +155,10 @@ static const __initconst struct idt_data apic_idts[] = {
+@@ -158,6 +158,10 @@ static const __initconst struct idt_data apic_idts[] = {
  	INTG(POSTED_INTR_WAKEUP_VECTOR,		asm_sysvec_kvm_posted_intr_wakeup_ipi),
  	INTG(POSTED_INTR_NESTED_VECTOR,		asm_sysvec_kvm_posted_intr_nested_ipi),
  # endif
@@ -133,14 +137,19 @@ index a58c6bc1cd68..c78146472d40 100644
  	INTG(IRQ_WORK_VECTOR,			asm_sysvec_irq_work),
  # endif
 diff --git a/arch/x86/kernel/irq.c b/arch/x86/kernel/irq.c
-index 766ffe3ba313..eb21340b2dfe 100644
+index b2fe6181960c..1ec311170247 100644
 --- a/arch/x86/kernel/irq.c
 +++ b/arch/x86/kernel/irq.c
-@@ -181,6 +181,19 @@ int arch_show_interrupts(struct seq_file *p, int prec)
- 		seq_printf(p, "%10u ",
+@@ -192,12 +192,18 @@ int arch_show_interrupts(struct seq_file *p, int prec)
  			   irq_stats(j)->kvm_posted_intr_wakeup_ipis);
  	seq_puts(p, "  Posted-interrupt wakeup event\n");
-+#endif
+ #endif
+-#ifdef CONFIG_X86_POSTED_MSI
+-	seq_printf(p, "%*s: ", prec, "PMN");
+-	for_each_online_cpu(j)
+-		seq_printf(p, "%10u ",
+-			   irq_stats(j)->posted_msi_notification_count);
+-	seq_puts(p, "  Posted MSI notification event\n");
 +#ifdef CONFIG_X86_USER_INTERRUPTS
 +	if (cpu_feature_enabled(X86_FEATURE_UINTR)) {
 +		seq_printf(p, "%*s: ", prec, "UIS");
@@ -156,9 +165,9 @@ index 766ffe3ba313..eb21340b2dfe 100644
  #endif
  	return 0;
  }
-@@ -327,6 +340,43 @@ DEFINE_IDTENTRY_SYSVEC_SIMPLE(sysvec_kvm_posted_intr_nested_ipi)
+@@ -501,6 +507,43 @@ DEFINE_IDTENTRY_SYSVEC(sysvec_posted_msi_notification)
  }
- #endif
+ #endif /* X86_POSTED_MSI */
  
 +#ifdef CONFIG_X86_USER_INTERRUPTS
 +/*
@@ -182,7 +191,7 @@ index 766ffe3ba313..eb21340b2dfe 100644
 +DEFINE_IDTENTRY_SYSVEC(sysvec_uintr_spurious_interrupt)
 +{
 +	/* TODO: Add entry-exit tracepoints */
-+	ack_APIC_irq();
++	apic_eoi();
 +	inc_irq_stat(uintr_spurious_count);
 +}
 +
@@ -192,14 +201,14 @@ index 766ffe3ba313..eb21340b2dfe 100644
 +DEFINE_IDTENTRY_SYSVEC(sysvec_uintr_kernel_notification)
 +{
 +	/* TODO: Add entry-exit tracepoints */
-+	ack_APIC_irq();
++	apic_eoi();
 +	inc_irq_stat(uintr_kernel_notifications);
 +}
 +#endif
 +
- 
  #ifdef CONFIG_HOTPLUG_CPU
  /* A cpu has been removed from cpu_online_mask.  Reset irq affinities. */
+ void fixup_irqs(void)
 -- 
 2.52.0
 

@@ -1,23 +1,23 @@
-From 1f12147729ec8eae3453a45db8fbf3bd5831b237 Mon Sep 17 00:00:00 2001
+From ed23f0483d0fd241c80fa8def88c272a0b0e1e47 Mon Sep 17 00:00:00 2001
 From: Sohil Mehta <sohil.mehta@intel.com>
 Date: Tue, 25 May 2021 16:57:37 -0700
-Subject: [PATCH 03/29] Documentation/x86: Add documentation for User
+Subject: [PATCH 02/28] Documentation/x86: Add documentation for User
  Interrupts
 
 For now, include just the hardware and software architecture summary.
 
 Signed-off-by: Sohil Mehta <sohil.mehta@intel.com>
 ---
- Documentation/x86/index.rst           |   1 +
- Documentation/x86/user-interrupts.rst | 107 ++++++++++++++++++++++++++
+ Documentation/arch/x86/index.rst           |   1 +
+ Documentation/arch/x86/user-interrupts.rst | 107 +++++++++++++++++++++
  2 files changed, 108 insertions(+)
- create mode 100644 Documentation/x86/user-interrupts.rst
+ create mode 100644 Documentation/arch/x86/user-interrupts.rst
 
-diff --git a/Documentation/x86/index.rst b/Documentation/x86/index.rst
-index c73d133fd37c..b85b2cc6c0fc 100644
---- a/Documentation/x86/index.rst
-+++ b/Documentation/x86/index.rst
-@@ -34,6 +34,7 @@ x86-specific Documentation
+diff --git a/Documentation/arch/x86/index.rst b/Documentation/arch/x86/index.rst
+index f88bcfceb7f2..6905fa622f44 100644
+--- a/Documentation/arch/x86/index.rst
++++ b/Documentation/arch/x86/index.rst
+@@ -36,6 +36,7 @@ x86-specific Documentation
     tsx_async_abort
     buslock
     usb-legacy-support
@@ -25,11 +25,11 @@ index c73d133fd37c..b85b2cc6c0fc 100644
     i386/index
     x86_64/index
     ifs
-diff --git a/Documentation/x86/user-interrupts.rst b/Documentation/x86/user-interrupts.rst
+diff --git a/Documentation/arch/x86/user-interrupts.rst b/Documentation/arch/x86/user-interrupts.rst
 new file mode 100644
 index 000000000000..a7795b193c34
 --- /dev/null
-+++ b/Documentation/x86/user-interrupts.rst
++++ b/Documentation/arch/x86/user-interrupts.rst
 @@ -0,0 +1,107 @@
 +.. SPDX-License-Identifier: GPL-2.0
 +

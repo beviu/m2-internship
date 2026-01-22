@@ -1,7 +1,7 @@
-From 1ae714dbde41221491a55e8214135f9bdd481b95 Mon Sep 17 00:00:00 2001
+From 5b216465238db0159f10695aea16b9ffe1900046 Mon Sep 17 00:00:00 2001
 From: Sohil Mehta <sohil.mehta@intel.com>
 Date: Thu, 8 Sep 2022 13:32:59 -0700
-Subject: [PATCH 09/29] x86/process/64: Clean up uintr task fork and exit paths
+Subject: [PATCH 08/28] x86/process/64: Clean up uintr task fork and exit paths
 
 The user interrupt MSRs and the user interrupt state is task specific.
 During task fork and exit clear the task state, clear the MSRs and
@@ -16,10 +16,10 @@ Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
 Signed-off-by: Sohil Mehta <sohil.mehta@intel.com>
 ---
  arch/x86/include/asm/uintr.h |  4 +++
- arch/x86/kernel/fpu/core.c   | 15 ++++++++++
- arch/x86/kernel/process.c    | 11 ++++++++
- arch/x86/kernel/uintr.c      | 53 ++++++++++++++++++++++++++++++++++++
- 4 files changed, 83 insertions(+)
+ arch/x86/kernel/fpu/core.c   | 14 ++++++++++
+ arch/x86/kernel/process.c    |  9 +++++++
+ arch/x86/kernel/uintr.c      | 52 ++++++++++++++++++++++++++++++++++++
+ 4 files changed, 79 insertions(+)
 
 diff --git a/arch/x86/include/asm/uintr.h b/arch/x86/include/asm/uintr.h
 index 2c8156c72cc0..636e2f4e7ef4 100644
@@ -42,22 +42,21 @@ index 2c8156c72cc0..636e2f4e7ef4 100644
  
  #endif /* _ASM_X86_UINTR_H */
 diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
-index 03801368d28f..4c2ebcbb877b 100644
+index 8a3197adbb4b..c640526c62e9 100644
 --- a/arch/x86/kernel/fpu/core.c
 +++ b/arch/x86/kernel/fpu/core.c
-@@ -568,6 +568,7 @@ int fpu_clone(struct task_struct *dst, unsigned long clone_flags, bool minimal)
- {
- 	struct fpu *src_fpu = &current->thread.fpu;
- 	struct fpu *dst_fpu = &dst->thread.fpu;
+@@ -677,6 +677,7 @@ int fpu_clone(struct task_struct *dst, u64 clone_flags, bool minimal,
+ 	 * thus x86_task_fpu() will always be cacheline aligned as well.
+ 	 */
+ 	struct fpu *dst_fpu = (void *)dst + sizeof(*dst);
 +	struct uintr_state *uintr_state;
  
- 	/* The new task's FPU state cannot be valid in the hardware. */
- 	dst_fpu->last_cpu = -1;
-@@ -615,6 +616,20 @@ int fpu_clone(struct task_struct *dst, unsigned long clone_flags, bool minimal)
- 	save_fpregs_to_fpstate(dst_fpu);
+ 	BUILD_BUG_ON(sizeof(*dst) % SMP_CACHE_BYTES != 0);
+ 
+@@ -728,6 +729,19 @@ int fpu_clone(struct task_struct *dst, u64 clone_flags, bool minimal,
  	if (!(clone_flags & CLONE_THREAD))
  		fpu_inherit_perms(dst_fpu);
-+
+ 
 +	/*
 +	 * All of UINTR state is not expected to be inherited. The UPID related
 +	 * structs are task specific. The UITT is same across a clone() but it
@@ -71,26 +70,25 @@ index 03801368d28f..4c2ebcbb877b 100644
 +			memset(uintr_state, 0, sizeof(*uintr_state));
 +	}
 +
- 	fpregs_unlock();
- 
  	/*
+ 	 * Children never inherit PASID state.
+ 	 * Force it to have its init value:
 diff --git a/arch/x86/kernel/process.c b/arch/x86/kernel/process.c
-index 58a6ea472db9..29cff35d58b5 100644
+index 4c718f8adc59..b5e62abbf938 100644
 --- a/arch/x86/kernel/process.c
 +++ b/arch/x86/kernel/process.c
-@@ -26,6 +26,7 @@
- #include <linux/elf-randomize.h>
+@@ -29,6 +29,7 @@
  #include <trace/events/power.h>
  #include <linux/hw_breakpoint.h>
+ #include <linux/entry-common.h>
 +#include <asm/uintr.h>
  #include <asm/cpu.h>
+ #include <asm/cpuid/api.h>
  #include <asm/apic.h>
- #include <linux/uaccess.h>
-@@ -91,6 +92,14 @@ int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
- #ifdef CONFIG_VM86
+@@ -111,6 +112,13 @@ int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
  	dst->thread.vm86 = NULL;
  #endif
-+
+ 
 +#ifdef CONFIG_X86_USER_INTERRUPTS
 +	/* User Interrupt receiver upid state is unique for each task */
 +	dst->thread.upid_ctx = NULL;
@@ -98,23 +96,22 @@ index 58a6ea472db9..29cff35d58b5 100644
 +	dst->thread.upid_activated = false;
 +#endif
 +
- 	/* Drop the copied pointer to current's fpstate */
- 	dst->thread.fpu.fpstate = NULL;
+ 	return 0;
+ }
  
-@@ -118,6 +127,8 @@ void exit_thread(struct task_struct *tsk)
- 
+@@ -135,6 +143,7 @@ void exit_thread(struct task_struct *tsk)
  	free_vm86(t);
  
+ 	shstk_free(tsk);
 +	uintr_free(tsk);
-+
- 	fpu__drop(fpu);
+ 	fpu__drop(tsk);
  }
  
 diff --git a/arch/x86/kernel/uintr.c b/arch/x86/kernel/uintr.c
-index 8455b7a757ea..177de2a10119 100644
+index 83bfdf338fce..dfba09a97a01 100644
 --- a/arch/x86/kernel/uintr.c
 +++ b/arch/x86/kernel/uintr.c
-@@ -353,3 +353,56 @@ void switch_uintr_return(void)
+@@ -351,3 +351,55 @@ void switch_uintr_return(void)
  	if (READ_ONCE(upid->puir))
  		apic->send_IPI_self(UINTR_NOTIFICATION_VECTOR);
  }
@@ -128,21 +125,20 @@ index 8455b7a757ea..177de2a10119 100644
 +void uintr_free(struct task_struct *t)
 +{
 +	struct uintr_upid_ctx *upid_ctx;
-+	void *xstate;
 +
 +	if (!cpu_feature_enabled(X86_FEATURE_UINTR))
 +		return;
 +
 +	upid_ctx = t->thread.upid_ctx;
 +	if (is_uintr_receiver(t)) {
-+		xstate = start_update_xsave_msrs(XFEATURE_UINTR);
++		fpregs_lock_and_load();
 +
-+		xsave_wrmsrl(xstate, MSR_IA32_UINTR_MISC, 0);
-+		xsave_wrmsrl(xstate, MSR_IA32_UINTR_TT, 0);
-+		xsave_wrmsrl(xstate, MSR_IA32_UINTR_PD, 0);
-+		xsave_wrmsrl(xstate, MSR_IA32_UINTR_RR, 0);
-+		xsave_wrmsrl(xstate, MSR_IA32_UINTR_STACKADJUST, 0);
-+		xsave_wrmsrl(xstate, MSR_IA32_UINTR_HANDLER, 0);
++		wrmsrl(MSR_IA32_UINTR_MISC, 0);
++		wrmsrl(MSR_IA32_UINTR_TT, 0);
++		wrmsrl(MSR_IA32_UINTR_PD, 0);
++		wrmsrl(MSR_IA32_UINTR_RR, 0);
++		wrmsrl(MSR_IA32_UINTR_STACKADJUST, 0);
++		wrmsrl(MSR_IA32_UINTR_HANDLER, 0);
 +
 +		/* If upid is active, upid_ctx will be valid */
 +		if (is_uintr_receiver(t)) {
@@ -156,7 +152,7 @@ index 8455b7a757ea..177de2a10119 100644
 +
 +		t->thread.upid_activated = false;
 +
-+		end_update_xsave_msrs();
++		fpregs_lock();
 +	}
 +
 +	if (upid_ctx) {

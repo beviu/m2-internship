@@ -1,0 +1,145 @@
+From 5d32058b0312fa801d06410756f81dad07cf283b Mon Sep 17 00:00:00 2001
+From: Sohil Mehta <sohil.mehta@intel.com>
+Date: Wed, 31 Aug 2022 17:08:14 -0700
+Subject: [PATCH 04/28] x86/fpu/xstate: Enumerate User Interrupts supervisor
+ state
+
+Enable xstate supervisor support for User Interrupts by default.
+
+The user interrupt state for a task consists of the MSR state and the
+User Interrupt Flag (UIF) value. XSAVES and XRSTORS handle saving and
+restoring both of these states.
+
+Signed-off-by: Sohil Mehta <sohil.mehta@intel.com>
+---
+ arch/x86/include/asm/fpu/types.h  | 23 ++++++++++++++++++++++-
+ arch/x86/include/asm/fpu/xstate.h |  1 +
+ arch/x86/kernel/cpu/common.c      |  6 ++++++
+ arch/x86/kernel/fpu/xstate.c      |  6 +++++-
+ 4 files changed, 34 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/include/asm/fpu/types.h b/arch/x86/include/asm/fpu/types.h
+index 93e99d2583d6..da6dbdf7c7f4 100644
+--- a/arch/x86/include/asm/fpu/types.h
++++ b/arch/x86/include/asm/fpu/types.h
+@@ -120,7 +120,7 @@ enum xfeature {
+ 	XFEATURE_CET_USER,
+ 	XFEATURE_CET_KERNEL,
+ 	XFEATURE_RSRVD_COMP_13,
+-	XFEATURE_RSRVD_COMP_14,
++	XFEATURE_UINTR,
+ 	XFEATURE_LBR,
+ 	XFEATURE_RSRVD_COMP_16,
+ 	XFEATURE_XTILE_CFG,
+@@ -143,6 +143,7 @@ enum xfeature {
+ #define XFEATURE_MASK_PASID		(1 << XFEATURE_PASID)
+ #define XFEATURE_MASK_CET_USER		(1 << XFEATURE_CET_USER)
+ #define XFEATURE_MASK_CET_KERNEL	(1 << XFEATURE_CET_KERNEL)
++#define XFEATURE_MASK_UINTR		(1 << XFEATURE_UINTR)
+ #define XFEATURE_MASK_LBR		(1 << XFEATURE_LBR)
+ #define XFEATURE_MASK_XTILE_CFG		(1 << XFEATURE_XTILE_CFG)
+ #define XFEATURE_MASK_XTILE_DATA	(1 << XFEATURE_XTILE_DATA)
+@@ -278,6 +279,26 @@ struct cet_supervisor_state {
+ 	u64 pl2_ssp;
+ } __packed;
+ 
++/*
++ * State component 14 is supervisor state used for User Interrupts state.
++ * The size of this state is 48 bytes
++ */
++struct uintr_state {
++	u64 handler;
++	u64 stack_adjust;
++	struct {
++		u32	uitt_size;
++		u8	uinv;
++		u8	pad1;
++		u8	pad2;
++		u8	pad3:7;
++		u8	uif:1;
++	} __packed misc;
++	u64 upid_addr;
++	u64 uirr;
++	u64 uitt_addr;
++} __packed;
++
+ /*
+  * State component 15: Architectural LBR configuration state.
+  * The size of Arch LBR state depends on the number of LBRs (lbr_depth).
+diff --git a/arch/x86/include/asm/fpu/xstate.h b/arch/x86/include/asm/fpu/xstate.h
+index 7a7dc9d56027..0158cdd071ba 100644
+--- a/arch/x86/include/asm/fpu/xstate.h
++++ b/arch/x86/include/asm/fpu/xstate.h
+@@ -52,6 +52,7 @@
+ /* All currently supported supervisor features */
+ #define XFEATURE_MASK_SUPERVISOR_SUPPORTED (XFEATURE_MASK_PASID | \
+ 					    XFEATURE_MASK_CET_USER | \
++					    XFEATURE_MASK_UINTR | \
+ 					    XFEATURE_MASK_GUEST_SUPERVISOR)
+ 
+ /*
+diff --git a/arch/x86/kernel/cpu/common.c b/arch/x86/kernel/cpu/common.c
+index c47380d10e53..95592d413a51 100644
+--- a/arch/x86/kernel/cpu/common.c
++++ b/arch/x86/kernel/cpu/common.c
+@@ -397,6 +397,12 @@ static void setup_uintr(struct cpuinfo_x86 *c)
+ 	if (!cpu_has(c, X86_FEATURE_UINTR))
+ 		goto disable_uintr;
+ 
++	/* Confirm XSAVE support for UINTR is present. */
++	if (!cpu_has_xfeatures(XFEATURE_MASK_UINTR, NULL)) {
++		pr_info_once("x86: User Interrupts (UINTR) not enabled. XSAVE support for UINTR is missing.\n");
++		goto clear_uintr_cap;
++	}
++
+ 	/*
+ 	 * User Interrupts currently doesn't support PTI. For processors that
+ 	 * support User interrupts PTI in auto mode will default to off.  Need
+diff --git a/arch/x86/kernel/fpu/xstate.c b/arch/x86/kernel/fpu/xstate.c
+index 76153dfb58c9..743baf404909 100644
+--- a/arch/x86/kernel/fpu/xstate.c
++++ b/arch/x86/kernel/fpu/xstate.c
+@@ -4,6 +4,7 @@
+  *
+  * Author: Suresh Siddha <suresh.b.siddha@intel.com>
+  */
++#include "asm/fpu/types.h"
+ #include <linux/bitops.h>
+ #include <linux/compat.h>
+ #include <linux/cpu.h>
+@@ -60,7 +61,7 @@ static const char *xfeature_names[] =
+ 	"Control-flow User registers",
+ 	"Control-flow Kernel registers (KVM only)",
+ 	"unknown xstate feature",
+-	"unknown xstate feature",
++	"User Interrupts registers",
+ 	"unknown xstate feature",
+ 	"unknown xstate feature",
+ 	"AMX Tile config",
+@@ -83,6 +84,7 @@ static unsigned short xsave_cpuid_features[] __initdata = {
+ 	[XFEATURE_PASID]			= X86_FEATURE_ENQCMD,
+ 	[XFEATURE_CET_USER]			= X86_FEATURE_SHSTK,
+ 	[XFEATURE_CET_KERNEL]			= X86_FEATURE_SHSTK,
++	[XFEATURE_UINTR]			= X86_FEATURE_UINTR,
+ 	[XFEATURE_XTILE_CFG]			= X86_FEATURE_AMX_TILE,
+ 	[XFEATURE_XTILE_DATA]			= X86_FEATURE_AMX_TILE,
+ 	[XFEATURE_APX]				= X86_FEATURE_APX,
+@@ -375,6 +377,7 @@ static __init void os_xrstor_booting(struct xregs_state *xstate)
+ 	 XFEATURE_MASK_PASID |			\
+ 	 XFEATURE_MASK_CET_USER |		\
+ 	 XFEATURE_MASK_CET_KERNEL |		\
++	 XFEATURE_MASK_UINTR |			\
+ 	 XFEATURE_MASK_XTILE |			\
+ 	 XFEATURE_MASK_APX)
+ 
+@@ -577,6 +580,7 @@ static bool __init check_xstate_against_struct(int nr)
+ 	case XFEATURE_XTILE_CFG:  return XCHECK_SZ(sz, nr, struct xtile_cfg);
+ 	case XFEATURE_CET_USER:	  return XCHECK_SZ(sz, nr, struct cet_user_state);
+ 	case XFEATURE_CET_KERNEL: return XCHECK_SZ(sz, nr, struct cet_supervisor_state);
++	case XFEATURE_UINTR:	  return XCHECK_SZ(sz, nr, struct uintr_state);
+ 	case XFEATURE_APX:        return XCHECK_SZ(sz, nr, struct apx_state);
+ 	case XFEATURE_XTILE_DATA: check_xtile_data_against_struct(sz); return true;
+ 	default:
+-- 
+2.52.0
+

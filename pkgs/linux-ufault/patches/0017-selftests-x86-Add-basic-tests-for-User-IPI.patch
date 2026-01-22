@@ -1,7 +1,7 @@
-From 20752410cea79fb068bf5f495e4f6a771016ecae Mon Sep 17 00:00:00 2001
+From 73f33551555036afbf1180ae5157e7cc6f3c62e8 Mon Sep 17 00:00:00 2001
 From: Sohil Mehta <sohil.mehta@intel.com>
 Date: Wed, 7 Sep 2022 11:58:14 -0700
-Subject: [PATCH 18/29] selftests/x86: Add basic tests for User IPI
+Subject: [PATCH 17/28] selftests/x86: Add basic tests for User IPI
 
 Include 2 basic tests for receiving a User IPI:
 1. Receiver is spinning in userspace.
@@ -19,7 +19,7 @@ Signed-off-by: Sohil Mehta <sohil.mehta@intel.com>
  create mode 100644 tools/testing/selftests/x86/uintr.c
 
 diff --git a/tools/testing/selftests/x86/Makefile b/tools/testing/selftests/x86/Makefile
-index 0388c4d60af0..b0845df841e9 100644
+index 434065215d12..f08081f6a1c9 100644
 --- a/tools/testing/selftests/x86/Makefile
 +++ b/tools/testing/selftests/x86/Makefile
 @@ -9,6 +9,7 @@ UNAME_M := $(shell uname -m)
@@ -30,10 +30,10 @@ index 0388c4d60af0..b0845df841e9 100644
  
  TARGETS_C_BOTHBITS := single_step_syscall sysret_ss_attrs syscall_nt test_mremap_vdso \
  			check_initial_reg_state sigreturn iopl ioperm \
-@@ -19,6 +20,11 @@ TARGETS_C_32BIT_ONLY := entry_from_vm86 test_syscall_vdso unwind_vdso \
+@@ -20,6 +21,11 @@ TARGETS_C_32BIT_ONLY := entry_from_vm86 test_syscall_vdso unwind_vdso \
  			vdso_restorer
  TARGETS_C_64BIT_ONLY := fsgsbase sysret_rip syscall_numbering \
- 			corrupt_xstate_header amx
+ 			corrupt_xstate_header amx lam test_shadow_stack avx apx
 +
 +ifeq ($(CAN_BUILD_UINTR),1)
 +TARGETS_C_64BIT_ONLY := $(TARGETS_C_64BIT_ONLY) uintr
@@ -42,8 +42,8 @@ index 0388c4d60af0..b0845df841e9 100644
  # Some selftests require 32bit support enabled also on 64bit systems
  TARGETS_C_32BIT_NEEDED := ldt_gdt ptrace_syscall
  
-@@ -41,6 +47,10 @@ ifeq ($(CAN_BUILD_WITH_NOPIE),1)
- CFLAGS += -no-pie
+@@ -50,6 +56,10 @@ CFLAGS += -Wno-unused-command-line-argument
+ endif
  endif
  
 +ifeq ($(CAN_BUILD_UINTR),1)

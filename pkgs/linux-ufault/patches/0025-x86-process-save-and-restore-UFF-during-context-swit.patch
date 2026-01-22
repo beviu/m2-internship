@@ -1,7 +1,7 @@
-From 0e478a8cb9cc8b8f956a26259c733ff440ab8bb0 Mon Sep 17 00:00:00 2001
+From 91c753f4eb8c9d11b0b1c76851e89b9d31335c72 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 25 Jul 2025 13:33:10 +0200
-Subject: [PATCH 26/29] x86/process: save and restore UFF during context switch
+Subject: [PATCH 25/28] x86/process: save and restore UFF during context switch
 
 ---
  arch/x86/include/asm/processor.h |  6 ++++++
@@ -9,12 +9,12 @@ Subject: [PATCH 26/29] x86/process: save and restore UFF during context switch
  2 files changed, 18 insertions(+)
 
 diff --git a/arch/x86/include/asm/processor.h b/arch/x86/include/asm/processor.h
-index 0859583f7192..37b83132b44e 100644
+index 21d7f1bdf70c..36627c96c70b 100644
 --- a/arch/x86/include/asm/processor.h
 +++ b/arch/x86/include/asm/processor.h
-@@ -522,6 +522,12 @@ struct thread_struct {
+@@ -500,6 +500,12 @@ struct thread_struct {
+ 
  	unsigned int		iopl_warn:1;
- 	unsigned int		sig_on_uaccess_err:1;
  
 +#ifdef CONFIG_X86_USER_FAULTS
 +	/* The User Fault Flag is a user-space flag that needs to be set in addition

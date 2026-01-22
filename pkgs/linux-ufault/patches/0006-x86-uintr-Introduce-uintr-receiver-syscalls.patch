@@ -1,7 +1,7 @@
-From b3aaa7224049123df4ce3c30e6994466ac517408 Mon Sep 17 00:00:00 2001
+From 8c9ba8daf506793f95cd29ab7ff8531ae8a08c82 Mon Sep 17 00:00:00 2001
 From: Sohil Mehta <sohil.mehta@intel.com>
 Date: Tue, 6 Sep 2022 23:10:15 -0700
-Subject: [PATCH 07/29] x86/uintr: Introduce uintr receiver syscalls
+Subject: [PATCH 06/28] x86/uintr: Introduce uintr receiver syscalls
 
 Any application that wants to receive a user interrupt needs to register
 an interrupt handler with the kernel. Add a registration syscall that
@@ -27,13 +27,13 @@ Signed-off-by: Sohil Mehta <sohil.mehta@intel.com>
  arch/x86/include/asm/processor.h |  11 ++
  arch/x86/include/asm/uintr.h     |  35 ++++
  arch/x86/kernel/Makefile         |   1 +
- arch/x86/kernel/uintr.c          | 280 +++++++++++++++++++++++++++++++
- 4 files changed, 327 insertions(+)
+ arch/x86/kernel/uintr.c          | 278 +++++++++++++++++++++++++++++++
+ 4 files changed, 325 insertions(+)
  create mode 100644 arch/x86/include/asm/uintr.h
  create mode 100644 arch/x86/kernel/uintr.c
 
 diff --git a/arch/x86/include/asm/processor.h b/arch/x86/include/asm/processor.h
-index 356308c73951..3c227d544f37 100644
+index a24c7805acdb..b5ceca5095a5 100644
 --- a/arch/x86/include/asm/processor.h
 +++ b/arch/x86/include/asm/processor.h
 @@ -9,6 +9,7 @@ struct task_struct;
@@ -44,9 +44,9 @@ index 356308c73951..3c227d544f37 100644
  
  #include <asm/math_emu.h>
  #include <asm/segment.h>
-@@ -521,6 +522,16 @@ struct thread_struct {
+@@ -499,6 +500,16 @@ struct thread_struct {
+ 
  	unsigned int		iopl_warn:1;
- 	unsigned int		sig_on_uaccess_err:1;
  
 +#ifdef CONFIG_X86_USER_INTERRUPTS
 +	/* User Interrupt state*/
@@ -103,12 +103,12 @@ index 000000000000..ba64d825be9e
 +
 +#endif /* _ASM_X86_UINTR_H */
 diff --git a/arch/x86/kernel/Makefile b/arch/x86/kernel/Makefile
-index a20a5ebfacd7..796db2497075 100644
+index bc184dd38d99..4cacf7c8fadc 100644
 --- a/arch/x86/kernel/Makefile
 +++ b/arch/x86/kernel/Makefile
-@@ -131,6 +131,7 @@ obj-$(CONFIG_UPROBES)			+= uprobes.o
+@@ -142,6 +142,7 @@ obj-$(CONFIG_UPROBES)			+= uprobes.o
+ 
  obj-$(CONFIG_PERF_EVENTS)		+= perf_regs.o
- obj-$(CONFIG_TRACING)			+= tracepoint.o
  obj-$(CONFIG_SCHED_MC_PRIO)		+= itmt.o
 +obj-$(CONFIG_X86_USER_INTERRUPTS)	+= uintr.o
  obj-$(CONFIG_X86_UMIP)			+= umip.o
@@ -116,10 +116,10 @@ index a20a5ebfacd7..796db2497075 100644
  obj-$(CONFIG_UNWINDER_ORC)		+= unwind_orc.o
 diff --git a/arch/x86/kernel/uintr.c b/arch/x86/kernel/uintr.c
 new file mode 100644
-index 000000000000..faff3dd361a5
+index 000000000000..2906890f1f59
 --- /dev/null
 +++ b/arch/x86/kernel/uintr.c
-@@ -0,0 +1,280 @@
+@@ -0,0 +1,278 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (c) 2021 - 2022, Intel Corporation.
@@ -214,7 +214,6 @@ index 000000000000..faff3dd361a5
 +{
 +	struct task_struct *t = current;
 +	struct uintr_upid_ctx *upid_ctx;
-+	void *xstate;
 +	u64 msr64;
 +
 +	if (!is_uintr_receiver(t))
@@ -228,15 +227,15 @@ index 000000000000..faff3dd361a5
 +	 * disable preemption while modifying the MSRs, UPID and ui_recv thread
 +	 * struct.
 +	 */
-+	xstate = start_update_xsave_msrs(XFEATURE_UINTR);
++	fpregs_lock_and_load();
 +
-+	xsave_rdmsrl(xstate, MSR_IA32_UINTR_MISC, &msr64);
++	rdmsrq(MSR_IA32_UINTR_MISC, msr64);
 +	msr64 &= ~GENMASK_ULL(39, 32);
-+	xsave_wrmsrl(xstate, MSR_IA32_UINTR_MISC, msr64);
-+	xsave_wrmsrl(xstate, MSR_IA32_UINTR_PD, 0);
-+	xsave_wrmsrl(xstate, MSR_IA32_UINTR_RR, 0);
-+	xsave_wrmsrl(xstate, MSR_IA32_UINTR_STACKADJUST, 0);
-+	xsave_wrmsrl(xstate, MSR_IA32_UINTR_HANDLER, 0);
++	wrmsrq(MSR_IA32_UINTR_MISC, msr64);
++	wrmsrq(MSR_IA32_UINTR_PD, 0);
++	wrmsrq(MSR_IA32_UINTR_RR, 0);
++	wrmsrq(MSR_IA32_UINTR_STACKADJUST, 0);
++	wrmsrq(MSR_IA32_UINTR_HANDLER, 0);
 +
 +	upid_ctx = t->thread.upid_ctx;
 +	//upid_ctx->receiver_active = false;
@@ -252,7 +251,7 @@ index 000000000000..faff3dd361a5
 +	/* Release reference since the removed it from the MSR. */
 +	put_upid_ref(upid_ctx);
 +
-+	end_update_xsave_msrs();
++	fpregs_unlock();
 +
 +	/*
 +	 * Once a UPID and thread struct are allocated for a thread, they will
@@ -289,7 +288,6 @@ index 000000000000..faff3dd361a5
 +	struct uintr_upid_ctx *upid_ctx;
 +	struct uintr_upid *upid;
 +	struct task_struct *t = current;
-+	void *xstate;
 +	u64 misc_msr;
 +	int cpu;
 +
@@ -318,7 +316,7 @@ index 000000000000..faff3dd361a5
 +	 * disable preemption while modifying the MSRs, UPID and upid_activated
 +	 * struct.
 +	 */
-+	xstate = start_update_xsave_msrs(XFEATURE_UINTR);
++	fpregs_lock_and_load();
 +
 +	cpu = smp_processor_id();
 +
@@ -330,21 +328,21 @@ index 000000000000..faff3dd361a5
 +	upid->nc.nv = UINTR_NOTIFICATION_VECTOR;
 +	upid->nc.ndst = cpu_to_ndst(cpu);
 +
-+	xsave_wrmsrl(xstate, MSR_IA32_UINTR_HANDLER, handler);
++	wrmsrl(MSR_IA32_UINTR_HANDLER, handler);
 +
-+	xsave_wrmsrl(xstate, MSR_IA32_UINTR_PD, (u64)upid);
++	wrmsrl(MSR_IA32_UINTR_PD, (u64)upid);
 +
 +	/* Set value as size of ABI redzone */
-+	xsave_wrmsrl(xstate, MSR_IA32_UINTR_STACKADJUST, OS_ABI_REDZONE);
++	wrmsrl(MSR_IA32_UINTR_STACKADJUST, OS_ABI_REDZONE);
 +
 +	/* Modify only the relevant bits of the MISC MSR */
-+	xsave_rdmsrl(xstate, MSR_IA32_UINTR_MISC, &misc_msr);
++	rdmsrl(MSR_IA32_UINTR_MISC, misc_msr);
 +	misc_msr |= (u64)UINTR_NOTIFICATION_VECTOR << 32;
-+	xsave_wrmsrl(xstate, MSR_IA32_UINTR_MISC, misc_msr);
++	wrmsrl(MSR_IA32_UINTR_MISC, misc_msr);
 +
 +	t->thread.upid_activated = true;
 +
-+	end_update_xsave_msrs();
++	fpregs_unlock();
 +
 +	pr_debug("recv: task=%d register handler=%llx upid %px flags=%d\n",
 +		 t->pid, handler, upid, flags);

@@ -1,7 +1,7 @@
-From 20db690275c30f88fb63f0438eaa2e8ecaca7801 Mon Sep 17 00:00:00 2001
+From 9e2f5c3ba4fe09278bbe8f1acd49b49d14b83cb6 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 25 Jul 2025 13:33:10 +0200
-Subject: [PATCH 24/29] x86/cpu: move cr4_toggle_bits_irqoffs to asm/tlbflush.h
+Subject: [PATCH 23/28] x86/cpu: move cr4_toggle_bits_irqoffs to asm/tlbflush.h
 
 ---
  arch/x86/include/asm/tlbflush.h |  1 +
@@ -10,10 +10,10 @@ Subject: [PATCH 24/29] x86/cpu: move cr4_toggle_bits_irqoffs to asm/tlbflush.h
  3 files changed, 14 insertions(+), 13 deletions(-)
 
 diff --git a/arch/x86/include/asm/tlbflush.h b/arch/x86/include/asm/tlbflush.h
-index cda3118f3b27..fc8708e65b0a 100644
+index 00daedfefc1b..6f1e965f42ad 100644
 --- a/arch/x86/include/asm/tlbflush.h
 +++ b/arch/x86/include/asm/tlbflush.h
-@@ -19,6 +19,7 @@ void __flush_tlb_all(void);
+@@ -24,6 +24,7 @@ void __flush_tlb_all(void);
  #define TLB_GENERATION_INVALID	0
  
  void cr4_update_irqsoff(unsigned long set, unsigned long clear);
@@ -22,12 +22,12 @@ index cda3118f3b27..fc8708e65b0a 100644
  
  /* Set in this cpu's CR4. */
 diff --git a/arch/x86/kernel/cpu/common.c b/arch/x86/kernel/cpu/common.c
-index 4815405a8da2..85473921989c 100644
+index 5978bebcfdbd..f400ef6a365f 100644
 --- a/arch/x86/kernel/cpu/common.c
 +++ b/arch/x86/kernel/cpu/common.c
-@@ -559,6 +559,19 @@ void cr4_update_irqsoff(unsigned long set, unsigned long clear)
+@@ -575,6 +575,19 @@ void cr4_update_irqsoff(unsigned long set, unsigned long clear)
  }
- EXPORT_SYMBOL(cr4_update_irqsoff);
+ EXPORT_SYMBOL_FOR_KVM(cr4_update_irqsoff);
  
 +void cr4_toggle_bits_irqsoff(unsigned long mask)
 +{
@@ -46,10 +46,10 @@ index 4815405a8da2..85473921989c 100644
  unsigned long cr4_read_shadow(void)
  {
 diff --git a/arch/x86/kernel/process.c b/arch/x86/kernel/process.c
-index c5a04f647271..e006d6fd73bd 100644
+index 39803d065806..788f2912adb9 100644
 --- a/arch/x86/kernel/process.c
 +++ b/arch/x86/kernel/process.c
-@@ -655,19 +655,6 @@ void speculation_ctrl_update_current(void)
+@@ -718,19 +718,6 @@ void speculation_ctrl_update_current(void)
  	preempt_enable();
  }
  

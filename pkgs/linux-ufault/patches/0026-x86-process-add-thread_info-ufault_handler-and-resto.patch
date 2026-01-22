@@ -1,7 +1,7 @@
-From ab1d67e4bdc34a590d404d945568f9f142e06ac8 Mon Sep 17 00:00:00 2001
+From 9c5f6a100f84f51e744d65491d2e2847b523b42d Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Thu, 22 Jan 2026 11:46:46 +0100
-Subject: [PATCH 27/29] x86/process: add thread_info::ufault_handler and
+Subject: [PATCH 26/28] x86/process: add thread_info::ufault_handler and
  restore during context switch
 
 ---
@@ -10,10 +10,10 @@ Subject: [PATCH 27/29] x86/process: add thread_info::ufault_handler and
  2 files changed, 14 insertions(+), 5 deletions(-)
 
 diff --git a/arch/x86/include/asm/processor.h b/arch/x86/include/asm/processor.h
-index 37b83132b44e..c07dbf5905da 100644
+index 36627c96c70b..d5cb96ced3c3 100644
 --- a/arch/x86/include/asm/processor.h
 +++ b/arch/x86/include/asm/processor.h
-@@ -495,6 +495,10 @@ struct thread_struct {
+@@ -474,6 +474,10 @@ struct thread_struct {
  	unsigned long gs;
  #endif
  

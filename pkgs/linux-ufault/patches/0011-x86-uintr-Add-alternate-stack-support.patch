@@ -1,7 +1,7 @@
-From 80f29fd2ad72546cbe61a421069676c390d57055 Mon Sep 17 00:00:00 2001
+From 02fe993da7ba5e6de7b128b41b9e3acbe648eed4 Mon Sep 17 00:00:00 2001
 From: Sohil Mehta <sohil.mehta@intel.com>
 Date: Thu, 8 Sep 2022 15:30:43 -0700
-Subject: [PATCH 12/29] x86/uintr: Add alternate stack support
+Subject: [PATCH 11/28] x86/uintr: Add alternate stack support
 
 Alternate stack support is needed when a task want to
 handle the interrupt on an different stack rather than the current one.
@@ -11,21 +11,20 @@ handling.
 
 Signed-off-by: Sohil Mehta <sohil.mehta@intel.com>
 ---
- arch/x86/kernel/uintr.c | 54 +++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 54 insertions(+)
+ arch/x86/kernel/uintr.c | 53 +++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 53 insertions(+)
 
 diff --git a/arch/x86/kernel/uintr.c b/arch/x86/kernel/uintr.c
-index 1821e011f695..218e30cdecdb 100644
+index cee413de32f0..da479ec7ca2c 100644
 --- a/arch/x86/kernel/uintr.c
 +++ b/arch/x86/kernel/uintr.c
-@@ -1025,6 +1025,60 @@ SYSCALL_DEFINE1(uintr_unregister_handler, unsigned int, flags)
+@@ -1022,6 +1022,59 @@ SYSCALL_DEFINE1(uintr_unregister_handler, unsigned int, flags)
  	return ret;
  }
  
 +static int do_uintr_alt_stack(void __user *sp, size_t size)
 +{
 +	struct task_struct *t = current;
-+	void *xstate;
 +	u64 msr64;
 +
 +	/*
@@ -44,9 +43,9 @@ index 1821e011f695..218e30cdecdb 100644
 +	else
 +		msr64 = OS_ABI_REDZONE; //program OS_ABI_REDZONE
 +
-+	xstate = start_update_xsave_msrs(XFEATURE_UINTR);
-+	xsave_wrmsrl(xstate, MSR_IA32_UINTR_STACKADJUST, msr64);
-+	end_update_xsave_msrs();
++	fpregs_lock_and_load();
++	wrmsrl(MSR_IA32_UINTR_STACKADJUST, msr64);
++	fpregs_unlock();
 +
 +	return 0;
 +}
