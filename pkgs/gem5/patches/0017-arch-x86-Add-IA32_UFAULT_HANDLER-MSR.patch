@@ -1,7 +1,7 @@
-From 29d009748e5a0db75907d91b86a1ccb4b22fc60e Mon Sep 17 00:00:00 2001
+From b0aa5530ea77c018fa54edff181113243d25dc03 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Mon, 5 Jan 2026 14:37:33 +0100
-Subject: [PATCH 15/17] arch-x86: Add IA32_UFAULT_HANDLER MSR
+Subject: [PATCH 17/19] arch-x86: Add IA32_UFAULT_HANDLER MSR
 
 This MSR lets the OS set the User Fault handler.
 ---

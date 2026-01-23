@@ -1,7 +1,7 @@
-From ad1da244f582ceaacedff35f9bd708d168f4d0d1 Mon Sep 17 00:00:00 2001
+From 2398ccdb8f57c6dfac5e4e8a6163008696fe86b1 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Thu, 15 Jan 2026 15:10:19 +0100
-Subject: [PATCH 10/17] arch-x86: Add SENDUIPI instruction
+Subject: [PATCH 11/19] arch-x86: Add SENDUIPI instruction
 
 The implementation was written by Berk.
 ---

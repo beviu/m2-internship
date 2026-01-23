@@ -1,7 +1,7 @@
-From d8f113a748ada13cc1bb17084aadf3bab82d83b1 Mon Sep 17 00:00:00 2001
+From 82d40468d1f39a12e6e45109b8ee2ba34b052e0f Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Mon, 5 Jan 2026 14:37:33 +0100
-Subject: [PATCH 01/17] arch-x86: Fix indentation in two_byte_opcodes.isa
+Subject: [PATCH 01/19] arch-x86: Fix indentation in two_byte_opcodes.isa
 
 ---
  src/arch/x86/isa/decoder/two_byte_opcodes.isa | 2 +-

@@ -1,12 +1,12 @@
-From b06e6c83f26f8115d1bcb47c9ca733a9e5a24596 Mon Sep 17 00:00:00 2001
+From 5b53961850925b691dec74a80af3a2f7f7a71a6d Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Thu, 15 Jan 2026 16:02:53 +0100
-Subject: [PATCH 03/17] arch-x86: Add TESTUI instruction
+Subject: [PATCH 04/19] arch-x86: Add TESTUI instruction
 
 ---
- src/arch/x86/isa/decoder/two_byte_opcodes.isa       |  1 +
- .../insts/general_purpose/compare_and_test/test.py  | 13 +++++++++++++
- 2 files changed, 14 insertions(+)
+ src/arch/x86/isa/decoder/two_byte_opcodes.isa        |  1 +
+ .../insts/general_purpose/compare_and_test/test.py   | 12 ++++++++++++
+ 2 files changed, 13 insertions(+)
 
 diff --git a/src/arch/x86/isa/decoder/two_byte_opcodes.isa b/src/arch/x86/isa/decoder/two_byte_opcodes.isa
 index 7cb212fcda..28dc5c6d07 100644
@@ -21,10 +21,10 @@ index 7cb212fcda..28dc5c6d07 100644
                  }
                  0x6: Inst::LMSW(Ew);
 diff --git a/src/arch/x86/isa/insts/general_purpose/compare_and_test/test.py b/src/arch/x86/isa/insts/general_purpose/compare_and_test/test.py
-index 8bff1e3cca..e9f762083d 100644
+index 8bff1e3cca..82597cdac0 100644
 --- a/src/arch/x86/isa/insts/general_purpose/compare_and_test/test.py
 +++ b/src/arch/x86/isa/insts/general_purpose/compare_and_test/test.py
-@@ -72,4 +72,17 @@ def macroop TEST_R_I
+@@ -72,4 +72,16 @@ def macroop TEST_R_I
      limm t1, imm
      and t0, reg, t1, flags=(OF, SF, ZF, PF, CF, AF)
  };
@@ -37,8 +37,7 @@ index 8bff1e3cca..e9f762083d 100644
 +
 +    # ZF := AF := OF := PF := SF := 0;
 +    ruflags t1, dataSize=8
-+    limm t2, "~((uint64_t)(ZFBit | AFBit | OFBit | PFBit | SFBit))", dataSize=8
-+    and t1, t1, t2, dataSize=8
++    andi t1, t1, "~((uint64_t)(ZFBit | AFBit | OFBit | PFBit | SFBit))", dataSize=8
 +    wruflags t1, t0, dataSize=8
 +};
  """

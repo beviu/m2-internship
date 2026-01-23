@@ -1,0 +1,25 @@
+From 3d91ba3ac663456066ec4c08cce1dcee6943c49d Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Fri, 23 Jan 2026 10:49:56 +0100
+Subject: [PATCH 02/19] arch-x86: Allow setting CR4.UINTR bit
+
+---
+ src/arch/x86/isa/microops/regop.isa | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/arch/x86/isa/microops/regop.isa b/src/arch/x86/isa/microops/regop.isa
+index b3efac1d02..348b7dbc78 100644
+--- a/src/arch/x86/isa/microops/regop.isa
++++ b/src/arch/x86/isa/microops/regop.isa
+@@ -1414,7 +1414,7 @@ let {{
+                     {
+                         CR4 cr4 = newVal;
+                         // PAE can't be disabled in long mode.
+-                        if (bits(newVal, 63, 11) ||
++                        if (bits(newVal, 24, 11) || bits(newVal, 63, 26) ||
+                                 (machInst.mode.mode == LongMode && !cr4.pae))
+                             fault = std::make_shared<GeneralProtection>(0);
+                     }
+-- 
+2.52.0
+

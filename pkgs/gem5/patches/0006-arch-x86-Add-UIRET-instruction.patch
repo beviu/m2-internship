@@ -1,7 +1,7 @@
-From 55ce0feb52d05c9897fd4944a2e9a5e1c16033c1 Mon Sep 17 00:00:00 2001
+From 9a362caf34350c9d9fd2a882e31190fc3e8c5a38 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 9 Jan 2026 15:45:47 +0100
-Subject: [PATCH 05/17] arch-x86: Add UIRET instruction
+Subject: [PATCH 06/19] arch-x86: Add UIRET instruction
 
 Most of the code is taken from Berk's great work.
 ---

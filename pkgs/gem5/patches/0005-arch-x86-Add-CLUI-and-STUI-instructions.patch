@@ -1,7 +1,7 @@
-From fb31fb77c6ac3726d963a0e862216844483867c3 Mon Sep 17 00:00:00 2001
+From 58dcbc8b1e7df612233844b7fa8d0aa6bb140c44 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
-Date: Mon, 5 Jan 2026 14:37:33 +0100
-Subject: [PATCH 14/17] arch-x86: Add STUF and CLUF instructions
+Date: Thu, 15 Jan 2026 16:02:53 +0100
+Subject: [PATCH 05/19] arch-x86: Add CLUI and STUI instructions
 
 ---
  src/arch/x86/isa/decoder/two_byte_opcodes.isa            | 2 ++
@@ -9,34 +9,34 @@ Subject: [PATCH 14/17] arch-x86: Add STUF and CLUF instructions
  2 files changed, 11 insertions(+)
 
 diff --git a/src/arch/x86/isa/decoder/two_byte_opcodes.isa b/src/arch/x86/isa/decoder/two_byte_opcodes.isa
-index 0cac00a6bd..9df5298bec 100644
+index 28dc5c6d07..64ac45be95 100644
 --- a/src/arch/x86/isa/decoder/two_byte_opcodes.isa
 +++ b/src/arch/x86/isa/decoder/two_byte_opcodes.isa
 @@ -138,6 +138,8 @@
                          0x0: BasicOperate::SERIALIZE({{/*Nothing*/}},
                                                           IsSerializeAfter);
-                         0x1: Inst::TESTUF();
-+                        0x2: Inst::CLUF();
-+                        0x3: Inst::STUF();
-                         0x4: Inst::UIRET();
                          0x5: Inst::TESTUI();
-                         0x6: Inst::CLUI();
++                        0x6: Inst::CLUI();
++                        0x7: Inst::STUI();
+                     }
+                 }
+                 0x6: Inst::LMSW(Ew);
 diff --git a/src/arch/x86/isa/insts/general_purpose/flags/set_and_clear.py b/src/arch/x86/isa/insts/general_purpose/flags/set_and_clear.py
-index 4d302e23ae..3ac1efaf2c 100644
+index 4c6ee6abdf..4d302e23ae 100644
 --- a/src/arch/x86/isa/insts/general_purpose/flags/set_and_clear.py
 +++ b/src/arch/x86/isa/insts/general_purpose/flags/set_and_clear.py
-@@ -184,4 +184,13 @@ def macroop STUI {
-     limm t1, 1, dataSize=8
-     wrval ctrlRegIdx("misc_reg::Uif"), t1, dataSize=8
+@@ -175,4 +175,13 @@ def macroop CLI_REAL {
+ def macroop CLI_VIRT {
+     panic "Virtual mode cli isn't implemented!"
  };
 +
-+def macroop CLUF {
-+    wrval ctrlRegIdx("misc_reg::Uff"), t0, dataSize=8
++def macroop CLUI {
++    wrval ctrlRegIdx("misc_reg::Uif"), t0, dataSize=8
 +};
 +
-+def macroop STUF {
++def macroop STUI {
 +    limm t1, 1, dataSize=8
-+    wrval ctrlRegIdx("misc_reg::Uff"), t1, dataSize=8
++    wrval ctrlRegIdx("misc_reg::Uif"), t1, dataSize=8
 +};
  """
 -- 

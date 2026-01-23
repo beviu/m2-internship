@@ -1,0 +1,25 @@
+From 145a5690e0161d859789dda5ab31618621715b78 Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Fri, 23 Jan 2026 10:51:19 +0100
+Subject: [PATCH 13/19] arch-x86: Allow setting CR4.UFAULT bit
+
+---
+ src/arch/x86/isa/microops/regop.isa | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/arch/x86/isa/microops/regop.isa b/src/arch/x86/isa/microops/regop.isa
+index 348b7dbc78..bc34b1dc4e 100644
+--- a/src/arch/x86/isa/microops/regop.isa
++++ b/src/arch/x86/isa/microops/regop.isa
+@@ -1414,7 +1414,7 @@ let {{
+                     {
+                         CR4 cr4 = newVal;
+                         // PAE can't be disabled in long mode.
+-                        if (bits(newVal, 24, 11) || bits(newVal, 63, 26) ||
++                        if (bits(newVal, 24, 11) || bits(newVal, 63, 27) ||
+                                 (machInst.mode.mode == LongMode && !cr4.pae))
+                             fault = std::make_shared<GeneralProtection>(0);
+                     }
+-- 
+2.52.0
+

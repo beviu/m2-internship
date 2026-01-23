@@ -75,7 +75,7 @@ static bool test_stuf(void) {
 static bool test_cluf(void) {
   cluf();
 
-  if (!testuf()) {
+  if (testuf()) {
     fputs("UFF should be unset after calling CLUF.\n", stderr);
     return false;
   }
@@ -103,7 +103,7 @@ static bool test_prctl_ufault_enable(void) {
   int status;
 
   if (prctl_ufault(PR_UFAULT_ENABLE, (unsigned long)NULL) == -1) {
-    perror("prctl(PR_UFAULT, PR_UFAULT_ENABLE) 3");
+    perror("prctl(PR_UFAULT, PR_UFAULT_ENABLE)");
     return false;
   }
 

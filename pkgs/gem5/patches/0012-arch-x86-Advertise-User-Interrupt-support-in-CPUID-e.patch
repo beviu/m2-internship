@@ -1,7 +1,7 @@
-From 5c15e01344a7056f66a9b4760524b567933e1665 Mon Sep 17 00:00:00 2001
+From cf1599d90313d75d65bc39de22dcf6b59b064700 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
-Date: Mon, 5 Jan 2026 14:50:34 +0100
-Subject: [PATCH 17/17] arch-x86: Advertise User Fault support in CPUID
+Date: Fri, 16 Jan 2026 09:54:57 +0100
+Subject: [PATCH 12/19] arch-x86: Advertise User Interrupt support in CPUID
  extended features
 
 ---
@@ -9,15 +9,15 @@ Subject: [PATCH 17/17] arch-x86: Advertise User Fault support in CPUID
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/src/arch/x86/X86ISA.py b/src/arch/x86/X86ISA.py
-index 55bf5ce268..6987b35db5 100644
+index aa48d1aa6e..55bf5ce268 100644
 --- a/src/arch/x86/X86ISA.py
 +++ b/src/arch/x86/X86ISA.py
 @@ -83,7 +83,7 @@ class X86ISA(BaseISA):
      )
      # 0000_0007h
      ExtendedFeatures = VectorParam.UInt32(
--        [0x00000000, 0x01800000, 0x00000020, 0x00000000], "feature flags"
-+        [0x00000000, 0x01800000, 0x00000060, 0x00000000], "feature flags"
+-        [0x00000000, 0x01800000, 0x00000000, 0x00000000], "feature flags"
++        [0x00000000, 0x01800000, 0x00000020, 0x00000000], "feature flags"
      )
      # 0000_000Dh - This uses ECX index, so the last entry must be all zeros
      ExtendedState = VectorParam.UInt32(
