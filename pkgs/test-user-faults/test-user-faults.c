@@ -5,89 +5,160 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/prctl.h>
 #include <x86gprintrin.h>
+
+#define PR_UFAULT 79
+#define PR_UFAULT_DISABLE 0
+#define PR_UFAULT_ENABLE 1
+#define PR_UFAULT_STATUS 2
+
+#define UFAULT_CODE_SHIFT 60
+#define UFAULT_CODE_PRESENT (1 << 0)
+#define UFAULT_CODE_WRITE (1 << 2)
+#define UFAULT_CODE_FETCH (1 << 3)
+#define UFAULT_ADDR_MASK ((1ULL << UFAULT_CODE_SHIFT) - 1)
 
 #define cluf() asm volatile(".long 0xea010ff3" ::: "memory");
 #define stuf() asm volatile(".long 0xeb010ff3" ::: "memory");
 
-typedef void (*ufault_handler_t)(struct __uintr_frame *frame,
-                                 unsigned long long vector);
-
 static sig_atomic_t ufault_code;
 static sig_atomic_t ufault_count = 0;
 
+static int prctl_ufault(unsigned long opt, unsigned long arg) {
+  return prctl((unsigned long)PR_UFAULT, opt, arg);
+}
+
 static inline __attribute__((always_inline)) bool testuf(void) {
   bool uff;
-
-  asm volatile(".long 0xeb010ff3" : "=@ccc"(uff)::"memory");
-
+  asm(".long 0xe9010ff3" : "=@ccc"(uff)::"cc");
   return uff;
 }
 
-static long syscall_2(long num, long arg1, long arg2) {
-  long ret;
-  asm volatile("syscall"
-               : "=a"(ret)
-               : "0"(num), "D"(arg1), "S"(arg2)
-               : "rcx", "r11", "memory", "cc");
-  return ret;
-}
-
-static int ufault_register_handler(ufault_handler_t handler, int flags) {
-  return syscall_2(480, (long)handler, flags);
-}
-
 static void __attribute__((interrupt, target("uintr,general-regs-only")))
-handler(struct __uintr_frame *frame, unsigned long long params) {
-  uint8_t code = params >> 60;
-  void *addr = (void *)((params << 3) >> 3);
+ufault_handler(struct __uintr_frame *frame, unsigned long long params) {
+  uint8_t code = params >> UFAULT_CODE_SHIFT;
+  void *addr = (void *)(params & UFAULT_ADDR_MASK);
 
   // Let the kernel handle the fault.
   cluf();
-  *(volatile char *)addr;
+  if (code & UFAULT_CODE_WRITE)
+    *(volatile char *)addr = 0;
+  else
+    *(volatile char *)addr;
   stuf();
 
-  ufault_code = params >> 60;
-  ++ufault_count;
+  if (ufault_count++)
+    ufault_code = params >> 60;
 }
 
-static bool test_uff(void) {
-  bool uff;
-
+static bool test_initial_uff(void) {
   if (testuf()) {
-    fputs("UFF flag is set before running STUF.\n", stderr);
-    return false;
-  }
-
-  stuf();
-  uff = testuf();
-  cluf();
-
-  if (!uff) {
-    fputs("UFF flag is not set after running STUF.\n", stderr);
+    fputs("UFF should be unset at the start of the process.\n", stderr);
     return false;
   }
 
   return true;
 }
 
-static bool test_user_fault(void) {
+static bool test_stuf(void) {
+  stuf();
+
+  if (!testuf()) {
+    fputs("UFF should be set after calling STUF.\n", stderr);
+    return false;
+  }
+
+  return true;
+}
+
+static bool test_cluf(void) {
+  cluf();
+
+  if (!testuf()) {
+    fputs("UFF should be unset after calling CLUF.\n", stderr);
+    return false;
+  }
+
+  return true;
+}
+
+static bool test_initial_prctl_ufault_status(void) {
+  int status = prctl_ufault(PR_UFAULT_STATUS, 0);
+  if (status == -1) {
+    perror("prctl(PR_UFAULT, PR_UFAULT_STATUS)");
+    return false;
+  }
+
+  if (status) {
+    fputs("PR_UFAULT_STATUS should return 0 at the start of the process.\n",
+          stderr);
+    return false;
+  }
+
+  return true;
+}
+
+static bool test_prctl_ufault_enable(void) {
+  int status;
+
+  if (prctl_ufault(PR_UFAULT_ENABLE, (unsigned long)NULL) == -1) {
+    perror("prctl(PR_UFAULT, PR_UFAULT_ENABLE) 3");
+    return false;
+  }
+
+  status = prctl_ufault(PR_UFAULT_STATUS, 0);
+  if (status == -1) {
+    perror("prctl(PR_UFAULT, PR_UFAULT_STATUS)");
+    return false;
+  }
+
+  if (!status) {
+    fputs("PR_UFAULT_STATUS should return 1 after calling PR_UFAULT_ENABLE.\n",
+          stderr);
+    return false;
+  }
+
+  return true;
+}
+
+static bool test_prctl_ufault_disable(void) {
+  int status;
+
+  if (prctl_ufault(PR_UFAULT_DISABLE, (unsigned long)NULL) == -1) {
+    perror("prctl(PR_UFAULT, PR_UFAULT_DISABLE)");
+    return false;
+  }
+
+  status = prctl_ufault(PR_UFAULT_STATUS, 0);
+  if (status == -1) {
+    perror("prctl(PR_UFAULT, PR_UFAULT_STATUS)");
+    return false;
+  }
+
+  if (status) {
+    fputs("PR_UFAULT_STATUS should return 0 after calling PR_UFAULT_DISABLE.\n",
+          stderr);
+    return false;
+  }
+
+  return true;
+}
+
+static bool test_delivery(void) {
   int ret;
   void *page = NULL;
   bool ok = true;
 
-  ret = ufault_register_handler(handler, 0);
-  if (ret) {
-    fprintf(stderr, "ufault_register_handler: %s\n", strerror(-ret));
-    ok = false;
-    goto out;
+  if (prctl_ufault(PR_UFAULT_ENABLE, (unsigned long)ufault_handler) == -1) {
+    perror("prctl(PR_UFAULT, PR_UFAULT_ENABLE)");
+    return false;
   }
 
   page = mmap(0, 1, PROT_READ, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
   if (page == MAP_FAILED) {
     perror("mmap");
-    ok = false;
-    goto out;
+    return false;
   }
 
   stuf();
@@ -95,31 +166,38 @@ static bool test_user_fault(void) {
   cluf();
 
   if (ufault_count != 1) {
-    fprintf(stderr, "Unexpected User Fault count: %d\n", ufault_count);
-    ok = false;
-    goto out;
+    fprintf(stderr, "A read should trigger one user fault, not %d.\n",
+            ufault_count);
+    munmap(page, 1);
+    return false;
   }
 
   if (ufault_code != 0) {
-    fprintf(stderr, "Unexpected User Fault code: %d\n", ufault_code);
-    ok = false;
-    goto out;
+    fprintf(stderr, "A read should have code 0, not %d.\n", ufault_code);
+    munmap(page, 1);
+    return false;
   }
 
-out:
-  if (page)
-    munmap(page, 1);
+  munmap(page, 1);
 
-  return ok;
+  return true;
 }
 
 int main(void) {
-  int ret;
+  bool ok = true;
 
-  if (!test_uff() || !test_user_fault())
-    return EXIT_FAILURE;
+  ok &= test_initial_uff();
+  ok &= test_stuf();
+  ok &= test_cluf();
+  ok &= test_initial_prctl_ufault_status();
+  ok &= test_prctl_ufault_enable();
+  ok &= test_prctl_ufault_disable();
+  ok &= test_delivery();
 
-  puts("User Faults are working.");
+  if (ok) {
+    puts("User Faults are working!");
+    return EXIT_SUCCESS;
+  }
 
-  return EXIT_SUCCESS;
+  return EXIT_FAILURE;
 }
