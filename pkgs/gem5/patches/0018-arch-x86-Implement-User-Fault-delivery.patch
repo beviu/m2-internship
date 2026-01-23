@@ -1,4 +1,4 @@
-From 7606e317a66f81714c8e19aaae30ec21ee526a7f Mon Sep 17 00:00:00 2001
+From 85c1de356de120790e975e37123ffe28d97e5559 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Mon, 5 Jan 2026 14:37:33 +0100
 Subject: [PATCH 18/19] arch-x86: Implement User Fault delivery
@@ -164,14 +164,14 @@ index 0d49bfe9da..5456f4bbab 100644
      Bitfield<17> pcide; // PCID Enable
      Bitfield<16> fsgsbase; // Enable RDFSBASE, RDGSBASE, WRFSBASE,
 diff --git a/src/arch/x86/tlb.cc b/src/arch/x86/tlb.cc
-index 270af19863..4679f7d02e 100644
+index 270af19863..08b707e3c8 100644
 --- a/src/arch/x86/tlb.cc
 +++ b/src/arch/x86/tlb.cc
 @@ -486,19 +486,26 @@ TLB::translate(const RequestPtr &req,
              bool inUser = m5Reg.cpl == 3 && !(flags & CPL0FlagBit);
              CR0 cr0 = tc->readMiscRegNoEffect(misc_reg::Cr0);
              bool badWrite = (!entry->writable && (inUser || cr0.wp));
-+            bool userFault = inUser && cr4.ufault && tc->readMiscRegNoEffect(X86ISA::misc_reg::Uif);
++            bool userFault = inUser && cr4.ufault && tc->readMiscRegNoEffect(X86ISA::misc_reg::Uff);
              if ((inUser && !entry->user) ||
                  (mode == BaseMMU::Write && badWrite)) {
                  // The page must have been present to get into the TLB in
