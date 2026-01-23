@@ -1,4 +1,4 @@
-From 85c1de356de120790e975e37123ffe28d97e5559 Mon Sep 17 00:00:00 2001
+From 1ae474da720d80539b40e928a01c68fcda853bb2 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Mon, 5 Jan 2026 14:37:33 +0100
 Subject: [PATCH 18/19] arch-x86: Implement User Fault delivery
@@ -8,9 +8,11 @@ Code was written by Berk.
  src/arch/x86/faults.cc            | 31 ++++++++++++++++++++++
  src/arch/x86/faults.hh            | 32 ++++++++++++++++++++++
  src/arch/x86/isa/insts/romutil.py | 44 +++++++++++++++++++++++++++++++
+ src/arch/x86/pagetable_walker.cc  | 33 ++++++++++++++++-------
+ src/arch/x86/pagetable_walker.hh  |  1 +
  src/arch/x86/regs/misc.hh         |  1 +
  src/arch/x86/tlb.cc               | 15 ++++++++---
- 5 files changed, 119 insertions(+), 4 deletions(-)
+ 7 files changed, 143 insertions(+), 14 deletions(-)
 
 diff --git a/src/arch/x86/faults.cc b/src/arch/x86/faults.cc
 index fce92b1fb4..f06699ad62 100644
@@ -151,6 +153,138 @@ index 7082b4d4a5..d4d8074da0 100644
 +};
  """
  )
+diff --git a/src/arch/x86/pagetable_walker.cc b/src/arch/x86/pagetable_walker.cc
+index bac174afb0..8172d225cf 100644
+--- a/src/arch/x86/pagetable_walker.cc
++++ b/src/arch/x86/pagetable_walker.cc
+@@ -304,6 +304,10 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
+     bool doTLBInsert = false;
+     bool doEndWalk = false;
+     bool badNX = pte.nx && mode == BaseMMU::Execute && enableNX;
++    HandyM5Reg m5Reg = tc->readMiscRegNoEffect(misc_reg::M5Reg);
++    bool inUser = m5Reg.cpl == 3;
++    CR4 cr4 = tc->readMiscRegNoEffect(misc_reg::Cr4);
++    bool doUserFault = inUser && cr4.ufault && tc->readMiscRegNoEffect(X86ISA::misc_reg::Uff);
+     switch(state) {
+       case LongPML4:
+         DPRINTF(PageTableWalker, "Got long mode PML4 entry %#016x.\n", pte);
+@@ -314,7 +318,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
+         entry.user = pte.u;
+         if (badNX || !pte.p) {
+             doEndWalk = true;
+-            fault = pageFault(pte.p);
++            fault = doUserFault ? userFault(pte.p) : pageFault(pte.p);
+             break;
+         }
+         entry.noExec = pte.nx;
+@@ -329,7 +333,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
+         entry.user = entry.user && pte.u;
+         if (badNX || !pte.p) {
+             doEndWalk = true;
+-            fault = pageFault(pte.p);
++            fault = doUserFault ? userFault(pte.p) : pageFault(pte.p);
+             break;
+         }
+         nextState = LongPD;
+@@ -342,7 +346,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
+         entry.user = entry.user && pte.u;
+         if (badNX || !pte.p) {
+             doEndWalk = true;
+-            fault = pageFault(pte.p);
++            fault = doUserFault ? userFault(pte.p) : pageFault(pte.p);
+             break;
+         }
+         if (!pte.ps) {
+@@ -371,7 +375,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
+         entry.user = entry.user && pte.u;
+         if (badNX || !pte.p) {
+             doEndWalk = true;
+-            fault = pageFault(pte.p);
++            fault = doUserFault ? userFault(pte.p) : pageFault(pte.p);
+             break;
+         }
+         entry.paddr = mbits(pte, 51, 12);
+@@ -388,7 +392,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
+         nextRead = mbits(pte, 51, 12) + vaddr.pael2 * dataSize;
+         if (!pte.p) {
+             doEndWalk = true;
+-            fault = pageFault(pte.p);
++            fault = doUserFault ? userFault(pte.p) : pageFault(pte.p);
+             break;
+         }
+         nextState = PAEPD;
+@@ -401,7 +405,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
+         entry.user = pte.u;
+         if (badNX || !pte.p) {
+             doEndWalk = true;
+-            fault = pageFault(pte.p);
++            fault = doUserFault ? userFault(pte.p) : pageFault(pte.p);
+             break;
+         }
+         if (!pte.ps) {
+@@ -431,7 +435,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
+         entry.user = entry.user && pte.u;
+         if (badNX || !pte.p) {
+             doEndWalk = true;
+-            fault = pageFault(pte.p);
++            fault = doUserFault ? userFault(pte.p) : pageFault(pte.p);
+             break;
+         }
+         entry.paddr = mbits(pte, 51, 12);
+@@ -450,7 +454,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
+         entry.user = pte.u;
+         if (!pte.p) {
+             doEndWalk = true;
+-            fault = pageFault(pte.p);
++            fault = doUserFault ? userFault(pte.p) : pageFault(pte.p);
+             break;
+         }
+         if (!pte.ps) {
+@@ -479,7 +483,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
+         entry.user = pte.u;
+         if (!pte.p) {
+             doEndWalk = true;
+-            fault = pageFault(pte.p);
++            fault = doUserFault ? userFault(pte.p) : pageFault(pte.p);
+             break;
+         }
+         // 4 KB page
+@@ -495,7 +499,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
+         entry.user = pte.u;
+         if (!pte.p) {
+             doEndWalk = true;
+-            fault = pageFault(pte.p);
++            fault = doUserFault ? userFault(pte.p) : pageFault(pte.p);
+             break;
+         }
+         entry.paddr = mbits(pte, 31, 12);
+@@ -756,5 +760,14 @@ Walker::WalkerState::pageFault(bool present)
+                                        m5reg.cpl == 3, false);
+ }
+ 
++Fault
++Walker::WalkerState::userFault(bool present)
++{
++    DPRINTF(PageTableWalker, "Raising user fault.\n");
++    if (mode == BaseMMU::Execute && !enableNX)
++        mode = BaseMMU::Read;
++    return std::make_shared<UserFault>(entry.vaddr, present, mode);
++}
++
+ } // namespace X86ISA
+ } // namespace gem5
+diff --git a/src/arch/x86/pagetable_walker.hh b/src/arch/x86/pagetable_walker.hh
+index 14e7c9976f..79514cc6e5 100644
+--- a/src/arch/x86/pagetable_walker.hh
++++ b/src/arch/x86/pagetable_walker.hh
+@@ -144,6 +144,7 @@ namespace X86ISA
+             void sendPackets();
+             void endWalk();
+             Fault pageFault(bool present);
++            Fault userFault(bool present);
+         };
+ 
+         friend class WalkerState;
 diff --git a/src/arch/x86/regs/misc.hh b/src/arch/x86/regs/misc.hh
 index 0d49bfe9da..5456f4bbab 100644
 --- a/src/arch/x86/regs/misc.hh
@@ -164,14 +298,14 @@ index 0d49bfe9da..5456f4bbab 100644
      Bitfield<17> pcide; // PCID Enable
      Bitfield<16> fsgsbase; // Enable RDFSBASE, RDGSBASE, WRFSBASE,
 diff --git a/src/arch/x86/tlb.cc b/src/arch/x86/tlb.cc
-index 270af19863..08b707e3c8 100644
+index 270af19863..90e36fca89 100644
 --- a/src/arch/x86/tlb.cc
 +++ b/src/arch/x86/tlb.cc
 @@ -486,19 +486,26 @@ TLB::translate(const RequestPtr &req,
              bool inUser = m5Reg.cpl == 3 && !(flags & CPL0FlagBit);
              CR0 cr0 = tc->readMiscRegNoEffect(misc_reg::Cr0);
              bool badWrite = (!entry->writable && (inUser || cr0.wp));
-+            bool userFault = inUser && cr4.ufault && tc->readMiscRegNoEffect(X86ISA::misc_reg::Uff);
++            bool doUserFault = inUser && cr4.ufault && tc->readMiscRegNoEffect(X86ISA::misc_reg::Uff);
              if ((inUser && !entry->user) ||
                  (mode == BaseMMU::Write && badWrite)) {
                  // The page must have been present to get into the TLB in
@@ -179,7 +313,7 @@ index 270af19863..08b707e3c8 100644
                  // fine even though we're not checking them.
 -                return std::make_shared<PageFault>(vaddr, true, mode, inUser,
 -                                                   false);
-+                if (userFault)
++                if (doUserFault)
 +                    return std::make_shared<UserFault>(vaddr, true, mode);
 +                else
 +                    return std::make_shared<PageFault>(vaddr, true, mode, inUser,
@@ -190,8 +324,8 @@ index 270af19863..08b707e3c8 100644
                  // fault that reflects that happening.
 -                return std::make_shared<PageFault>(
 -                    vaddr, true, BaseMMU::Write, inUser, false);
-+                if (userFault)
-+                    return std::make_shared<UserFault>(vaddr, inUser, mode);
++                if (doUserFault)
++                    return std::make_shared<UserFault>(vaddr, true, mode);
 +                else
 +                    return std::make_shared<PageFault>(
 +                        vaddr, true, BaseMMU::Write, inUser, false);
