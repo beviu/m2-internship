@@ -1,4 +1,4 @@
-From 933b97f44d64854b88b2301a3cc4085df5aba7e7 Mon Sep 17 00:00:00 2001
+From 047029c4370bc920d0dcdd98768ecfe87c2d191b Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Mon, 5 Jan 2026 14:37:33 +0100
 Subject: [PATCH 16/19] arch-x86: Add STUF and CLUF instructions

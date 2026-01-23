@@ -1,4 +1,4 @@
-From 9a362caf34350c9d9fd2a882e31190fc3e8c5a38 Mon Sep 17 00:00:00 2001
+From 280a6c5d8bd7910c2697b71cfe2e07c8af349402 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 9 Jan 2026 15:45:47 +0100
 Subject: [PATCH 06/19] arch-x86: Add UIRET instruction

@@ -1,4 +1,4 @@
-From 145a5690e0161d859789dda5ab31618621715b78 Mon Sep 17 00:00:00 2001
+From 0974026a484de5e476fcbae0ce8f4f1ed8d433b1 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 23 Jan 2026 10:51:19 +0100
 Subject: [PATCH 13/19] arch-x86: Allow setting CR4.UFAULT bit

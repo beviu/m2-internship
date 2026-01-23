@@ -1,4 +1,4 @@
-From cf1599d90313d75d65bc39de22dcf6b59b064700 Mon Sep 17 00:00:00 2001
+From d7907eb1ef6561a9d12d011b4d5069373a1ba49b Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 16 Jan 2026 09:54:57 +0100
 Subject: [PATCH 12/19] arch-x86: Advertise User Interrupt support in CPUID

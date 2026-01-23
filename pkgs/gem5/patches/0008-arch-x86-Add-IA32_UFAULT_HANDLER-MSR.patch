@@ -1,4 +1,4 @@
-From 7e491478bddffafb1a7ccc9bdec665c87f3648d0 Mon Sep 17 00:00:00 2001
+From 859a8a8868f50199ba9f406460b695b9845fcee5 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 16 Jan 2026 10:37:18 +0100
 Subject: [PATCH 08/19] arch-x86: Add IA32_UFAULT_HANDLER MSR
