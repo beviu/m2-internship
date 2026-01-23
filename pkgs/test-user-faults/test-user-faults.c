@@ -26,7 +26,7 @@ static sig_atomic_t ufault_code;
 static sig_atomic_t ufault_count = 0;
 
 static int prctl_ufault(unsigned long opt, unsigned long arg) {
-  return prctl((unsigned long)PR_UFAULT, opt, arg);
+  return prctl((unsigned long)PR_UFAULT, opt, arg, 0L, 0L);
 }
 
 static inline __attribute__((always_inline)) bool testuf(void) {
@@ -146,9 +146,7 @@ static bool test_prctl_ufault_disable(void) {
 }
 
 static bool test_delivery(void) {
-  int ret;
   void *page = NULL;
-  bool ok = true;
 
   if (prctl_ufault(PR_UFAULT_ENABLE, (unsigned long)ufault_handler) == -1) {
     perror("prctl(PR_UFAULT, PR_UFAULT_ENABLE)");
