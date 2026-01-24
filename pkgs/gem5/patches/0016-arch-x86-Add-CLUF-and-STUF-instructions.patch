@@ -1,7 +1,7 @@
-From 047029c4370bc920d0dcdd98768ecfe87c2d191b Mon Sep 17 00:00:00 2001
+From a98fb53fed2262b3ed51b69e8d372f7122fd313e Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Mon, 5 Jan 2026 14:37:33 +0100
-Subject: [PATCH 16/19] arch-x86: Add STUF and CLUF instructions
+Subject: [PATCH 16/20] arch-x86: Add CLUF and STUF instructions
 
 ---
  src/arch/x86/isa/decoder/two_byte_opcodes.isa            | 2 ++

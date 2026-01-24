@@ -1,7 +1,7 @@
 From 3d91ba3ac663456066ec4c08cce1dcee6943c49d Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 23 Jan 2026 10:49:56 +0100
-Subject: [PATCH 02/19] arch-x86: Allow setting CR4.UINTR bit
+Subject: [PATCH 02/20] arch-x86: Allow setting CR4.UINTR bit
 
 ---
  src/arch/x86/isa/microops/regop.isa | 2 +-

@@ -42,14 +42,15 @@ stdenv.mkDerivation (finalAttrs: {
     ./patches/0009-arch-x86-Add-IA32_UINTR_TT-MSR.patch
     ./patches/0010-arch-x86-Add-physical-parameter-to-load-store-operat.patch
     ./patches/0011-arch-x86-Add-SENDUIPI-instruction.patch
-    ./patches/0012-arch-x86-Advertise-User-Interrupt-support-in-CPUID-e.patch
+    ./patches/0012-arch-x86-Advertise-user-interrupt-support-in-CPUID-e.patch
     ./patches/0013-arch-x86-Allow-setting-CR4.UFAULT-bit.patch
     ./patches/0014-arch-x86-Add-misc_reg-Uff-register.patch
     ./patches/0015-arch-x86-Add-TESTUF-instruction.patch
-    ./patches/0016-arch-x86-Add-STUF-and-CLUF-instructions.patch
-    ./patches/0017-arch-x86-Add-IA32_UFAULT_HANDLER-MSR.patch
-    ./patches/0018-arch-x86-Implement-User-Fault-delivery.patch
-    ./patches/0019-arch-x86-Advertise-User-Fault-support-in-CPUID-exten.patch
+    ./patches/0016-arch-x86-Add-CLUF-and-STUF-instructions.patch
+    ./patches/0017-arch-x86-Add-UFRET-instruction.patch
+    ./patches/0018-arch-x86-Add-IA32_UFAULT_HANDLER-MSR.patch
+    ./patches/0019-arch-x86-Implement-user-fault-delivery.patch
+    ./patches/0020-arch-x86-Advertise-user-fault-support-in-CPUID-exten.patch
   ];
 
   nativeBuildInputs = [

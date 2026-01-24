@@ -1,7 +1,7 @@
-From 3899e83762e5423aea7bbbbb6a58558341461d2d Mon Sep 17 00:00:00 2001
+From ff8fedb5a9328f05c0623b71a056cfb04ec08e45 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 16 Jan 2026 11:17:57 +0100
-Subject: [PATCH 09/19] arch-x86: Add IA32_UINTR_TT MSR
+Subject: [PATCH 09/20] arch-x86: Add IA32_UINTR_TT MSR
 
 ---
  src/arch/x86/regs/misc.hh | 1 +

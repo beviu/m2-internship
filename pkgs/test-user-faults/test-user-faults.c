@@ -1,6 +1,5 @@
-#include <signal.h>
+#include <inttypes.h>
 #include <stdbool.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,21 +12,12 @@
 #define PR_UFAULT_ENABLE 1
 #define PR_UFAULT_STATUS 2
 
-#define UFAULT_CODE_SHIFT 60
 #define UFAULT_CODE_PRESENT (1 << 0)
 #define UFAULT_CODE_WRITE (1 << 2)
 #define UFAULT_CODE_FETCH (1 << 3)
-#define UFAULT_ADDR_MASK ((1ULL << UFAULT_CODE_SHIFT) - 1)
 
-#define cluf() asm volatile(".long 0xea010ff3" ::: "memory");
-#define stuf() asm volatile(".long 0xeb010ff3" ::: "memory");
-
-static sig_atomic_t ufault_code;
-static sig_atomic_t ufault_count = 0;
-
-static int prctl_ufault(unsigned long opt, unsigned long arg) {
-  return prctl((unsigned long)PR_UFAULT, opt, arg, 0L, 0L);
-}
+volatile uint32_t ufault_count = 0;
+volatile uint64_t first_ufault_code;
 
 static inline __attribute__((always_inline)) bool testuf(void) {
   bool uff;
@@ -35,21 +25,36 @@ static inline __attribute__((always_inline)) bool testuf(void) {
   return uff;
 }
 
-static void __attribute__((interrupt, target("uintr,general-regs-only")))
-ufault_handler(struct __uintr_frame *frame, unsigned long long params) {
-  uint8_t code = params >> UFAULT_CODE_SHIFT;
-  void *addr = (void *)(params & UFAULT_ADDR_MASK);
+static inline __attribute__((always_inline)) void cluf(void) {
+  asm volatile(".long 0xea010ff3" :::);
+}
 
-  // Let the kernel handle the fault.
-  cluf();
+static inline __attribute__((always_inline)) void stuf(void) {
+  asm volatile(".long 0xeb010ff3" :::);
+}
+
+static inline __attribute__((always_inline)) void barrier(void) {
+  asm volatile("" ::: "memory");
+}
+
+static int prctl_ufault(unsigned long opt, unsigned long arg) {
+  return prctl((unsigned long)PR_UFAULT, opt, arg, 0L, 0L);
+}
+
+// see test-user-faults.S
+extern void asm_ufault_handler();
+
+__attribute__((target("general-regs-only")))
+void ufault_handler(struct __uintr_frame *frame, unsigned long long addr,
+                    unsigned long long code) {
+  /* Replay the fault with user faults disabled to let the kernel handle it. */
   if (code & UFAULT_CODE_WRITE)
     *(volatile char *)addr = 0;
   else
     *(volatile char *)addr;
-  stuf();
 
   if (ufault_count++)
-    ufault_code = params >> 60;
+    first_ufault_code = code;
 }
 
 static bool test_initial_uff(void) {
@@ -148,7 +153,7 @@ static bool test_prctl_ufault_disable(void) {
 static bool test_delivery(void) {
   void *page = NULL;
 
-  if (prctl_ufault(PR_UFAULT_ENABLE, (unsigned long)ufault_handler) == -1) {
+  if (prctl_ufault(PR_UFAULT_ENABLE, (unsigned long)asm_ufault_handler) == -1) {
     perror("prctl(PR_UFAULT, PR_UFAULT_ENABLE)");
     return false;
   }
@@ -159,9 +164,15 @@ static bool test_delivery(void) {
     return false;
   }
 
+  barrier();
   stuf();
+  barrier();
+
   *(volatile char *)page;
+
+  barrier();
   cluf();
+  barrier();
 
   if (ufault_count != 1) {
     fprintf(stderr, "A read should trigger one user fault, not %d.\n",
@@ -170,8 +181,9 @@ static bool test_delivery(void) {
     return false;
   }
 
-  if (ufault_code != 0) {
-    fprintf(stderr, "A read should have code 0, not %d.\n", ufault_code);
+  if (first_ufault_code != 0) {
+    fprintf(stderr, "A read should have code 0, not %" PRIu64 ".\n",
+            first_ufault_code);
     munmap(page, 1);
     return false;
   }

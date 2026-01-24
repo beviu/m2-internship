@@ -1,7 +1,7 @@
 From 38a8fd2c45baad8cd4dd48b3303d5981c2535807 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Thu, 15 Jan 2026 16:02:53 +0100
-Subject: [PATCH 03/19] arch-x86: Add misc_reg::Uif register
+Subject: [PATCH 03/20] arch-x86: Add misc_reg::Uif register
 
 This register will store UIF (user-interrupt flag).
 ---

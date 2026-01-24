@@ -1,7 +1,7 @@
-From 4363bde8db87f60a23ef4fbc617efa03a43c1075 Mon Sep 17 00:00:00 2001
+From 2b1c0cdec90df798f20ecc0a37bca401d4525d10 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Mon, 5 Jan 2026 14:37:33 +0100
-Subject: [PATCH 14/19] arch-x86: Add misc_reg::Uff register
+Subject: [PATCH 14/20] arch-x86: Add misc_reg::Uff register
 
 This register will store whether User Faults are enabled or not, like
 misc_reg::Uif for User Interrupts.

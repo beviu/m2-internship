@@ -1,24 +1,27 @@
-From 1ae474da720d80539b40e928a01c68fcda853bb2 Mon Sep 17 00:00:00 2001
+From 58457b040fe91bc9bdefcf93a0b1033d1d6fa1ad Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Mon, 5 Jan 2026 14:37:33 +0100
-Subject: [PATCH 18/19] arch-x86: Implement User Fault delivery
+Subject: [PATCH 19/20] arch-x86: Implement user fault delivery
 
-Code was written by Berk.
+Code was written by Berk and modified a bit to not reuse the existing
+user interrupt ABI because compilers would end handlers with the UIRET
+instruction but we don't want to use it as we have our own UFF flag that
+UIRET does not know about.
 ---
- src/arch/x86/faults.cc            | 31 ++++++++++++++++++++++
+ src/arch/x86/faults.cc            | 25 ++++++++++++++++++
  src/arch/x86/faults.hh            | 32 ++++++++++++++++++++++
  src/arch/x86/isa/insts/romutil.py | 44 +++++++++++++++++++++++++++++++
  src/arch/x86/pagetable_walker.cc  | 33 ++++++++++++++++-------
  src/arch/x86/pagetable_walker.hh  |  1 +
  src/arch/x86/regs/misc.hh         |  1 +
  src/arch/x86/tlb.cc               | 15 ++++++++---
- 7 files changed, 143 insertions(+), 14 deletions(-)
+ 7 files changed, 137 insertions(+), 14 deletions(-)
 
 diff --git a/src/arch/x86/faults.cc b/src/arch/x86/faults.cc
-index fce92b1fb4..f06699ad62 100644
+index fce92b1fb4..8809db03c8 100644
 --- a/src/arch/x86/faults.cc
 +++ b/src/arch/x86/faults.cc
-@@ -179,6 +179,37 @@ PageFault::describe() const
+@@ -179,6 +179,31 @@ PageFault::describe() const
      return ss.str();
  }
  
@@ -32,32 +35,26 @@ index fce92b1fb4..f06699ad62 100644
 +    if (m5reg.mode != LongMode)
 +        panic("User Faults are only supported in long mode.");
 +
-+    // Invalidate any matching TLB entries before handling the page fault.
-+    tc->getMMUPtr()->demapPage(addr, 0);
-+
 +    PCState pc = tc->pcState().as<PCState>();
 +
-+    DPRINTF(Faults, "RIP %#x: User Fault at %s\n", pc.pc(), addr);
++    DPRINTF(Faults, "RIP %#x: User Fault at %s with code %#x\n", pc.pc(), addr, code);
 +
-+    Addr cs_base = tc->readMiscRegNoEffect(misc_reg::CsEffBase);
-+    tc->setReg(intRegMicro(7), pc.pc() - cs_base);
++    tc->setReg(intRegMicro(1), pc.pc());
++    tc->setReg(intRegMicro(2), addr);
++    tc->setReg(intRegMicro(3), code);
 +
-+    RegVal params = ((uint64_t)code << 60) | ((addr >> 3) << 3);
-+    tc->setReg(intRegMicro(15), params);
-+
-+    MicroPC entry = X86ISAInst::rom_labels::extern_label_userFault;
-+    pc.upc(romMicroPC(entry));
-+    pc.nupc(romMicroPC(entry) + 1);
++    MicroPC entry = romMicroPC(X86ISAInst::rom_labels::extern_label_userFault);
++    pc.upc(entry);
++    pc.nupc(entry + 1);
 +
 +    tc->pcState(pc);
-+    tc->setMiscReg(misc_reg::Cr2, addr);
 +}
 +
  void
  InitInterrupt::invoke(ThreadContext *tc, const StaticInstPtr &inst)
  {
 diff --git a/src/arch/x86/faults.hh b/src/arch/x86/faults.hh
-index a1ff1b02c2..e7fd127c18 100644
+index a1ff1b02c2..ea84ee5f89 100644
 --- a/src/arch/x86/faults.hh
 +++ b/src/arch/x86/faults.hh
 @@ -298,6 +298,38 @@ class PageFault : public X86Fault
@@ -67,14 +64,14 @@ index a1ff1b02c2..e7fd127c18 100644
 +class UserFault : public FaultBase
 +{
 +  protected:
-+    BitUnion8(UserFaultErrorCode)
++    BitUnion8(UserFaultCode)
 +        Bitfield<0> present;
 +        Bitfield<1> write;
 +        Bitfield<2> fetch;
-+    EndBitUnion(UserFaultErrorCode)
++    EndBitUnion(UserFaultCode)
 +
 +    Addr addr;
-+    UserFaultErrorCode code;
++    UserFaultCode code;
 +
 +  public:
 +    UserFault(Addr _addr, bool present, BaseMMU::Mode mode) :
@@ -100,7 +97,7 @@ index a1ff1b02c2..e7fd127c18 100644
  {
    public:
 diff --git a/src/arch/x86/isa/insts/romutil.py b/src/arch/x86/isa/insts/romutil.py
-index 7082b4d4a5..d4d8074da0 100644
+index 7082b4d4a5..10c9b3596a 100644
 --- a/src/arch/x86/isa/insts/romutil.py
 +++ b/src/arch/x86/isa/insts/romutil.py
 @@ -269,5 +269,49 @@ def rom
@@ -110,44 +107,44 @@ index 7082b4d4a5..d4d8074da0 100644
 +
 +def rom
 +{
-+    # This processes a User Fault. On entry, the CPU is in long mode, t7 is the
-+    # current ip and t15 contains the fault address and access bits. We need t7
-+    # because rdip returns the next ip.
 +    extern userFault:
 +
-+    rflags t10, dataSize=8
++    # t1 - The faulting RIP.
++    # t2 - The address trying to be accessed.
++    # t3 - The user fault code.
 +
 +    # holdRSP := RSP;
-+    mov t6, t6, rsp, dataSize=8
++    mov t4, t0, rsp, dataSize=8
 +
 +    # RSP := RSP & ~FH; // force the stack to be 16-byte aligned
-+    limm t2, ~0xF, dataSize=8
-+    and rsp, rsp, t2, dataSize=8
++    limm t5, "~(uint64_t)0xF", dataSize=8
++    and rsp, rsp, t5, dataSize=8
++
++    # UFF := 0;
++    wrval ctrlRegIdx("misc_reg::Uff"), t0, dataSize=8
 +
 +    # Push holdRSP;
-+    subi rsp, rsp, 8, dataSize=8
-+    st t6, ss, [1, t0, rsp], dataSize=8, addressSize=8
++    # Push RFLAGS;
++    # Push RIP;
++    # Push ADDR;
++    # Push CODE;
++    rflags t6, dataSize=8
++    st t4, ss, [1, t0, rsp], -8, dataSize=8, addressSize=8
++    st t6, ss, [1, t0, rsp], -16, dataSize=8, addressSize=8
++    st t1, ss, [1, t0, rsp], -24, dataSize=8, addressSize=8
++    st t2, ss, [1, t0, rsp], -32, dataSize=8, addressSize=8
++    st t3, ss, [1, t0, rsp], -40, dataSize=8, addressSize=8
++    subi rsp, rsp, 40, dataSize=8
 +
-+    # Push RFLAGS
-+    subi rsp, rsp, 8, dataSize=8
-+    st t10, ss, [1, t0, rsp], dataSize=8, addressSize=8
++    # RFLAGS.TF := 0;
++    # RFLAGS.RF := 0;
++    limm t7, "~(uint64_t)(TFBit | RFBit)", dataSize=8
++    and t8, t6, t7, dataSize=8
++    wrflags t8, t0, dataSize=8
 +
-+    # Push RIP
-+    subi rsp, rsp, 8, dataSize=8
-+    st t7, ss, [1, t0, rsp], dataSize=8, addressSize=8
-+
-+    # Push the fault address and access bits.
-+    subi rsp, rsp, 8, dataSize=8
-+    st t15, ss, [1, t0, rsp], dataSize=8, addressSize=8
-+
-+    # RFLAGS.TF,RF := 0
-+    limm t6, (1 << 8) | (1 << 16), dataSize=8
-+    or t10, t10, t6, dataSize=8
-+    wrflags t10, t6, dataSize=8
-+
-+    # RIP := UFHANDLER
-+    rdval t1, ctrlRegIdx("misc_reg::Ufhandler"), dataSize=8
-+    wripi t1, 0, dataSize=8
++    # RIP := UFHANDLER;
++    rdval t9, ctrlRegIdx("misc_reg::Ufhandler"), dataSize=8
++    wrip t9, t0, dataSize=8
 +
 +    eret
 +};

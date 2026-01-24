@@ -1,7 +1,7 @@
-From 4e31216be16938674c730622702b830167316e96 Mon Sep 17 00:00:00 2001
+From a69b17e20fda90d226f9d7739db69ef8bdfba1b6 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Thu, 15 Jan 2026 15:10:19 +0100
-Subject: [PATCH 11/19] arch-x86: Add SENDUIPI instruction
+Subject: [PATCH 11/20] arch-x86: Add SENDUIPI instruction
 
 The implementation was written by Berk.
 ---
@@ -26,12 +26,12 @@ index 20fd0ccab3..c50d816a31 100644
                          }
                      }
 diff --git a/src/arch/x86/isa/insts/general_purpose/control_transfer/interrupts_and_exceptions.py b/src/arch/x86/isa/insts/general_purpose/control_transfer/interrupts_and_exceptions.py
-index b665855323..dbc3c339f7 100644
+index cb8ba3ba09..dc5615ba61 100644
 --- a/src/arch/x86/isa/insts/general_purpose/control_transfer/interrupts_and_exceptions.py
 +++ b/src/arch/x86/isa/insts/general_purpose/control_transfer/interrupts_and_exceptions.py
 @@ -388,6 +388,102 @@ canonical:
-     limm t1, 1, dataSize=8
-     wrval ctrlRegIdx("misc_reg::Uif"), t1, dataSize=8
+     limm t11, 1, dataSize=8
+     wrval ctrlRegIdx("misc_reg::Uif"), t11, dataSize=8
  };
 +
 +def macroop SENDUIPI_R {

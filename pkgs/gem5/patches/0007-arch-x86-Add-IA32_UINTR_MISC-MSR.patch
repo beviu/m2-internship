@@ -1,7 +1,7 @@
-From 3ac9455f147205c17245a5f57954d3dae9ce5242 Mon Sep 17 00:00:00 2001
+From 1dcd9d672bba55c92974eb4081d5e769954abb99 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Thu, 15 Jan 2026 15:10:19 +0100
-Subject: [PATCH 07/19] arch-x86: Add IA32_UINTR_MISC MSR
+Subject: [PATCH 07/20] arch-x86: Add IA32_UINTR_MISC MSR
 
 ---
  src/arch/x86/regs/misc.hh | 4 +++-

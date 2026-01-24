@@ -1,7 +1,7 @@
-From 564aafd5b2d9a5bc0b99ae8732386529ee65a9fe Mon Sep 17 00:00:00 2001
+From f04841bebf2272ab0753c1724b22d5a96b165f44 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Thu, 15 Jan 2026 16:02:53 +0100
-Subject: [PATCH 05/19] arch-x86: Add CLUI and STUI instructions
+Subject: [PATCH 05/20] arch-x86: Add CLUI and STUI instructions
 
 ---
  src/arch/x86/isa/decoder/two_byte_opcodes.isa            | 2 ++

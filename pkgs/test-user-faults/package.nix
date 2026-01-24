@@ -7,7 +7,11 @@ stdenv.mkDerivation {
   src = ./.;
 
   buildPhase = ''
-    $CC test-user-faults.c -o test-user-faults -O3
+    # Since on user faults, the CPU directly pushes to the stack, we must
+    # disable red zone.
+    # TODO: Implement the equivalent of UISTACKADJUST for user faults and use
+    #       it.
+    $CC test-user-faults.c test-user-faults.S -o test-user-faults -O3
   '';
 
   installPhase = ''
