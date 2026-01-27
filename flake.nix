@@ -45,43 +45,29 @@
         system:
         let
           pkgs = import nixpkgs { inherit system; };
+          packages = pkgs: {
+            gem5 = pkgs.callPackage ./pkgs/gem5/package.nix { };
+            gem5-bridge = pkgs.callPackage ./pkgs/gem5-bridge/package.nix {
+              kernel = pkgs.linux-ufault;
+              kernelModuleMakeFlags = pkgs.linux-ufault.commonMakeFlags ++ [
+                "KBUILD_OUTPUT=${pkgs.linux-ufault.dev}/lib/modules/${pkgs.linux-ufault.modDirVersion}/build"
+              ];
+            };
+            gem5-disk-image = pkgs.callPackage ./pkgs/gem5-disk-image/package.nix { };
+            extmem = pkgs.callPackage ./pkgs/extmem/package.nix { };
+            extmem-ufault = pkgs.extmem.override {
+              withUserFaults = true;
+            };
+            gapbs = pkgs.callPackage ./pkgs/gapbs/package.nix { };
+            linux-ufault = pkgs.callPackage ./pkgs/linux-ufault/package.nix { };
+            m5ops = pkgs.callPackage ./pkgs/m5ops/package.nix { };
+            mmapbench = pkgs.callPackage ./pkgs/mmapbench/package.nix { };
+            simple-mmap-test = pkgs.callPackage ./pkgs/simple-mmap-test/package.nix { };
+            twitter-dataset = pkgs.callPackage ./pkgs/twitter-dataset/package.nix { };
+            test-user-faults = pkgs.callPackage ./pkgs/test-user-faults/package.nix { };
+          };
         in
-        rec {
-          gem5 = pkgs.callPackage ./pkgs/gem5/package.nix { };
-          gem5-bridge = pkgs.callPackage ./pkgs/gem5-bridge/package.nix {
-            kernel = linux-ufault;
-            kernelModuleMakeFlags = linux-ufault.commonMakeFlags ++ [
-              "KBUILD_OUTPUT=${linux-ufault.dev}/lib/modules/${linux-ufault.modDirVersion}/build"
-            ];
-          };
-          gem5-disk-image = pkgs.callPackage ./pkgs/gem5-disk-image/package.nix {
-            inherit
-              extmem
-              extmem-ufault
-              gem5-bridge
-              m5ops
-              linux-ufault
-              mmapbench
-              simple-mmap-test
-              test-user-faults
-              ;
-          };
-          extmem = pkgs.callPackage ./pkgs/extmem/package.nix { inherit m5ops; };
-          extmem-ufault = extmem.override {
-            inherit m5ops;
-
-            withUserFaults = true;
-          };
-          gapbs = pkgs.callPackage ./pkgs/gapbs/package.nix { };
-          linux-ufault = pkgs.callPackage ./pkgs/linux-ufault/package.nix { };
-          m5ops = pkgs.callPackage ./pkgs/m5ops/package.nix { };
-          mmapbench = pkgs.callPackage ./pkgs/mmapbench/package.nix { };
-          simple-mmap-test = pkgs.callPackage ./pkgs/simple-mmap-test/package.nix {
-            inherit m5ops;
-          };
-          twitter-dataset = pkgs.callPackage ./pkgs/twitter-dataset/package.nix { };
-          test-user-faults = pkgs.callPackage ./pkgs/test-user-faults/package.nix { };
-        }
+        nixpkgs.lib.makeScope pkgs.newScope packages
       );
 
       devShells = forAllSystems (
