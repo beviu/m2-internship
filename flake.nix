@@ -45,29 +45,33 @@
         system:
         let
           pkgs = import nixpkgs { inherit system; };
-          packages = pkgs: {
-            gem5 = pkgs.callPackage ./pkgs/gem5/package.nix { };
-            gem5-bridge = pkgs.callPackage ./pkgs/gem5-bridge/package.nix {
-              kernel = pkgs.linux-ufault;
-              kernelModuleMakeFlags = pkgs.linux-ufault.commonMakeFlags ++ [
-                "KBUILD_OUTPUT=${pkgs.linux-ufault.dev}/lib/modules/${pkgs.linux-ufault.modDirVersion}/build"
-              ];
+          packageNames = map ({ name, ... }: name) (
+            builtins.filter ({ value, ... }: value == "directory") (
+              nixpkgs.lib.attrsToList (builtins.readDir ./pkgs)
+            )
+          );
+          packages =
+            pkgs:
+            nixpkgs.lib.genAttrs packageNames (name: pkgs.callPackage ./pkgs/${name}/package.nix { })
+            // {
+              gem5-bridge = pkgs.callPackage ./pkgs/gem5-bridge/package.nix {
+                kernel = pkgs.linux-ufault;
+                kernelModuleMakeFlags = pkgs.linux-ufault.commonMakeFlags ++ [
+                  "KBUILD_OUTPUT=${pkgs.linux-ufault.dev}/lib/modules/${pkgs.linux-ufault.modDirVersion}/build"
+                ];
+              };
+              extmem-ufault = pkgs.extmem.override {
+                withUserFaults = true;
+              };
             };
-            gem5-disk-image = pkgs.callPackage ./pkgs/gem5-disk-image/package.nix { };
-            extmem = pkgs.callPackage ./pkgs/extmem/package.nix { };
-            extmem-ufault = pkgs.extmem.override {
-              withUserFaults = true;
-            };
-            gapbs = pkgs.callPackage ./pkgs/gapbs/package.nix { };
-            linux-ufault = pkgs.callPackage ./pkgs/linux-ufault/package.nix { };
-            m5ops = pkgs.callPackage ./pkgs/m5ops/package.nix { };
-            mmapbench = pkgs.callPackage ./pkgs/mmapbench/package.nix { };
-            simple-mmap-test = pkgs.callPackage ./pkgs/simple-mmap-test/package.nix { };
-            twitter-dataset = pkgs.callPackage ./pkgs/twitter-dataset/package.nix { };
-            test-user-faults = pkgs.callPackage ./pkgs/test-user-faults/package.nix { };
-          };
+          scope = nixpkgs.lib.makeScope pkgs.newScope packages;
         in
-        nixpkgs.lib.makeScope pkgs.newScope packages
+        removeAttrs scope [
+          "callPackage"
+          "newScope"
+          "overrideScope"
+          "packages"
+        ]
       );
 
       devShells = forAllSystems (
