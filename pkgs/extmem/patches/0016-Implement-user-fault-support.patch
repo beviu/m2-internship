@@ -1,0 +1,265 @@
+From f92fd7baeadfff0dbed25cdab243216bb046e261 Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Fri, 21 Nov 2025 10:57:20 +0100
+Subject: [PATCH 16/16] Implement user fault support
+
+---
+ src/Makefile        | 20 +++++++++++++-------
+ src/core.c          | 17 +++++++++++++++--
+ src/core.h          |  6 ++++--
+ src/ufault/entry.S  | 46 +++++++++++++++++++++++++++++++++++++++++++++
+ src/ufault/ufault.c | 40 +++++++++++++++++++++++++++++++++++++++
+ src/ufault/ufault.h | 28 +++++++++++++++++++++++++++
+ 6 files changed, 146 insertions(+), 11 deletions(-)
+ create mode 100644 src/ufault/entry.S
+ create mode 100644 src/ufault/ufault.c
+ create mode 100644 src/ufault/ufault.h
+
+diff --git a/src/Makefile b/src/Makefile
+index 7ff743b..b94b667 100644
+--- a/src/Makefile
++++ b/src/Makefile
+@@ -1,6 +1,6 @@
+ CC = gcc
+-CFLAGS = -g -Wall -O3 -fPIC -fno-omit-frame-pointer
+-#CFLAGS = -g3 -Wall -O0 -fPIC
++# Disable the red zone for user faults.
++CFLAGS = -g -Wall -O3 -fPIC -fno-omit-frame-pointer -mno-red-zone
+ LDFLAGS = -shared -fno-omit-frame-pointer
+ INCLUDES = -I../linux/usr/include/
+ LIBS = -lm -lpthread -luring -ldl -lsyscall_intercept -lm5
+@@ -10,11 +10,11 @@ default: libextmem-default.so
+ all: libextmem-default.so libextmem-pagerank.so
+ 
+ 
+-libextmem-default.so: extmem-default.o policies/default.o intercept_layer.o fifo.o storagemanager.o storage_iouring.o observability.o
+-	$(CC) $(LDFLAGS) -o libextmem-default.so extmem-default.o policies/default.o intercept_layer.o observability.o fifo.o storagemanager.o storage_iouring.o $(LIBS)
++libextmem-default.so: extmem-default.o policies/default.o intercept_layer.o fifo.o storagemanager.o storage_iouring.o observability.o ufault/entry.o ufault/ufault.o
++	$(CC) $(LDFLAGS) -o libextmem-default.so extmem-default.o policies/default.o intercept_layer.o observability.o fifo.o storagemanager.o storage_iouring.o ufault/entry.o ufault/ufault.o $(LIBS)
+ 
+-libextmem-pagerank.so: extmem-pagerank.o policies/pagerank.o intercept_layer.o fifo.o storagemanager.o storage_iouring.o observability.o
+-	$(CC) $(LDFLAGS) -o libextmem-pagerank.so extmem-pagerank.o policies/pagerank.o intercept_layer.o observability.o fifo.o storagemanager.o storage_iouring.o $(LIBS)
++libextmem-pagerank.so: extmem-pagerank.o policies/pagerank.o intercept_layer.o fifo.o storagemanager.o storage_iouring.o observability.o ufault/entry.o ufault/ufault.o
++	$(CC) $(LDFLAGS) -o libextmem-pagerank.so extmem-pagerank.o policies/pagerank.o intercept_layer.o observability.o fifo.o storagemanager.o storage_iouring.o ufault/entry.o ufault/ufault.o $(LIBS)
+ 
+ extmem-default.o: core.c core.h policies/disklinux.h intercept_layer.h observability.h fifo.h storagemanager.h
+ 	$(CC) $(CFLAGS) $(INCLUDES) -D ALLOC_DISK -D LRU_SWAP -c core.c -o extmem-default.o
+@@ -43,8 +43,14 @@ storage_iouring.o: storage_iouring.c storage_iouring.h core.h fifo.h
+ storagemanager.o: storagemanager.c storagemanager.h core.h
+ 	$(CC) $(CFLAGS) $(INCLUDES) -c storagemanager.c
+ 
++ufault/entry.o: ufault/entry.S
++	$(CC) $(CFLAGS) $(INCLUDES) -c ufault/entry.S -o ufault/entry.o
++
++ufault/ufault.o: ufault/ufault.c ufault/ufault.h core.h
++	$(CC) $(CFLAGS) $(INCLUDES) -c ufault/ufault.c -o ufault/ufault.o
++
+ fifo.o: fifo.c fifo.h core.h
+ 	$(CC) $(CFLAGS) $(INCLUDES) -c fifo.c
+ 
+ clean:
+-	$(RM) *.o *.so policies/*.o
++	$(RM) *.o *.so policies/*.o ufault/*.o
+diff --git a/src/core.c b/src/core.c
+index cabc3d3..9218aae 100644
+--- a/src/core.c
++++ b/src/core.c
+@@ -24,6 +24,7 @@
+ 
+ #include "core.h"
+ #include "timer.h"
++#include "ufault/ufault.h"
+ #include "uthash.h"
+ #include "observability.h"
+ 
+@@ -218,9 +219,18 @@ void uswap_sig_handler(int code, siginfo_t *siginfo, void *context)
+ 
+ }
+ 
++void uswap_register_ufault_handler()
++{
++    LOG("Registering a user fault handler\n");
+ 
++    int ret = prctl_ufault(PR_UFAULT_ENABLE, (unsigned long)asm_uswap_ufault_handler);
++    if (ret < 0) {
++        perror("prctl(PR_UFAULT, PR_UFAULT_ENABLE)");
++        abort();
++    }
++}
+ 
+-void uswap_register_handler(int sig)
++void uswap_register_signal_handler(int sig)
+ {
+     struct sigaction action;
+     LOG("Registering a signal handler\n");
+@@ -329,7 +339,10 @@ void extmem_init()
+     usleep(1000000);
+   }
+   
+-  #ifdef USWAP_SIGNAL  // for self-paging mode
++  #ifdef USWAP_UF
++  LOG("extmem_init: registering user fault handler\n");
++  uswap_register_ufault_handler();
++  #elif defined(USWAP_SIGNAL) // for self-paging mode
+   LOG("extmem_init: registering SIGBUS handler\n");
+   uswap_register_handler(SIGBUS);
+   //uswap_register_handler(SIGSEGV);  // depending on system may need sigsegv or sigbus
+diff --git a/src/core.h b/src/core.h
+index 7899199..9387301 100644
+--- a/src/core.h
++++ b/src/core.h
+@@ -47,7 +47,8 @@ extern "C" {
+ #define USWAP_IOURING
+ //#define USWAP_SPDK
+ 
+-#define USWAP_SIGNAL  
++#define USWAP_UF
++//#define USWAP_SIGNAL
+ //#define USWAP_UFFD
+ 
+ //#define POPULATE_ALL
+@@ -218,7 +219,8 @@ void extmem_clear_stats();
+ 
+ void uswap_sig_handler(int code, siginfo_t *siginfo, void *context);
+ 
+-void uswap_register_handler(int sig);
++void uswap_register_signal_handler(int sig);
++void uswap_register_ufault_handler();
+ 
+ void core_migrate_up_async_start(struct user_page *page);
+ void core_migrate_up_async_finish(struct user_page *page, uint64_t dram_offset);
+diff --git a/src/ufault/entry.S b/src/ufault/entry.S
+new file mode 100644
+index 0000000..d78f93d
+--- /dev/null
++++ b/src/ufault/entry.S
+@@ -0,0 +1,46 @@
++.macro ufret
++     .long 0xfa010ff3
++.endm
++
++.section .note.GNU-stack, "", @progbits
++
++.text
++.globl asm_uswap_ufault_handler
++asm_uswap_ufault_handler:
++    /* To deliver a user fault, the CPU first aligns the stack to 16-bytes and
++       then pushes 5 quadwords. Push an additional quadword before the next 8
++       quadwords, so that the stack is 16-bytes aligned when calling into the C
++       code. This is required by the ABI. */
++    subq $8, %rsp
++
++    /* Save all caller-saved registers before calling into the C code. The C
++       code is compiled to only use general purpose registers (e.g. SSE
++       registers don't need to be saved). */
++    pushq %rax
++    pushq %rdi
++    pushq %rsi
++    pushq %rdx
++    pushq %r8
++    pushq %r9
++    pushq %r10
++    pushq %r11
++
++    leaq 88(%rsp), %rdi
++    movq 80(%rsp), %rsi
++    movq 72(%rsp), %rdx
++    call uswap_ufault_handler
++
++    popq %r11
++    popq %r10
++    popq %r9
++    popq %r8
++    popq %rdx
++    popq %rsi
++    popq %rdi
++    popq %rax
++
++    /* The UIRET instruction only pops the user interrupt frame. Before it, we
++       need to pop the fault code and the fault address. */
++    addq $24, %rsp
++
++    ufret
+diff --git a/src/ufault/ufault.c b/src/ufault/ufault.c
+new file mode 100644
+index 0000000..a5ba048
+--- /dev/null
++++ b/src/ufault/ufault.c
+@@ -0,0 +1,40 @@
++#include <sys/prctl.h>
++#include <x86gprintrin.h>
++
++#include "../core.h"
++#include "ufault.h"
++
++int prctl_ufault(unsigned long opt, unsigned long arg)
++{
++  return prctl((unsigned long)PR_UFAULT, opt, arg, 0L, 0L);
++}
++
++__attribute__((target("general-regs-only")))
++void uswap_ufault_handler(struct __uintr_frame *frame, unsigned long long addr, unsigned long long code)
++{
++    if (!userfault_range_check(addr)) {
++      /* Replay the fault with user faults disabled to let the kernel handle it. */
++      if (code & UFAULT_CODE_WRITE)
++        *(volatile char *)addr = 0;
++      else
++        *(volatile char *)addr;
++      return;
++    }
++  
++    internal_call = true;
++
++    unsigned long page_boundary = addr & ~(PAGE_SIZE - 1);
++
++    struct user_page *page = get_user_page(page_boundary);
++    if(page == NULL) {
++        handle_first_fault(page_boundary);
++    }
++    else if(page->swapped_out) {
++        handle_missing_fault(page);
++    }
++    else{
++        handle_wp_fault(page);
++    }
++
++    internal_call = false;
++}
+diff --git a/src/ufault/ufault.h b/src/ufault/ufault.h
+new file mode 100644
+index 0000000..6342c42
+--- /dev/null
++++ b/src/ufault/ufault.h
+@@ -0,0 +1,28 @@
++#ifndef UFAULT_UFAULT_H
++#define UFAULT_UFAULT_H
++
++#define PR_UFAULT 79
++#define PR_UFAULT_DISABLE 0
++#define PR_UFAULT_ENABLE 1
++#define PR_UFAULT_STATUS 2
++
++#define UFAULT_CODE_PRESENT (1 << 0)
++#define UFAULT_CODE_WRITE (1 << 2)
++#define UFAULT_CODE_FETCH (1 << 3)
++
++static inline __attribute__((always_inline)) void stuf(void)
++{
++  asm volatile(".long 0xeb010ff3" :::);
++}
++
++static inline __attribute__((always_inline)) void barrier(void)
++{
++  asm volatile("" ::: "memory");
++}
++
++int prctl_ufault(unsigned long opt, unsigned long arg);
++
++// see entry.S
++void asm_uswap_ufault_handler();
++
++#endif
+-- 
+2.52.0
+

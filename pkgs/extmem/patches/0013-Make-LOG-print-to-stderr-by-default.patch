@@ -1,7 +1,7 @@
-From 8e7e3506adc407efafecb6839ad136cc6214b84b Mon Sep 17 00:00:00 2001
+From 8c2911b38c5c917df3c65d83b78f2531fd094aaa Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Thu, 4 Dec 2025 13:33:55 +0100
-Subject: [PATCH 13/15] Make LOG print to stderr by default
+Subject: [PATCH 13/16] Make LOG print to stderr by default
 
 ---
  src/core.h | 4 ++--
@@ -24,5 +24,5 @@ index e516653..6186c77 100644
  //#define LOGPOLICY(...) fprintf(stderr, __VA_ARGS__)
  //#define LOGPOLICY(...)	fprintf(logfile, __VA_ARGS__)
 -- 
-2.51.2
+2.52.0
 

@@ -1,7 +1,7 @@
-From f6b01dbf673a3f35ffa24a9e25e3233d754d435d Mon Sep 17 00:00:00 2001
+From 3decf54c3faf00401a42929a68e475b28b92373f Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Thu, 4 Dec 2025 13:33:55 +0100
-Subject: [PATCH 12/15] Log more steps during initialization
+Subject: [PATCH 12/16] Log more steps during initialization
 
 ---
  src/core.c            | 14 ++++++++++++--
@@ -101,5 +101,5 @@ index a439f1c..a2feb42 100644
    libc_munmap = bind_symbol("munmap");
    libc_malloc = bind_symbol("malloc");
 -- 
-2.51.2
+2.52.0
 

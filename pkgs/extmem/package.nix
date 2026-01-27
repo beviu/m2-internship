@@ -82,9 +82,10 @@ stdenv.mkDerivation {
     ./patches/0011-Remove-call-to-undefined-function-lrudisk_stats.patch
     ./patches/0012-Log-more-steps-during-initialization.patch
     ./patches/0013-Make-LOG-print-to-stderr-by-default.patch
-    ./patches/0014-Call-m5-exit-when-EXTMEM_M5_EXIT-is-set-to-1.patch
+    ./patches/0014-Switch-processor-when-EXTMEM_SWITCH_PROCESSOR-is-set.patch
+    ./patches/0015-Added-range-tracking-for-extmem_mmap.patch
   ]
-  ++ lib.optional withUserFaults ./patches/0015-Implement-User-Fault-support.patch;
+  ++ lib.optional withUserFaults ./patches/0016-Implement-user-fault-support.patch;
 
   buildInputs = [
     liburing

@@ -1,7 +1,7 @@
-From 54787a183bccf6e4ec96902d2577042d512eed5b Mon Sep 17 00:00:00 2001
+From b9a07f60ec5ef2e2ab93cf4e0c78611db67b1911 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Tue, 2 Dec 2025 13:33:12 +0100
-Subject: [PATCH 11/15] Remove call to undefined function lrudisk_stats
+Subject: [PATCH 11/16] Remove call to undefined function lrudisk_stats
 
 ---
  src/core.c               | 1 -
@@ -67,5 +67,5 @@ index 83ba130..560f121 100644
  static struct user_page* fetch_free_asynch();
  int direct_allocate_page_async(int nr_pages, int priority);
 -- 
-2.51.2
+2.52.0
 

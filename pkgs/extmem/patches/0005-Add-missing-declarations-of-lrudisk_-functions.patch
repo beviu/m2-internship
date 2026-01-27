@@ -1,7 +1,7 @@
-From 8454c2276c06256bac4d62bf3c447d7162de35c6 Mon Sep 17 00:00:00 2001
+From b55e39598e8714d3a12e27a3d66bae7da700643f Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Tue, 2 Dec 2025 11:51:40 +0100
-Subject: [PATCH 05/15] Add missing declarations of lrudisk_* functions
+Subject: [PATCH 05/16] Add missing declarations of lrudisk_* functions
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -49,5 +49,5 @@ index 7e82237..a5efda6 100644
    #define pagefault(...) lrudisk_pagefault(__VA_ARGS__)
    #define paging_init(...) lrudisk_init(__VA_ARGS__)
 -- 
-2.51.2
+2.52.0
 
