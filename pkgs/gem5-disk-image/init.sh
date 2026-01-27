@@ -24,11 +24,11 @@ case "$action" in
     ;;
   simple-mmap-test-with-extmem-sigbus)
     echo "Starting simple-mmap-test with ExtMem (SIGBUS)..."
-    LD_PRELOAD="$EXTMEM_PATH/lib/libextmem-default.so" EXTMEM_SWITCH_PROCESSOR=1 SIMPLE_MMAP_TEST_M5_EXIT_AFTER=1 simple-mmap-test
+    LD_PRELOAD="$EXTMEM_PATH/lib/libextmem-default.so" EXTMEM_SWITCH_PROCESSOR=1 DRAMSIZE=1048576 SIMPLE_MMAP_TEST_M5_EXIT_AFTER=1 simple-mmap-test
     ;;
   simple-mmap-test-with-extmem-ufault)
     echo "Starting simple-mmap-test with ExtMem (User Faults)..."
-    LD_PRELOAD="$EXTMEM_UFAULT_PATH/lib/libextmem-default.so" EXTMEM_SWITCH_PROCESSOR=1 SIMPLE_MMAP_TEST_M5_EXIT_AFTER=1 simple-mmap-test
+    LD_PRELOAD="$EXTMEM_UFAULT_PATH/lib/libextmem-default.so" EXTMEM_SWITCH_PROCESSOR=1 DRAMSIZE=1048576 SIMPLE_MMAP_TEST_M5_EXIT_AFTER=1 simple-mmap-test
     ;;
   test-user-faults)
     echo "Starting test-user-faults..."
