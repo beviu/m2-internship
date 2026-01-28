@@ -1,16 +1,16 @@
-From f1d1704ef8198ce026884be2eb00693550903a91 Mon Sep 17 00:00:00 2001
+From 0f96a05835b4547fec1c61da1410e5af491d788e Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 21 Nov 2025 10:57:20 +0100
 Subject: [PATCH 16/16] Implement user fault support
 
 ---
  src/Makefile        | 20 +++++++++++++-------
- src/core.c          | 19 +++++++++++++++++--
+ src/core.c          | 23 +++++++++++++++++++++--
  src/core.h          |  6 ++++--
  src/ufault/entry.S  | 46 +++++++++++++++++++++++++++++++++++++++++++++
  src/ufault/ufault.c | 40 +++++++++++++++++++++++++++++++++++++++
  src/ufault/ufault.h | 28 +++++++++++++++++++++++++++
- 6 files changed, 148 insertions(+), 11 deletions(-)
+ 6 files changed, 152 insertions(+), 11 deletions(-)
  create mode 100644 src/ufault/entry.S
  create mode 100644 src/ufault/ufault.c
  create mode 100644 src/ufault/ufault.h
@@ -61,7 +61,7 @@ index 7ff743b..b94b667 100644
 -	$(RM) *.o *.so policies/*.o
 +	$(RM) *.o *.so policies/*.o ufault/*.o
 diff --git a/src/core.c b/src/core.c
-index cabc3d3..4f8699c 100644
+index cabc3d3..6e891f1 100644
 --- a/src/core.c
 +++ b/src/core.c
 @@ -24,6 +24,7 @@
@@ -72,7 +72,7 @@ index cabc3d3..4f8699c 100644
  #include "uthash.h"
  #include "observability.h"
  
-@@ -218,9 +219,18 @@ void uswap_sig_handler(int code, siginfo_t *siginfo, void *context)
+@@ -218,9 +219,22 @@ void uswap_sig_handler(int code, siginfo_t *siginfo, void *context)
  
  }
  
@@ -85,14 +85,18 @@ index cabc3d3..4f8699c 100644
 +        perror("prctl(PR_UFAULT, PR_UFAULT_ENABLE)");
 +        abort();
 +    }
-+}
  
 -void uswap_register_handler(int sig)
++    barrier();
++    stuf();
++    barrier();
++}
++
 +void uswap_register_signal_handler(int sig)
  {
      struct sigaction action;
      LOG("Registering a signal handler\n");
-@@ -329,7 +339,10 @@ void extmem_init()
+@@ -329,7 +343,10 @@ void extmem_init()
      usleep(1000000);
    }
    
@@ -104,7 +108,7 @@ index cabc3d3..4f8699c 100644
    LOG("extmem_init: registering SIGBUS handler\n");
    uswap_register_handler(SIGBUS);
    //uswap_register_handler(SIGSEGV);  // depending on system may need sigsegv or sigbus
-@@ -504,6 +517,7 @@ void* extmem_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t
+@@ -504,6 +521,7 @@ void* extmem_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t
    }
    assert(p != NULL && p != MAP_FAILED);
  
@@ -112,7 +116,7 @@ index cabc3d3..4f8699c 100644
    // register with uffd
    struct uffdio_register uffdio_register;
    uffdio_register.range.start = (uint64_t)p;
-@@ -514,6 +528,7 @@ void* extmem_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t
+@@ -514,6 +532,7 @@ void* extmem_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t
      perror("ioctl uffdio_register");
      assert(0);
    }
@@ -198,7 +202,7 @@ index 0000000..d78f93d
 +    ufret
 diff --git a/src/ufault/ufault.c b/src/ufault/ufault.c
 new file mode 100644
-index 0000000..a5ba048
+index 0000000..71f726e
 --- /dev/null
 +++ b/src/ufault/ufault.c
 @@ -0,0 +1,40 @@
@@ -224,7 +228,7 @@ index 0000000..a5ba048
 +        *(volatile char *)addr;
 +      return;
 +    }
-+  
++
 +    internal_call = true;
 +
 +    unsigned long page_boundary = addr & ~(PAGE_SIZE - 1);
