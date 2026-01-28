@@ -1,16 +1,16 @@
-From f92fd7baeadfff0dbed25cdab243216bb046e261 Mon Sep 17 00:00:00 2001
+From f1d1704ef8198ce026884be2eb00693550903a91 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 21 Nov 2025 10:57:20 +0100
 Subject: [PATCH 16/16] Implement user fault support
 
 ---
  src/Makefile        | 20 +++++++++++++-------
- src/core.c          | 17 +++++++++++++++--
+ src/core.c          | 19 +++++++++++++++++--
  src/core.h          |  6 ++++--
  src/ufault/entry.S  | 46 +++++++++++++++++++++++++++++++++++++++++++++
  src/ufault/ufault.c | 40 +++++++++++++++++++++++++++++++++++++++
  src/ufault/ufault.h | 28 +++++++++++++++++++++++++++
- 6 files changed, 146 insertions(+), 11 deletions(-)
+ 6 files changed, 148 insertions(+), 11 deletions(-)
  create mode 100644 src/ufault/entry.S
  create mode 100644 src/ufault/ufault.c
  create mode 100644 src/ufault/ufault.h
@@ -61,7 +61,7 @@ index 7ff743b..b94b667 100644
 -	$(RM) *.o *.so policies/*.o
 +	$(RM) *.o *.so policies/*.o ufault/*.o
 diff --git a/src/core.c b/src/core.c
-index cabc3d3..9218aae 100644
+index cabc3d3..4f8699c 100644
 --- a/src/core.c
 +++ b/src/core.c
 @@ -24,6 +24,7 @@
@@ -104,6 +104,22 @@ index cabc3d3..9218aae 100644
    LOG("extmem_init: registering SIGBUS handler\n");
    uswap_register_handler(SIGBUS);
    //uswap_register_handler(SIGSEGV);  // depending on system may need sigsegv or sigbus
+@@ -504,6 +517,7 @@ void* extmem_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t
+   }
+   assert(p != NULL && p != MAP_FAILED);
+ 
++#if defined(USWAP_SIGNAL) || defined(USWAP_UFFD)
+   // register with uffd
+   struct uffdio_register uffdio_register;
+   uffdio_register.range.start = (uint64_t)p;
+@@ -514,6 +528,7 @@ void* extmem_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t
+     perror("ioctl uffdio_register");
+     assert(0);
+   }
++#endif
+ 
+   arrput(userfault_range_start_array, (uint64_t)p);
+   arrput(userfault_range_end_array, (uint64_t)p + length);
 diff --git a/src/core.h b/src/core.h
 index 7899199..9387301 100644
 --- a/src/core.h
