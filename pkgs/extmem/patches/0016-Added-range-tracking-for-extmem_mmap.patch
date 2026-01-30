@@ -1,7 +1,7 @@
-From ed7f15e861ee6a191a41b9f0d15ef0eb0a0e404a Mon Sep 17 00:00:00 2001
+From 6700d739cb07ab18a8d710ce4c9a921fe6e09440 Mon Sep 17 00:00:00 2001
 From: sinharudraneel <sinharudraneel@gmail.com>
 Date: Thu, 4 Dec 2025 21:07:39 -0500
-Subject: [PATCH 15/16] Added range tracking for extmem_mmap
+Subject: [PATCH 16/17] Added range tracking for extmem_mmap
 
 ---
  src/core.c   |   45 +-
@@ -11,7 +11,7 @@ Subject: [PATCH 15/16] Added range tracking for extmem_mmap
  create mode 100644 src/stb_ds.h
 
 diff --git a/src/core.c b/src/core.c
-index 2de165d..cabc3d3 100644
+index a3516f4..2ba6279 100644
 --- a/src/core.c
 +++ b/src/core.c
 @@ -33,6 +33,9 @@
@@ -33,7 +33,7 @@ index 2de165d..cabc3d3 100644
  
  static void *extmem_stats_thread()
  {
-@@ -510,7 +515,9 @@ void* extmem_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t
+@@ -505,7 +510,9 @@ void* extmem_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t
      assert(0);
    }
  
@@ -44,7 +44,7 @@ index 2de165d..cabc3d3 100644
    if (need_populate) {
      LOG("extmem_mmap: doing mmap_populate\n");
      //assert(!"map populate not implemented yet!");
-@@ -1936,3 +1943,39 @@ struct user_page* get_user_page(uint64_t va)
+@@ -1931,3 +1938,39 @@ struct user_page* get_user_page(uint64_t va)
    return find_page(va);
  }
  

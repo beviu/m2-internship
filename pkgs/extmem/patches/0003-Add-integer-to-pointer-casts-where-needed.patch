@@ -1,7 +1,7 @@
 From 94f8edfc94c17788b0b3625105f0bfc9d079cfb3 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Tue, 2 Dec 2025 11:28:55 +0100
-Subject: [PATCH 03/16] Add integer to pointer casts where needed
+Subject: [PATCH 03/17] Add integer to pointer casts where needed
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit

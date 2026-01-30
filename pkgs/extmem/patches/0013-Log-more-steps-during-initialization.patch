@@ -1,15 +1,15 @@
-From 3decf54c3faf00401a42929a68e475b28b92373f Mon Sep 17 00:00:00 2001
+From 8a61260eb924acc36e706461cfc35ea274b04d0d Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Thu, 4 Dec 2025 13:33:55 +0100
-Subject: [PATCH 12/16] Log more steps during initialization
+Subject: [PATCH 13/17] Log more steps during initialization
 
 ---
- src/core.c            | 14 ++++++++++++--
+ src/core.c            | 12 ++++++++++--
  src/intercept_layer.c |  6 ++++--
- 2 files changed, 16 insertions(+), 4 deletions(-)
+ 2 files changed, 14 insertions(+), 4 deletions(-)
 
 diff --git a/src/core.c b/src/core.c
-index 1dd7555..ecd1fef 100644
+index f0a58f0..369ef86 100644
 --- a/src/core.c
 +++ b/src/core.c
 @@ -246,7 +246,9 @@ void extmem_init()
@@ -53,22 +53,7 @@ index 1dd7555..ecd1fef 100644
    s = pthread_create(&fault_thread, NULL, handle_fault, 0);
    if (s != 0) {
      perror("pthread_create");
-@@ -365,12 +372,14 @@ void extmem_init()
-   #endif
- 
-   // Page cache: small victim cache for swapped out pages
-+  LOG("extmem_init: allocating page cache\n");
-   page_cache =libc_mmap(NULL,16 * PAGE_SIZE * MAX_USER_THREADS, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE , -1, 0);
-   if (page_cache == MAP_FAILED) {
-     perror("page cache mmap");
-     assert(0);
-   }
- 
-+  LOG("extmem_init: clearing page cache to zeros\n");
-   memset(page_cache , 0, PAGE_SIZE * 16 * MAX_USER_THREADS);
- 
- 
-@@ -379,6 +388,7 @@ void extmem_init()
+@@ -376,6 +383,7 @@ void extmem_init()
    assert(s == 0);
  #endif
  

@@ -1,7 +1,7 @@
 From eacdedc4d05ba515c2584d30421dc12ccfff00a5 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Tue, 2 Dec 2025 11:53:19 +0100
-Subject: [PATCH 06/16] Add missing declaration of core_try_prefetch function
+Subject: [PATCH 06/17] Add missing declaration of core_try_prefetch function
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit

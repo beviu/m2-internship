@@ -1,7 +1,7 @@
 From beedf2738fea37f65d91430122e6574a48d765a8 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Tue, 2 Dec 2025 11:40:08 +0100
-Subject: [PATCH 04/16] Add missing declarations of ioring_* functions
+Subject: [PATCH 04/17] Add missing declarations of ioring_* functions
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit

@@ -1,0 +1,37 @@
+From 36a17cd19705356572721fb41d5d3309b24c4f0c Mon Sep 17 00:00:00 2001
+From: beviu <contact@beviu.com>
+Date: Fri, 30 Jan 2026 15:03:31 +0100
+Subject: [PATCH 12/17] Use MAP_POPULATE instead of memsetting page cache to
+ zero
+
+This memset is very slow. As the OS already hands out zeroed pages, we
+can use MAP_POPULATE to keep the existing behavior but prevent an
+additional memset.
+---
+ src/core.c | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/src/core.c b/src/core.c
+index 1dd7555..f0a58f0 100644
+--- a/src/core.c
++++ b/src/core.c
+@@ -365,15 +365,12 @@ void extmem_init()
+   #endif
+ 
+   // Page cache: small victim cache for swapped out pages
+-  page_cache =libc_mmap(NULL,16 * PAGE_SIZE * MAX_USER_THREADS, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE , -1, 0);
++  page_cache =libc_mmap(NULL,16 * PAGE_SIZE * MAX_USER_THREADS, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_POPULATE, -1, 0);
+   if (page_cache == MAP_FAILED) {
+     perror("page cache mmap");
+     assert(0);
+   }
+ 
+-  memset(page_cache , 0, PAGE_SIZE * 16 * MAX_USER_THREADS);
+-
+-
+ #ifdef STATS_THREAD
+   s = pthread_create(&stats_thread, NULL, extmem_stats_thread, NULL);
+   assert(s == 0);
+-- 
+2.52.0
+

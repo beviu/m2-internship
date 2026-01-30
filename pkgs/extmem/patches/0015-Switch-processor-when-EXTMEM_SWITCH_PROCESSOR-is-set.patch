@@ -1,7 +1,7 @@
-From 8314f61ac7606e6735c4dae647e077934dd34595 Mon Sep 17 00:00:00 2001
+From d352609862b1925a5cb34580738c7702fdfca3d4 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 12 Dec 2025 15:30:21 +0100
-Subject: [PATCH 14/16] Switch processor when EXTMEM_SWITCH_PROCESSOR is set to
+Subject: [PATCH 15/17] Switch processor when EXTMEM_SWITCH_PROCESSOR is set to
  1
 
 Switch processor before the first user fault system call when
@@ -30,7 +30,7 @@ index 724e656..7ff743b 100644
  default: libextmem-default.so
  
 diff --git a/src/core.c b/src/core.c
-index ecd1fef..2de165d 100644
+index 369ef86..a3516f4 100644
 --- a/src/core.c
 +++ b/src/core.c
 @@ -33,6 +33,8 @@

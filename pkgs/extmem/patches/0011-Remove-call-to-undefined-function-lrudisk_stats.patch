@@ -1,7 +1,7 @@
 From b9a07f60ec5ef2e2ab93cf4e0c78611db67b1911 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Tue, 2 Dec 2025 13:33:12 +0100
-Subject: [PATCH 11/16] Remove call to undefined function lrudisk_stats
+Subject: [PATCH 11/17] Remove call to undefined function lrudisk_stats
 
 ---
  src/core.c               | 1 -

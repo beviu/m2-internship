@@ -13,8 +13,8 @@
 #define PR_UFAULT_STATUS 2
 
 #define UFAULT_CODE_PRESENT (1 << 0)
-#define UFAULT_CODE_WRITE (1 << 2)
-#define UFAULT_CODE_FETCH (1 << 3)
+#define UFAULT_CODE_WRITE (1 << 1)
+#define UFAULT_CODE_FETCH (1 << 2)
 
 volatile uint32_t ufault_count = 0;
 volatile uint64_t first_ufault_code;

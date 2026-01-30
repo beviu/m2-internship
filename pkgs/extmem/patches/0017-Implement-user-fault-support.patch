@@ -1,7 +1,7 @@
-From 0f96a05835b4547fec1c61da1410e5af491d788e Mon Sep 17 00:00:00 2001
+From 8f8555270204c1c93be0bec67217f9b2d5cc6f0a Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 21 Nov 2025 10:57:20 +0100
-Subject: [PATCH 16/16] Implement user fault support
+Subject: [PATCH 17/17] Implement user fault support
 
 ---
  src/Makefile        | 20 +++++++++++++-------
@@ -61,7 +61,7 @@ index 7ff743b..b94b667 100644
 -	$(RM) *.o *.so policies/*.o
 +	$(RM) *.o *.so policies/*.o ufault/*.o
 diff --git a/src/core.c b/src/core.c
-index cabc3d3..6e891f1 100644
+index 2ba6279..e4e70ce 100644
 --- a/src/core.c
 +++ b/src/core.c
 @@ -24,6 +24,7 @@
@@ -108,7 +108,7 @@ index cabc3d3..6e891f1 100644
    LOG("extmem_init: registering SIGBUS handler\n");
    uswap_register_handler(SIGBUS);
    //uswap_register_handler(SIGSEGV);  // depending on system may need sigsegv or sigbus
-@@ -504,6 +521,7 @@ void* extmem_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t
+@@ -499,6 +516,7 @@ void* extmem_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t
    }
    assert(p != NULL && p != MAP_FAILED);
  
@@ -116,7 +116,7 @@ index cabc3d3..6e891f1 100644
    // register with uffd
    struct uffdio_register uffdio_register;
    uffdio_register.range.start = (uint64_t)p;
-@@ -514,6 +532,7 @@ void* extmem_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t
+@@ -509,6 +527,7 @@ void* extmem_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t
      perror("ioctl uffdio_register");
      assert(0);
    }
@@ -150,7 +150,7 @@ index 7899199..9387301 100644
  void core_migrate_up_async_finish(struct user_page *page, uint64_t dram_offset);
 diff --git a/src/ufault/entry.S b/src/ufault/entry.S
 new file mode 100644
-index 0000000..d78f93d
+index 0000000..cd710ab
 --- /dev/null
 +++ b/src/ufault/entry.S
 @@ -0,0 +1,46 @@
@@ -195,7 +195,7 @@ index 0000000..d78f93d
 +    popq %rdi
 +    popq %rax
 +
-+    /* The UIRET instruction only pops the user interrupt frame. Before it, we
++    /* The UFRET instruction only pops the user interrupt frame. Before it, we
 +       need to pop the fault code and the fault address. */
 +    addq $24, %rsp
 +
@@ -248,7 +248,7 @@ index 0000000..71f726e
 +}
 diff --git a/src/ufault/ufault.h b/src/ufault/ufault.h
 new file mode 100644
-index 0000000..6342c42
+index 0000000..59e33dc
 --- /dev/null
 +++ b/src/ufault/ufault.h
 @@ -0,0 +1,28 @@
@@ -261,8 +261,8 @@ index 0000000..6342c42
 +#define PR_UFAULT_STATUS 2
 +
 +#define UFAULT_CODE_PRESENT (1 << 0)
-+#define UFAULT_CODE_WRITE (1 << 2)
-+#define UFAULT_CODE_FETCH (1 << 3)
++#define UFAULT_CODE_WRITE (1 << 1)
++#define UFAULT_CODE_FETCH (1 << 2)
 +
 +static inline __attribute__((always_inline)) void stuf(void)
 +{

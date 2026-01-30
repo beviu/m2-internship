@@ -39,7 +39,7 @@ asm_ufault_handler:
     popq %rdi
     popq %rax
 
-    /* The UIRET instruction only pops the user interrupt frame. Before it, we
+    /* The UFRET instruction only pops the user interrupt frame. Before it, we
        need to pop the fault code and the fault address. */
     addq $24, %rsp
 

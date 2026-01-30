@@ -80,12 +80,13 @@ stdenv.mkDerivation {
     ./patches/0009-Add-missing-declaration-of-extmem_migration_downdisk.patch
     ./patches/0010-Remove-unused-functions-lrudisk_allocate_page_critic.patch
     ./patches/0011-Remove-call-to-undefined-function-lrudisk_stats.patch
-    ./patches/0012-Log-more-steps-during-initialization.patch
-    ./patches/0013-Make-LOG-print-to-stderr-by-default.patch
-    ./patches/0014-Switch-processor-when-EXTMEM_SWITCH_PROCESSOR-is-set.patch
-    ./patches/0015-Added-range-tracking-for-extmem_mmap.patch
+    ./patches/0012-Use-MAP_POPULATE-instead-of-memsetting-page-cache-to.patch
+    ./patches/0013-Log-more-steps-during-initialization.patch
+    ./patches/0014-Make-LOG-print-to-stderr-by-default.patch
+    ./patches/0015-Switch-processor-when-EXTMEM_SWITCH_PROCESSOR-is-set.patch
+    ./patches/0016-Added-range-tracking-for-extmem_mmap.patch
   ]
-  ++ lib.optional withUserFaults ./patches/0016-Implement-user-fault-support.patch;
+  ++ lib.optional withUserFaults ./patches/0017-Implement-user-fault-support.patch;
 
   buildInputs = [
     liburing
