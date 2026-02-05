@@ -1,16 +1,16 @@
-From 40bf134b310aa5ad0f7c2720616de1a692a3e931 Mon Sep 17 00:00:00 2001
+From e1720076a5c4b015bb58accb88c10343218d5556 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 21 Nov 2025 10:57:20 +0100
 Subject: [PATCH 17/17] Implement user fault support
 
 ---
  src/Makefile        | 20 +++++++++++-------
- src/core.c          | 23 ++++++++++++++++++--
+ src/core.c          | 21 +++++++++++++++++--
  src/core.h          |  6 ++++--
  src/ufault/entry.S  | 51 +++++++++++++++++++++++++++++++++++++++++++++
  src/ufault/ufault.c | 40 +++++++++++++++++++++++++++++++++++
  src/ufault/ufault.h | 28 +++++++++++++++++++++++++
- 6 files changed, 157 insertions(+), 11 deletions(-)
+ 6 files changed, 155 insertions(+), 11 deletions(-)
  create mode 100644 src/ufault/entry.S
  create mode 100644 src/ufault/ufault.c
  create mode 100644 src/ufault/ufault.h
@@ -61,7 +61,7 @@ index 7ff743b..b94b667 100644
 -	$(RM) *.o *.so policies/*.o
 +	$(RM) *.o *.so policies/*.o ufault/*.o
 diff --git a/src/core.c b/src/core.c
-index 2ba6279..e4e70ce 100644
+index 2ba6279..8bd6422 100644
 --- a/src/core.c
 +++ b/src/core.c
 @@ -24,6 +24,7 @@
@@ -79,19 +79,19 @@ index 2ba6279..e4e70ce 100644
 +void uswap_register_ufault_handler()
 +{
 +    LOG("Registering a user fault handler\n");
- 
++
 +    int ret = prctl_ufault(PR_UFAULT_ENABLE, (unsigned long)asm_uswap_ufault_handler);
 +    if (ret < 0) {
 +        perror("prctl(PR_UFAULT, PR_UFAULT_ENABLE)");
 +        abort();
 +    }
  
--void uswap_register_handler(int sig)
 +    barrier();
 +    stuf();
 +    barrier();
 +}
-+
+ 
+-void uswap_register_handler(int sig)
 +void uswap_register_signal_handler(int sig)
  {
      struct sigaction action;
@@ -108,22 +108,6 @@ index 2ba6279..e4e70ce 100644
    LOG("extmem_init: registering SIGBUS handler\n");
    uswap_register_handler(SIGBUS);
    //uswap_register_handler(SIGSEGV);  // depending on system may need sigsegv or sigbus
-@@ -499,6 +516,7 @@ void* extmem_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t
-   }
-   assert(p != NULL && p != MAP_FAILED);
- 
-+#if defined(USWAP_SIGNAL) || defined(USWAP_UFFD)
-   // register with uffd
-   struct uffdio_register uffdio_register;
-   uffdio_register.range.start = (uint64_t)p;
-@@ -509,6 +527,7 @@ void* extmem_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t
-     perror("ioctl uffdio_register");
-     assert(0);
-   }
-+#endif
- 
-   arrput(userfault_range_start_array, (uint64_t)p);
-   arrput(userfault_range_end_array, (uint64_t)p + length);
 diff --git a/src/core.h b/src/core.h
 index 7899199..9387301 100644
 --- a/src/core.h
