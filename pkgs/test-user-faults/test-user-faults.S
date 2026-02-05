@@ -7,6 +7,9 @@
 .text
 .globl asm_ufault_handler
 asm_ufault_handler:
+    /* Clear the direction flag. This is required by the ABI. */
+    cld
+
     /* To deliver a user fault, the CPU first aligns the stack to 16-bytes and
        then pushes 5 quadwords. Push an additional quadword before the next 8
        quadwords, so that the stack is 16-bytes aligned when calling into the C

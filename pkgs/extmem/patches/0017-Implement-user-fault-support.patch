@@ -1,16 +1,16 @@
-From 8f8555270204c1c93be0bec67217f9b2d5cc6f0a Mon Sep 17 00:00:00 2001
+From 0212fa8a0ff1ee8e959a711cc0a4cbfd78c1c510 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 21 Nov 2025 10:57:20 +0100
 Subject: [PATCH 17/17] Implement user fault support
 
 ---
- src/Makefile        | 20 +++++++++++++-------
- src/core.c          | 23 +++++++++++++++++++++--
+ src/Makefile        | 20 +++++++++++-------
+ src/core.c          | 23 +++++++++++++++++++--
  src/core.h          |  6 ++++--
- src/ufault/entry.S  | 46 +++++++++++++++++++++++++++++++++++++++++++++
- src/ufault/ufault.c | 40 +++++++++++++++++++++++++++++++++++++++
- src/ufault/ufault.h | 28 +++++++++++++++++++++++++++
- 6 files changed, 152 insertions(+), 11 deletions(-)
+ src/ufault/entry.S  | 49 +++++++++++++++++++++++++++++++++++++++++++++
+ src/ufault/ufault.c | 40 ++++++++++++++++++++++++++++++++++++
+ src/ufault/ufault.h | 28 ++++++++++++++++++++++++++
+ 6 files changed, 155 insertions(+), 11 deletions(-)
  create mode 100644 src/ufault/entry.S
  create mode 100644 src/ufault/ufault.c
  create mode 100644 src/ufault/ufault.h
@@ -150,10 +150,10 @@ index 7899199..9387301 100644
  void core_migrate_up_async_finish(struct user_page *page, uint64_t dram_offset);
 diff --git a/src/ufault/entry.S b/src/ufault/entry.S
 new file mode 100644
-index 0000000..cd710ab
+index 0000000..7531a57
 --- /dev/null
 +++ b/src/ufault/entry.S
-@@ -0,0 +1,46 @@
+@@ -0,0 +1,49 @@
 +.macro ufret
 +     .long 0xfa010ff3
 +.endm
@@ -163,6 +163,9 @@ index 0000000..cd710ab
 +.text
 +.globl asm_uswap_ufault_handler
 +asm_uswap_ufault_handler:
++    /* Clear the direction flag. This is required by the ABI. */
++    cld
++
 +    /* To deliver a user fault, the CPU first aligns the stack to 16-bytes and
 +       then pushes 5 quadwords. Push an additional quadword before the next 8
 +       quadwords, so that the stack is 16-bytes aligned when calling into the C
