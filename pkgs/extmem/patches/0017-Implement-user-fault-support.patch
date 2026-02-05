@@ -1,16 +1,16 @@
-From 0212fa8a0ff1ee8e959a711cc0a4cbfd78c1c510 Mon Sep 17 00:00:00 2001
+From 40bf134b310aa5ad0f7c2720616de1a692a3e931 Mon Sep 17 00:00:00 2001
 From: beviu <contact@beviu.com>
 Date: Fri, 21 Nov 2025 10:57:20 +0100
 Subject: [PATCH 17/17] Implement user fault support
 
 ---
  src/Makefile        | 20 +++++++++++-------
- src/core.c          | 23 +++++++++++++++++++--
+ src/core.c          | 23 ++++++++++++++++++--
  src/core.h          |  6 ++++--
- src/ufault/entry.S  | 49 +++++++++++++++++++++++++++++++++++++++++++++
- src/ufault/ufault.c | 40 ++++++++++++++++++++++++++++++++++++
- src/ufault/ufault.h | 28 ++++++++++++++++++++++++++
- 6 files changed, 155 insertions(+), 11 deletions(-)
+ src/ufault/entry.S  | 51 +++++++++++++++++++++++++++++++++++++++++++++
+ src/ufault/ufault.c | 40 +++++++++++++++++++++++++++++++++++
+ src/ufault/ufault.h | 28 +++++++++++++++++++++++++
+ 6 files changed, 157 insertions(+), 11 deletions(-)
  create mode 100644 src/ufault/entry.S
  create mode 100644 src/ufault/ufault.c
  create mode 100644 src/ufault/ufault.h
@@ -150,10 +150,10 @@ index 7899199..9387301 100644
  void core_migrate_up_async_finish(struct user_page *page, uint64_t dram_offset);
 diff --git a/src/ufault/entry.S b/src/ufault/entry.S
 new file mode 100644
-index 0000000..7531a57
+index 0000000..bf55dd6
 --- /dev/null
 +++ b/src/ufault/entry.S
-@@ -0,0 +1,49 @@
+@@ -0,0 +1,51 @@
 +.macro ufret
 +     .long 0xfa010ff3
 +.endm
@@ -163,26 +163,27 @@ index 0000000..7531a57
 +.text
 +.globl asm_uswap_ufault_handler
 +asm_uswap_ufault_handler:
-+    /* Clear the direction flag. This is required by the ABI. */
-+    cld
-+
-+    /* To deliver a user fault, the CPU first aligns the stack to 16-bytes and
-+       then pushes 5 quadwords. Push an additional quadword before the next 8
-+       quadwords, so that the stack is 16-bytes aligned when calling into the C
-+       code. This is required by the ABI. */
-+    subq $8, %rsp
-+
 +    /* Save all caller-saved registers before calling into the C code. The C
 +       code is compiled to only use general purpose registers (e.g. SSE
 +       registers don't need to be saved). */
 +    pushq %rax
-+    pushq %rdi
-+    pushq %rsi
++    pushq %rcx
 +    pushq %rdx
++    pushq %rsi
++    pushq %rdi
 +    pushq %r8
 +    pushq %r9
 +    pushq %r10
 +    pushq %r11
++
++    /* Before jumping to the handler, the CPU aligned the stack to 16-bytes and
++       then pushed 5 quadwords. We just pushed 9 quadwords so at this point the
++       stack is 16-bytes aligned again. This ABI requires the stack to be
++       16-bytes aligned before calling a function. */
++
++    /* The ABI requires the direction flag to be cleared before calling a
++       function. */
++    cld
 +
 +    leaq 88(%rsp), %rdi
 +    movq 80(%rsp), %rsi
@@ -193,14 +194,15 @@ index 0000000..7531a57
 +    popq %r10
 +    popq %r9
 +    popq %r8
-+    popq %rdx
-+    popq %rsi
 +    popq %rdi
++    popq %rsi
++    popq %rdx
++    popq %rcx
 +    popq %rax
 +
 +    /* The UFRET instruction only pops the user interrupt frame. Before it, we
 +       need to pop the fault code and the fault address. */
-+    addq $24, %rsp
++    addq $16, %rsp
 +
 +    ufret
 diff --git a/src/ufault/ufault.c b/src/ufault/ufault.c
