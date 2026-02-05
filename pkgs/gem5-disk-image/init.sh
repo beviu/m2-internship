@@ -35,6 +35,10 @@ case "$action" in
     switch_processor
     test-user-faults
     ;;
+  shell)
+    echo "Starting a shell"
+    bash
+    ;;
   *)
     echo "Unknown action." >&2
     ;;
